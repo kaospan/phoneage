@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Modern Stone Age Theme - Brighter */
+    --background: 32 35% 18%;
+    --foreground: 40 70% 95%;
+
+    --card: 25 30% 25%;
+    --card-foreground: 40 70% 95%;
+
+    --popover: 25 30% 25%;
+    --popover-foreground: 40 70% 95%;
+
+    --primary: 25 85% 60%;
+    --primary-foreground: 40 95% 98%;
+
+    --secondary: 120 50% 55%;
+    --secondary-foreground: 40 95% 98%;
+
+    --muted: 25 25% 40%;
+    --muted-foreground: 40 40% 75%;
+
+    --accent: 30 90% 65%;
+    --accent-foreground: 25 30% 10%;
+
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 40 95% 98%;
+
+    --border: 25 35% 45%;
+    --input: 25 30% 30%;
+    --ring: 25 85% 60%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  }
+}
