@@ -8,6 +8,7 @@ interface Game3DProps {
   playerPos: { x: number; y: number };
   cavePos: { x: number; y: number };
   selectedArrow?: { x: number; y: number } | null;
+  selectorPos?: { x: number; y: number } | null;
   cameraOffset?: { x: number; z: number };
   viewMode?: '2d' | '3d';
   onArrowClick?: (x: number, y: number) => void;
@@ -775,9 +776,10 @@ const CameraController = ({
 
     const viewWidth = viewHeight * perspectiveCamera.aspect;
 
-    // Only follow if map is larger than view (with some margin)
-    const shouldFollowX = gridWidth > viewWidth * 0.7;
-    const shouldFollowZ = gridHeight > viewHeight * 0.7;
+    // Only follow if map is larger than view (with margin for edge detection)
+    // Use 0.8 threshold so camera starts following when player nears edge
+    const shouldFollowX = gridWidth > viewWidth * 0.8;
+    const shouldFollowZ = gridHeight > viewHeight * 0.8;
 
     // Apply camera offset for manual panning
     const panOffsetX = cameraOffset?.x || 0;
@@ -787,9 +789,31 @@ const CameraController = ({
       const playerX = playerPos.x + offsetX;
       const playerZ = playerPos.y + offsetZ;
 
-      // Smooth camera follow with constraints + manual offset
-      const targetX = (shouldFollowX ? playerX : 0) + panOffsetX;
-      const targetZ = (shouldFollowZ ? playerZ : 0) + panOffsetZ;
+      // Define edge margins (distance from player where camera starts following)
+      const edgeMarginX = viewWidth * 0.3; // Start following at 30% from edge
+      const edgeMarginZ = viewHeight * 0.3;
+
+      // Calculate map bounds
+      const minX = -gridWidth / 2;
+      const maxX = gridWidth / 2;
+      const minZ = -gridHeight / 2;
+      const maxZ = gridHeight / 2;
+
+      // Camera target with edge clamping
+      let targetX = shouldFollowX ? playerX : 0;
+      let targetZ = shouldFollowZ ? playerZ : 0;
+
+      // Clamp camera to keep edges in view
+      if (shouldFollowX) {
+        targetX = Math.max(minX + viewWidth / 2 - edgeMarginX, Math.min(maxX - viewWidth / 2 + edgeMarginX, targetX));
+      }
+      if (shouldFollowZ) {
+        targetZ = Math.max(minZ + viewHeight / 2 - edgeMarginZ, Math.min(maxZ - viewHeight / 2 + edgeMarginZ, targetZ));
+      }
+
+      // Apply manual pan offset
+      targetX += panOffsetX;
+      targetZ += panOffsetZ;
 
       camera.position.lerp(
         new THREE.Vector3(targetX, cameraHeight, targetZ + cameraDistance),
@@ -809,7 +833,7 @@ const CameraController = ({
   return null;
 };
 
-export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, cameraOffset, viewMode = '3d', onArrowClick, onCancelSelection }: Game3DProps) => {
+export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, cameraOffset, viewMode = '3d', onArrowClick, onCancelSelection }: Game3DProps) => {
   const gridHeight = grid.length;
   const gridWidth = grid[0]?.length || 0;
 
@@ -827,7 +851,7 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, cameraOffset, 
   const fov = is2D ? 42 : 50;
 
   return (
-    <div className="w-full h-full bg-gradient-to-b from-stone-900 to-stone-800 overflow-hidden touch-none relative">
+    <div className="w-full h-full bg-gradient-to-b from-stone-900 to-stone-800 overflow-hidden touch-none relative z-30">
       <Canvas shadows onClick={() => onCancelSelection?.()}>
         <PerspectiveCamera
           makeDefault
@@ -939,6 +963,32 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, cameraOffset, 
           <planeGeometry args={[gridWidth + 10, gridHeight + 10]} />
           <meshStandardMaterial color="#3a3a3a" emissive="#1a1a1a" />
         </mesh>
+
+        {/* Selector highlight (white ring) when active and not currently selecting an arrow */}
+        {selectorPos && !selectedArrow && (
+          <group position={[selectorPos.x + offsetX, 0.6, selectorPos.y + offsetZ]}>
+            {/* Front edge */}
+            <mesh position={[0, 0, 0.5]}>
+              <boxGeometry args={[1.05, 0.04, 0.04]} />
+              <meshBasicMaterial color="#FFFFFF" />
+            </mesh>
+            {/* Back edge */}
+            <mesh position={[0, 0, -0.5]}>
+              <boxGeometry args={[1.05, 0.04, 0.04]} />
+              <meshBasicMaterial color="#FFFFFF" />
+            </mesh>
+            {/* Left edge */}
+            <mesh position={[-0.5, 0, 0]}>
+              <boxGeometry args={[0.04, 0.04, 1.05]} />
+              <meshBasicMaterial color="#FFFFFF" />
+            </mesh>
+            {/* Right edge */}
+            <mesh position={[0.5, 0, 0]}>
+              <boxGeometry args={[0.04, 0.04, 1.05]} />
+              <meshBasicMaterial color="#FFFFFF" />
+            </mesh>
+          </group>
+        )}
       </Canvas>
     </div>
   );
