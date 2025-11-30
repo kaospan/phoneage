@@ -36,8 +36,8 @@ export const PuzzleGame = () => {
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
 
-    // Flashing state for arrow deselection feedback
-    const [isFlashing, setIsFlashing] = useState(false);
+    // Player highlight flash state for control transfer feedback
+    const [playerFlashCount, setPlayerFlashCount] = useState(0);
 
     const allLevels = getAllLevels();
     const currentLevel = allLevels[currentLevelIndex];
@@ -130,7 +130,7 @@ export const PuzzleGame = () => {
         return false;
       }
       const state: GameState = { grid, baseGrid, playerPos, selectedArrow: arrowPos, breakableRockStates, isGliding, isComplete } as GameState;
-      
+
       // Try all four directions
       const directions = [
         { dx: 0, dy: -1 },  // up
@@ -138,7 +138,7 @@ export const PuzzleGame = () => {
         { dx: -1, dy: 0 },  // left
         { dx: 1, dy: 0 }    // right
       ];
-      
+
       for (const dir of directions) {
         const outcome = attemptRemoteArrowMove(state, dir.dx, dir.dy);
         if (outcome.glidePath) {
@@ -147,6 +147,20 @@ export const PuzzleGame = () => {
       }
       return false; // Cannot move in any direction
     }, [grid, baseGrid, playerPos, breakableRockStates, isGliding, isComplete]);
+
+    // Helper function to flash player highlight twice
+    const flashPlayerHighlight = useCallback(() => {
+      setPlayerFlashCount(2); // Start with 2 flashes
+      let flashes = 0;
+      const flashInterval = setInterval(() => {
+        flashes++;
+        setPlayerFlashCount(prev => prev > 0 ? prev - 1 : 0);
+        if (flashes >= 4) { // 2 on, 2 off = 4 total changes
+          clearInterval(flashInterval);
+          setPlayerFlashCount(0);
+        }
+      }, 300); // Flash every 300ms
+    }, []);
 
     const moveArrowRemotely = useCallback((dx: number, dy: number) => {
       if (!selectedArrow || isGliding) return;
@@ -172,25 +186,25 @@ export const PuzzleGame = () => {
             setMoves(m => m + 1);
             setIsGliding(false);
             const newArrowPos = { x: pos.x, y: pos.y };
-            
+
             // Check if arrow can still move in any direction
             setTimeout(() => {
               const finalGrid = [...newGrid.map(r => [...r])] as CellType[][];
               const arrowCell = finalGrid[newArrowPos.y][newArrowPos.x];
-              const testState: GameState = { 
-                grid: finalGrid, 
-                baseGrid, 
-                playerPos, 
-                selectedArrow: newArrowPos, 
-                breakableRockStates, 
-                isGliding: false, 
-                isComplete 
+              const testState: GameState = {
+                grid: finalGrid,
+                baseGrid,
+                playerPos,
+                selectedArrow: newArrowPos,
+                breakableRockStates,
+                isGliding: false,
+                isComplete
               } as GameState;
-              
+
               const directions = [
                 { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
               ];
-              
+
               let canMove = false;
               for (const dir of directions) {
                 const testOutcome = attemptRemoteArrowMove(testState, dir.dx, dir.dy);
@@ -199,13 +213,14 @@ export const PuzzleGame = () => {
                   break;
                 }
               }
-              
+
               if (canMove) {
                 // Keep arrow selected
                 setSelectedArrow(newArrowPos);
               } else {
-                // Arrow is blocked, return control to player
+                // Arrow is blocked, return control to player with flash
                 setSelectedArrow(null);
+                flashPlayerHighlight();
                 toast.info("Arrow blocked - control returned to player");
               }
             }, 50); // Small delay to ensure grid is updated
@@ -215,7 +230,7 @@ export const PuzzleGame = () => {
         }
       };
       animate();
-    }, [selectedArrow, isGliding, grid, baseGrid, playerPos, breakableRockStates, isComplete]);
+    }, [selectedArrow, isGliding, grid, baseGrid, playerPos, breakableRockStates, isComplete, flashPlayerHighlight]);
 
     const movePlayer = useCallback((dx: number, dy: number) => {
       if (isComplete || isGliding) return;
@@ -265,17 +280,14 @@ export const PuzzleGame = () => {
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
         const key = e.key;
-        // Space/Enter: deselect arrow (with flash) OR toggle selector
+        // Space/Enter: deselect arrow (manual) OR toggle selector
         if (key === ' ' || key === 'Enter') {
           e.preventDefault();
-          // If arrow is selected, deselect it with flash effect
+          // If arrow is selected, deselect it manually
           if (selectedArrow && !isSelectorActive) {
-            setIsFlashing(true);
-            setTimeout(() => {
-              setIsFlashing(false);
-              setSelectedArrow(null);
-              toast.info("Arrow deselected");
-            }, 500); // Flash for 500ms before deselecting
+            setSelectedArrow(null);
+            flashPlayerHighlight();
+            toast.info("Arrow deselected - control returned to player");
             return;
           }
           // Otherwise, handle selector mode
@@ -569,20 +581,19 @@ export const PuzzleGame = () => {
             cameraOffset={cameraOffset}
             viewMode={viewMode}
             theme={currentLevel.theme}
+            onPlayerClick={flashPlayerHighlight}
+            playerFlashCount={playerFlashCount}
             onArrowClick={(x, y) => {
-              if (isGliding || isFlashing) return; // Prevent clicks during gliding or flashing
+              if (isGliding) return;
               const cell = grid[y][x];
               if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) {
                 if (playerPos.x === x && playerPos.y === y) { toast.error("Cannot select arrow while standing on it!"); return; }
                 const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
                 if (isSameArrow) {
-                  // Flash before deselecting
-                  setIsFlashing(true);
-                  setTimeout(() => {
-                    setIsFlashing(false);
-                    setSelectedArrow(null);
-                    toast.info("Arrow deselected");
-                  }, 500);
+                  // Deselect arrow with flash
+                  setSelectedArrow(null);
+                  flashPlayerHighlight();
+                  toast.info("Arrow deselected - control returned to player");
                 } else {
                   // Select new arrow
                   setSelectedArrow({ x, y });

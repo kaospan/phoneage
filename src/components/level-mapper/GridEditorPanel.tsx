@@ -25,35 +25,37 @@ export const GridEditorPanel: React.FC = () => {
 
     // Calculate cell size based on container width and image
     React.useEffect(() => {
-        if (!imageURL || !containerRef.current) return;
+        const updateCellSize = () => {
+            if (!containerRef.current) return;
 
-        const img = new Image();
-        img.onload = () => {
-            setImageNaturalSize({ width: img.width, height: img.height });
-
-            if (overlayEnabled) {
-                // When overlay is enabled, calculate cell size from image dimensions
-                const imageCellWidth = img.width / cols;
-                const imageCellHeight = img.height / rows;
-                // Use the smaller dimension to ensure both fit
-                const calculatedSize = Math.floor(Math.min(imageCellWidth, imageCellHeight));
-                setCellSize(Math.max(20, Math.min(calculatedSize, 100))); // Min 20px, max 100px
+            if (imageURL && overlayEnabled) {
+                // When overlay is enabled, load image and calculate from its dimensions
+                const img = new Image();
+                img.onload = () => {
+                    setImageNaturalSize({ width: img.width, height: img.height });
+                    const imageCellWidth = img.width / cols;
+                    const imageCellHeight = img.height / rows;
+                    const calculatedSize = Math.floor(Math.min(imageCellWidth, imageCellHeight));
+                    setCellSize(Math.max(20, Math.min(calculatedSize, 100)));
+                };
+                img.src = imageURL;
             } else {
                 // Without overlay, fit to container width
-                const containerWidth = containerRef.current!.offsetWidth - 40;
+                const containerWidth = containerRef.current.offsetWidth - 40;
                 const calculatedCellSize = Math.floor(containerWidth / cols);
                 setCellSize(Math.max(24, Math.min(calculatedCellSize, 80)));
             }
         };
-        img.src = imageURL;
+
+        updateCellSize();
     }, [imageURL, cols, rows, overlayEnabled]);
 
-    // Resize observer to update cell size on container resize (only when overlay is off)
+    // Resize observer to update cell size on container resize
     React.useEffect(() => {
-        if (!containerRef.current || overlayEnabled) return;
+        if (!containerRef.current) return;
 
         const resizeObserver = new ResizeObserver(() => {
-            if (containerRef.current && !imageURL) {
+            if (containerRef.current && !overlayEnabled) {
                 const containerWidth = containerRef.current.offsetWidth - 40;
                 const calculatedCellSize = Math.floor(containerWidth / cols);
                 setCellSize(Math.max(24, Math.min(calculatedCellSize, 80)));
@@ -62,7 +64,7 @@ export const GridEditorPanel: React.FC = () => {
 
         resizeObserver.observe(containerRef.current);
         return () => resizeObserver.disconnect();
-    }, [cols, overlayEnabled, imageURL]);
+    }, [cols, overlayEnabled]);
 
     const differences = React.useMemo(() => {
         const ref = compareLevel?.grid || [];

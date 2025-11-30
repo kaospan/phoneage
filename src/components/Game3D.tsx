@@ -15,7 +15,8 @@ interface Game3DProps {
   theme?: ColorTheme;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
-  isFlashing?: boolean;
+  onPlayerClick?: () => void;
+  playerFlashCount?: number;
 }
 
 // Wall (Non-breakable Brown Rock) - low profile with X marker (unwalkable)
@@ -98,8 +99,7 @@ const ArrowTile = ({
   isSelected,
   hasSelection,
   color,
-  onClick,
-  isFlashing
+  onClick
 }: {
   position: [number, number, number];
   direction: number;
@@ -107,7 +107,6 @@ const ArrowTile = ({
   hasSelection?: boolean;
   color: string;
   onClick?: (e: any) => void;
-  isFlashing?: boolean;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -671,9 +670,20 @@ const Cave = ({ position, color }: { position: [number, number, number]; color: 
 };
 
 // Player (Detailed Green Dinosaur) with smooth movement
-const Player = ({ position, color }: { position: [number, number, number]; color: string }) => {
+const Player = ({
+  position,
+  color,
+  onClick,
+  showFlash
+}: {
+  position: [number, number, number];
+  color: string;
+  onClick?: () => void;
+  showFlash?: boolean;
+}) => {
   const groupRef = useRef<THREE.Group>(null);
   const targetPos = useRef(new THREE.Vector3(...position));
+  const lastTapTimeRef = useRef<number>(0);
 
   useEffect(() => {
     targetPos.current.set(...position);
@@ -686,8 +696,28 @@ const Player = ({ position, color }: { position: [number, number, number]; color
     }
   });
 
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation();
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapTimeRef.current;
+
+    // Detect double-tap/double-click (within 300ms)
+    if (timeSinceLastTap < 300) {
+      onClick?.();
+    }
+
+    lastTapTimeRef.current = now;
+  };
+
   return (
-    <group ref={groupRef} position={position}>
+    <group ref={groupRef} position={position} onPointerDown={handlePointerDown}>
+      {/* Yellow flash highlight when showFlash is true */}
+      {showFlash && (
+        <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.4, 0.55, 32]} />
+          <meshBasicMaterial color="#FFD700" transparent opacity={0.8} />
+        </mesh>
+      )}
       {/* Body - more detailed */}
       <mesh position={[0, 0.35, 0]} castShadow>
         <capsuleGeometry args={[0.22, 0.5, 12, 20]} />
@@ -1050,7 +1080,9 @@ export const Game3D = ({
   viewMode = '3d',
   theme = 'default',
   onArrowClick,
-  onCancelSelection
+  onCancelSelection,
+  onPlayerClick,
+  playerFlashCount = 0
 }: Game3DProps) => {
   const gridHeight = grid.length;
   const gridWidth = grid[0]?.length || 0;
@@ -1140,7 +1172,12 @@ export const Game3D = ({
                     />
                     {/* Show player on top of arrow when riding */}
                     {isPlayer && (
-                      <Player position={[pos[0], 0.25, pos[2]]} color={themeColors.player} />
+                      <Player
+                        position={[pos[0], 0.25, pos[2]]}
+                        color={themeColors.player}
+                        onClick={onPlayerClick}
+                        showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
+                      />
                     )}
                   </group>
                 )}
@@ -1159,7 +1196,12 @@ export const Game3D = ({
                     />
                     {/* Show player on top of arrow when riding */}
                     {isPlayer && (
-                      <Player position={[pos[0], 0.25, pos[2]]} color={themeColors.player} />
+                      <Player
+                        position={[pos[0], 0.25, pos[2]]}
+                        color={themeColors.player}
+                        onClick={onPlayerClick}
+                        showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
+                      />
                     )}
                   </group>
                 )}
@@ -1177,14 +1219,24 @@ export const Game3D = ({
                     />
                     {/* Show player on top of arrow when riding */}
                     {isPlayer && (
-                      <Player position={[pos[0], 0.25, pos[2]]} color={themeColors.player} />
+                      <Player
+                        position={[pos[0], 0.25, pos[2]]}
+                        color={themeColors.player}
+                        onClick={onPlayerClick}
+                        showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
+                      />
                     )}
                   </group>
                 )}
                 {isCave && <Cave position={[pos[0], 0.05, pos[2]]} color={themeColors.cave} />}
                 {/* Show player at ground level when not on arrow */}
                 {isPlayer && !isArrowTile && !isBidirectionalArrow && !isOmnidirectionalArrow && (
-                  <Player position={[pos[0], 0, pos[2]]} color={themeColors.player} />
+                  <Player
+                    position={[pos[0], 0, pos[2]]}
+                    color={themeColors.player}
+                    onClick={onPlayerClick}
+                    showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
+                  />
                 )}
               </group>
             );
