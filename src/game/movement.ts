@@ -60,15 +60,28 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
 
   // Stones impassable
   if (targetCell === 2) return {};
+  
   // Enter breakable rock (first time)
   if (targetCell === 6) {
     const key = `${targetX},${targetY}`;
     if (!breakableRockStates.get(key)) {
       breakableRockStates.set(key, true);
-      return { newPlayerPos: { x: targetX, y: targetY }, consumedMove: true };
+      const outcome: PlayerMoveOutcome = {
+        newPlayerPos: { x: targetX, y: targetY },
+        consumedMove: true
+      };
+      // If leaving a stepped-on breakable rock, break it even when entering another breakable rock
+      if (willBreakRock) {
+        const newGrid = grid.map(r => [...r]);
+        newGrid[playerPos.y][playerPos.x] = 5; // becomes void
+        outcome.newGrid = newGrid;
+        outcome.brokeRock = true;
+      }
+      return outcome;
     }
     return {}; // second time blocked
   }
+  
   // Fire, water, void impassable
   if (targetCell === 1 || targetCell === 4 || targetCell === 5) return {};
 

@@ -1,0 +1,243 @@
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TILE_TYPES } from '@/lib/levelgrid';
+import { X, Upload, Save, Trash2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+interface CellReference {
+    id: string;
+    tileType: number;
+    imageData: string; // base64
+    timestamp: number;
+    gridPosition?: { row: number; col: number };
+    sourceName?: string; // e.g., "level7"
+}
+
+const STORAGE_KEY = 'stone-age-cell-references';
+
+export const CellReferenceManager: React.FC = () => {
+    const [references, setReferences] = useState<CellReference[]>([]);
+    const [selectedType, setSelectedType] = useState<number>(2); // Default to stone
+    const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+
+    // Load references from localStorage
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            try {
+                setReferences(JSON.parse(stored));
+            } catch (e) {
+                console.error('Failed to load cell references:', e);
+            }
+        }
+    }, []);
+
+    // Save references to localStorage
+    const saveReferences = (refs: CellReference[]) => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(refs));
+        setReferences(refs);
+    };
+
+    // Handle image upload
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const imageData = event.target?.result as string;
+            setUploadedImage(imageData);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Save uploaded image as reference
+    const saveAsReference = () => {
+        if (!uploadedImage) return;
+
+        const newRef: CellReference = {
+            id: `ref-${Date.now()}`,
+            tileType: selectedType,
+            imageData: uploadedImage,
+            timestamp: Date.now(),
+        };
+
+        saveReferences([...references, newRef]);
+        setUploadedImage(null);
+    };
+
+    // Delete a reference
+    const deleteReference = (id: string) => {
+        saveReferences(references.filter(ref => ref.id !== id));
+    };
+
+    // Get tile type name
+    const getTileTypeName = (type: number) => {
+        return TILE_TYPES.find(t => t.id === type)?.name || `Type ${type}`;
+    };
+
+    // Group references by tile type
+    const referencesByType = references.reduce((acc, ref) => {
+        if (!acc[ref.tileType]) acc[ref.tileType] = [];
+        acc[ref.tileType].push(ref);
+        return acc;
+    }, {} as Record<number, CellReference[]>);
+
+    return (
+        <div className="space-y-4 p-4">
+            <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Cell Reference Sprites</h3>
+                <span className="text-sm text-muted-foreground">{references.length} saved</span>
+            </div>
+
+            <Alert>
+                <AlertDescription>
+                    Upload cropped cell images to use as reference sprites for detection. These help identify specific tile types.
+                </AlertDescription>
+            </Alert>
+
+            {/* Upload Section */}
+            <Card className="p-4 space-y-3">
+                <Label>Add New Reference Sprite</Label>
+
+                <div className="space-y-2">
+                    <Label htmlFor="sprite-upload" className="text-sm text-muted-foreground">
+                        Upload Cell Image
+                    </Label>
+                    <div className="flex gap-2">
+                        <input
+                            id="sprite-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="hidden"
+                        />
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById('sprite-upload')?.click()}
+                            className="flex-1"
+                        >
+                            <Upload className="w-4 h-4 mr-2" />
+                            Choose Image
+                        </Button>
+                    </div>
+                </div>
+
+                {uploadedImage && (
+                    <>
+                        <div className="border rounded-lg p-2 bg-muted/20">
+                            <img
+                                src={uploadedImage}
+                                alt="Preview"
+                                className="w-full h-auto max-h-32 object-contain"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="tile-type-select">Tile Type</Label>
+                            <Select
+                                value={selectedType.toString()}
+                                onValueChange={(val) => setSelectedType(parseInt(val))}
+                            >
+                                <SelectTrigger id="tile-type-select">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {TILE_TYPES.map((tile) => (
+                                        <SelectItem key={tile.id} value={tile.id.toString()}>
+                                            <div className="flex items-center gap-2">
+                                                <div
+                                                    className="w-4 h-4 rounded border"
+                                                    style={{ backgroundColor: tile.color }}
+                                                />
+                                                <span>{tile.name}</span>
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <Button onClick={saveAsReference} size="sm" className="flex-1">
+                                <Save className="w-4 h-4 mr-2" />
+                                Save Reference
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setUploadedImage(null)}
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </>
+                )}
+            </Card>
+
+            {/* Saved References Gallery */}
+            {Object.keys(referencesByType).length > 0 && (
+                <div className="space-y-4">
+                    <h4 className="font-medium">Saved References</h4>
+                    {Object.entries(referencesByType).map(([typeStr, refs]) => {
+                        const type = parseInt(typeStr);
+                        return (
+                            <Card key={type} className="p-3">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div
+                                        className="w-4 h-4 rounded border"
+                                        style={{ backgroundColor: TILE_TYPES.find(t => t.id === type)?.color }}
+                                    />
+                                    <span className="font-medium">{getTileTypeName(type)}</span>
+                                    <span className="text-xs text-muted-foreground ml-auto">
+                                        {refs.length} {refs.length === 1 ? 'sprite' : 'sprites'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {refs.map((ref) => (
+                                        <div key={ref.id} className="relative group">
+                                            <div className="border rounded overflow-hidden bg-muted/20 aspect-square">
+                                                <img
+                                                    src={ref.imageData}
+                                                    alt={`Reference ${ref.id}`}
+                                                    className="w-full h-full object-contain"
+                                                />
+                                            </div>
+                                            <Button
+                                                variant="destructive"
+                                                size="icon"
+                                                className="absolute -top-2 -right-2 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={() => deleteReference(ref.id)}
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Export utility functions to use references in detection
+export const getCellReferences = (): CellReference[] => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    try {
+        return JSON.parse(stored);
+    } catch {
+        return [];
+    }
+};
+
+export const getReferencesForType = (tileType: number): CellReference[] => {
+    return getCellReferences().filter(ref => ref.tileType === tileType);
+};

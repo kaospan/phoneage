@@ -2,6 +2,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { useEffect, useRef } from 'react';
+import { themes, type ColorTheme, type ThemeColors } from '@/data/levels';
 
 interface Game3DProps {
   grid: number[][];
@@ -11,54 +12,79 @@ interface Game3DProps {
   selectorPos?: { x: number; y: number } | null;
   cameraOffset?: { x: number; z: number };
   viewMode?: '2d' | '3d';
+  theme?: ColorTheme;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
 
 // Wall (Non-breakable Brown Rock) - low profile with X marker (unwalkable)
-const FireWall = ({ position }: { position: [number, number, number] }) => {
+const FireWall = ({ position, color }: { position: [number, number, number]; color: string }) => {
   return (
     <group position={position}>
-      {/* Low-profile tile cap */}
+      {/* Low-profile tile cap with gradient effect */}
       <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.98, 0.2, 0.98]} />
-        <meshStandardMaterial color="#a67c52" roughness={0.8} metalness={0.1} />
+        <meshStandardMaterial
+          color={color}
+          roughness={0.7}
+          metalness={0.2}
+          emissive={color}
+          emissiveIntensity={0.1}
+        />
       </mesh>
 
       {/* X marker to indicate blocked/unwalkable */}
       <mesh position={[0, 0.12, 0]} rotation={[0, Math.PI / 4, 0]}>
         <boxGeometry args={[0.96, 0.02, 0.08]} />
-        <meshStandardMaterial color="#5a3b22" emissive="#2b1c11" emissiveIntensity={0.15} />
+        <meshStandardMaterial
+          color="#000000"
+          emissive="#ff0000"
+          emissiveIntensity={0.3}
+          roughness={0.8}
+        />
       </mesh>
       <mesh position={[0, 0.12, 0]} rotation={[0, -Math.PI / 4, 0]}>
         <boxGeometry args={[0.96, 0.02, 0.08]} />
-        <meshStandardMaterial color="#5a3b22" emissive="#2b1c11" emissiveIntensity={0.15} />
+        <meshStandardMaterial
+          color="#000000"
+          emissive="#ff0000"
+          emissiveIntensity={0.3}
+          roughness={0.8}
+        />
       </mesh>
     </group>
   );
 };
 
-// Stone - lower profile
-const Stone = ({ position }: { position: [number, number, number] }) => {
+// Stone - enhanced with better colors
+const Stone = ({ position, color }: { position: [number, number, number]; color: string }) => {
   return (
-    <mesh position={[position[0], 0.25, position[2]]}>
-      <dodecahedronGeometry args={[0.45, 0]} />
-      <meshStandardMaterial color="#6b4423" roughness={0.9} metalness={0.1} />
+    <mesh position={[position[0], 0.25, position[2]]} castShadow receiveShadow>
+      <dodecahedronGeometry args={[0.45, 1]} />
+      <meshStandardMaterial
+        color={color}
+        roughness={0.8}
+        metalness={0.2}
+        emissive={color}
+        emissiveIntensity={0.05}
+      />
     </mesh>
   );
 };
 
-// Breakable Rock - lower profile but distinct color
-const BreakableRock = ({ position }: { position: [number, number, number] }) => {
+// Breakable Rock - enhanced with glowing effect
+const BreakableRock = ({ position, color }: { position: [number, number, number]; color: string }) => {
   return (
-    <mesh position={[position[0], 0.28, position[2]]}>
-      <dodecahedronGeometry args={[0.48, 0]} />
+    <mesh position={[position[0], 0.28, position[2]]} castShadow receiveShadow>
+      <dodecahedronGeometry args={[0.48, 1]} />
       <meshStandardMaterial
-        color="#4a9eff"
-        emissive="#2b5a99"
-        emissiveIntensity={0.3}
-        roughness={0.6}
-        metalness={0.3}
+        color={color}
+        emissive={color}
+        emissiveIntensity={0.4}
+        roughness={0.5}
+        metalness={0.4}
+        transparent
+        opacity={0.95}
       />
     </mesh>
   );
@@ -70,12 +96,14 @@ const ArrowTile = ({
   direction,
   isSelected,
   hasSelection,
+  color,
   onClick
 }: {
   position: [number, number, number];
   direction: number;
   isSelected?: boolean;
   hasSelection?: boolean;
+  color: string;
   onClick?: (e: any) => void;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
@@ -158,8 +186,11 @@ const ArrowTile = ({
       >
         <boxGeometry args={[0.9, 0.15, 0.9]} />
         <meshStandardMaterial
-          color="#8B7355"
-          roughness={0.7}
+          color={color}
+          emissive={color}
+          emissiveIntensity={isSelected ? 0.5 : 0.2}
+          roughness={0.6}
+          metalness={0.3}
         />
       </mesh>
 
@@ -216,12 +247,14 @@ const BidirectionalArrowTile = ({
   direction,
   isSelected,
   hasSelection,
+  color,
   onClick
 }: {
   position: [number, number, number];
   direction: 11 | 12;
   isSelected?: boolean;
   hasSelection?: boolean;
+  color: string;
   onClick?: (e: any) => void;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
@@ -297,8 +330,11 @@ const BidirectionalArrowTile = ({
       >
         <boxGeometry args={[0.9, 0.15, 0.9]} />
         <meshStandardMaterial
-          color="#8B7355"
-          roughness={0.7}
+          color={color}
+          emissive={color}
+          emissiveIntensity={isSelected ? 0.5 : 0.2}
+          roughness={0.6}
+          metalness={0.3}
         />
       </mesh>
 
@@ -313,10 +349,11 @@ const BidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.25, 0.45, 3]} />
         <meshStandardMaterial
-          color="#FF6B6B"
-          emissive="#FF4444"
-          emissiveIntensity={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.7}
           roughness={0.3}
+          metalness={0.2}
         />
       </mesh>
 
@@ -331,10 +368,11 @@ const BidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.25, 0.45, 3]} />
         <meshStandardMaterial
-          color="#FF6B6B"
-          emissive="#FF4444"
-          emissiveIntensity={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.7}
           roughness={0.3}
+          metalness={0.2}
         />
       </mesh>
 
@@ -372,11 +410,13 @@ const OmnidirectionalArrowTile = ({
   position,
   isSelected,
   hasSelection,
+  color,
   onClick
 }: {
   position: [number, number, number];
   isSelected?: boolean;
   hasSelection?: boolean;
+  color: string;
   onClick?: (e: any) => void;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
@@ -451,8 +491,11 @@ const OmnidirectionalArrowTile = ({
       >
         <boxGeometry args={[0.9, 0.15, 0.9]} />
         <meshStandardMaterial
-          color="#8B7355"
-          roughness={0.7}
+          color={color}
+          emissive={color}
+          emissiveIntensity={isSelected ? 0.5 : 0.2}
+          roughness={0.6}
+          metalness={0.3}
         />
       </mesh>
 
@@ -468,10 +511,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color="#FF6B6B"
-          emissive="#FF4444"
-          emissiveIntensity={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.7}
           roughness={0.3}
+          metalness={0.2}
         />
       </mesh>
 
@@ -486,10 +530,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color="#FF6B6B"
-          emissive="#FF4444"
-          emissiveIntensity={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.7}
           roughness={0.3}
+          metalness={0.2}
         />
       </mesh>
 
@@ -504,10 +549,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color="#FF6B6B"
-          emissive="#FF4444"
-          emissiveIntensity={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.7}
           roughness={0.3}
+          metalness={0.2}
         />
       </mesh>
 
@@ -522,10 +568,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color="#FF6B6B"
-          emissive="#FF4444"
-          emissiveIntensity={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.7}
           roughness={0.3}
+          metalness={0.2}
         />
       </mesh>
 
@@ -559,15 +606,16 @@ const OmnidirectionalArrowTile = ({
 };
 
 // Cave entrance - detailed
-const Cave = ({ position }: { position: [number, number, number] }) => {
+const Cave = ({ position, color }: { position: [number, number, number]; color: string }) => {
   return (
     <group position={position}>
       {/* Base platform */}
       <mesh position={[0, 0, 0]} castShadow>
         <cylinderGeometry args={[0.55, 0.6, 0.15, 32]} />
         <meshStandardMaterial
-          color="#4a3322"
-          roughness={0.9}
+          color={color}
+          roughness={0.8}
+          metalness={0.1}
         />
       </mesh>
 
@@ -575,10 +623,10 @@ const Cave = ({ position }: { position: [number, number, number] }) => {
       <mesh position={[0, 0.25, 0]} castShadow>
         <cylinderGeometry args={[0.5, 0.5, 0.4, 32]} />
         <meshStandardMaterial
-          color="#2d5016"
-          emissive="#4a7c23"
-          emissiveIntensity={0.4}
-          roughness={0.7}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.5}
+          roughness={0.6}
         />
       </mesh>
 
@@ -589,25 +637,30 @@ const Cave = ({ position }: { position: [number, number, number] }) => {
         const z = Math.sin(angle) * 0.45;
         return (
           <mesh key={i} position={[x, 0.1, z]} castShadow>
-            <dodecahedronGeometry args={[0.1 + Math.random() * 0.05, 0]} />
-            <meshStandardMaterial color="#5a4833" roughness={0.95} />
+            <dodecahedronGeometry args={[0.1 + Math.random() * 0.05, 1]} />
+            <meshStandardMaterial
+              color={color}
+              roughness={0.9}
+              emissive={color}
+              emissiveIntensity={0.2}
+            />
           </mesh>
         );
       })}
 
       {/* Glow effects */}
-      <pointLight position={[0, 0.5, 0]} intensity={1.5} color="#6ab82e" distance={4} />
-      <pointLight position={[0, 0.2, 0]} intensity={0.8} color="#4a7c23" distance={2} />
+      <pointLight position={[0, 0.5, 0]} intensity={2} color={color} distance={4} />
+      <pointLight position={[0, 0.2, 0]} intensity={1.2} color={color} distance={2} />
 
       {/* Particles effect ring */}
       <mesh position={[0, 0.35, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.35, 0.45, 32]} />
         <meshStandardMaterial
-          color="#6ab82e"
-          emissive="#6ab82e"
-          emissiveIntensity={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.8}
           transparent
-          opacity={0.4}
+          opacity={0.5}
         />
       </mesh>
     </group>
@@ -615,7 +668,7 @@ const Cave = ({ position }: { position: [number, number, number] }) => {
 };
 
 // Player (Detailed Green Dinosaur) with smooth movement
-const Player = ({ position }: { position: [number, number, number] }) => {
+const Player = ({ position, color }: { position: [number, number, number]; color: string }) => {
   const groupRef = useRef<THREE.Group>(null);
   const targetPos = useRef(new THREE.Vector3(...position));
 
@@ -633,28 +686,36 @@ const Player = ({ position }: { position: [number, number, number] }) => {
   return (
     <group ref={groupRef} position={position}>
       {/* Body - more detailed */}
-      <mesh position={[0, 0.35, 0]}>
+      <mesh position={[0, 0.35, 0]} castShadow>
         <capsuleGeometry args={[0.22, 0.5, 12, 20]} />
         <meshStandardMaterial
-          color="#2d5016"
-          roughness={0.7}
-          metalness={0.1}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.3}
+          roughness={0.6}
+          metalness={0.2}
         />
       </mesh>
 
       {/* Head - larger and more detailed */}
-      <mesh position={[0, 0.85, 0.15]}>
+      <mesh position={[0, 0.85, 0.15]} castShadow>
         <sphereGeometry args={[0.28, 20, 20]} />
         <meshStandardMaterial
-          color="#3a6b1f"
-          roughness={0.6}
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.2}
+          roughness={0.5}
         />
       </mesh>
 
       {/* Snout */}
-      <mesh position={[0, 0.8, 0.35]}>
+      <mesh position={[0, 0.8, 0.35]} castShadow>
         <boxGeometry args={[0.15, 0.12, 0.2]} />
-        <meshStandardMaterial color="#325918" />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.1}
+        />
       </mesh>
 
       {/* Eyes */}
@@ -698,11 +759,16 @@ const Player = ({ position }: { position: [number, number, number] }) => {
 };
 
 // Floor tile
-const FloorTile = ({ position }: { position: [number, number, number] }) => {
+const FloorTile = ({ position, color }: { position: [number, number, number]; color: string }) => {
   return (
     <mesh position={position} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[1, 1]} />
-      <meshStandardMaterial color="#c9a876" roughness={0.8} />
+      <meshStandardMaterial
+        color={color}
+        roughness={0.7}
+        emissive={color}
+        emissiveIntensity={0.05}
+      />
     </mesh>
   );
 };
@@ -833,9 +899,23 @@ const CameraController = ({
   return null;
 };
 
-export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, cameraOffset, viewMode = '3d', onArrowClick, onCancelSelection }: Game3DProps) => {
+export const Game3D = ({
+  grid,
+  playerPos,
+  cavePos,
+  selectedArrow,
+  selectorPos,
+  cameraOffset,
+  viewMode = '3d',
+  theme = 'default',
+  onArrowClick,
+  onCancelSelection
+}: Game3DProps) => {
   const gridHeight = grid.length;
   const gridWidth = grid[0]?.length || 0;
+
+  // Get theme colors
+  const themeColors = themes[theme];
 
   // Center the grid
   const offsetX = -gridWidth / 2;
@@ -869,16 +949,18 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
           viewMode={viewMode}
         />
 
-        {/* Lighting */}
-        <ambientLight intensity={0.3} />
+        {/* Enhanced Lighting with theme-based ambient */}
+        <ambientLight intensity={0.4} color={themeColors.ambient} />
         <directionalLight
           position={[10, 15, 10]}
-          intensity={1}
+          intensity={1.2}
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
+          color="#ffffff"
         />
-        <pointLight position={[-5, 5, -5]} intensity={0.5} color="#ff6600" />
+        <pointLight position={[-5, 5, -5]} intensity={0.6} color={themeColors.wall} />
+        <pointLight position={[5, 5, 5]} intensity={0.4} color={themeColors.floor} />
 
         {/* Grid */}
         {grid.map((row, y) =>
@@ -893,10 +975,10 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
             return (
               <group key={`${x}-${y}`}>
                 {/* Only render floor for non-void cells */}
-                {cell !== 5 && (cell === 4 ? <WaterTile position={pos} /> : <FloorTile position={pos} />)}
-                {cell === 1 && <FireWall position={[pos[0], 0.5, pos[2]]} />}
-                {cell === 2 && <Stone position={[pos[0], 0.4, pos[2]]} />}
-                {cell === 6 && <BreakableRock position={[pos[0], 0.4, pos[2]]} />}
+                {cell !== 5 && (cell === 4 ? <WaterTile position={pos} /> : <FloorTile position={pos} color={themeColors.floor} />)}
+                {cell === 1 && <FireWall position={[pos[0], 0.5, pos[2]]} color={themeColors.wall} />}
+                {cell === 2 && <Stone position={[pos[0], 0.4, pos[2]]} color={themeColors.stone} />}
+                {cell === 6 && <BreakableRock position={[pos[0], 0.4, pos[2]]} color={themeColors.breakable} />}
                 {isArrowTile && (
                   <group>
                     <ArrowTile
@@ -904,6 +986,7 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
                       direction={cell}
                       isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
                       hasSelection={hasSelection}
+                      color={themeColors.arrow}
                       onClick={(e) => {
                         e.stopPropagation();
                         onArrowClick?.(x, y);
@@ -911,7 +994,7 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
                     />
                     {/* Show player on top of arrow when riding */}
                     {isPlayer && (
-                      <Player position={[pos[0], 0.25, pos[2]]} />
+                      <Player position={[pos[0], 0.25, pos[2]]} color={themeColors.player} />
                     )}
                   </group>
                 )}
@@ -921,6 +1004,7 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
                       position={[pos[0], 0, pos[2]]}
                       isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
                       hasSelection={hasSelection}
+                      color={themeColors.arrow}
                       onClick={(e) => {
                         e.stopPropagation();
                         onArrowClick?.(x, y);
@@ -929,7 +1013,7 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
                     />
                     {/* Show player on top of arrow when riding */}
                     {isPlayer && (
-                      <Player position={[pos[0], 0.25, pos[2]]} />
+                      <Player position={[pos[0], 0.25, pos[2]]} color={themeColors.player} />
                     )}
                   </group>
                 )}
@@ -939,6 +1023,7 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
                       position={[pos[0], 0, pos[2]]}
                       isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
                       hasSelection={hasSelection}
+                      color={themeColors.arrow}
                       onClick={(e) => {
                         e.stopPropagation();
                         onArrowClick?.(x, y);
@@ -946,13 +1031,15 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
                     />
                     {/* Show player on top of arrow when riding */}
                     {isPlayer && (
-                      <Player position={[pos[0], 0.25, pos[2]]} />
+                      <Player position={[pos[0], 0.25, pos[2]]} color={themeColors.player} />
                     )}
                   </group>
                 )}
-                {isCave && <Cave position={[pos[0], 0.15, pos[2]]} />}
-                {/* Show player on land (not on arrow) */}
-                {isPlayer && !isArrowTile && !isBidirectionalArrow && !isOmnidirectionalArrow && <Player position={[pos[0], 0, pos[2]]} />}
+                {isCave && <Cave position={[pos[0], 0.05, pos[2]]} color={themeColors.cave} />}
+                {/* Show player at ground level when not on arrow */}
+                {isPlayer && !isArrowTile && !isBidirectionalArrow && !isOmnidirectionalArrow && (
+                  <Player position={[pos[0], 0, pos[2]]} color={themeColors.player} />
+                )}
               </group>
             );
           })
@@ -990,6 +1077,6 @@ export const Game3D = ({ grid, playerPos, cavePos, selectedArrow, selectorPos, c
           </group>
         )}
       </Canvas>
-    </div>
+    </div >
   );
 };
