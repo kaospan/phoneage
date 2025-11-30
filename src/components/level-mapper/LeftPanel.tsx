@@ -13,6 +13,8 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         rows, cols, setRows, setCols,
         showGrid, setShowGrid,
         importLevelIndex, setImportLevelIndex,
+        compareLevelIndex, setCompareLevelIndex,
+        overlayEnabled, setOverlayEnabled,
         allLevels, imageURL, setImageURL,
         detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
@@ -65,6 +67,35 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 }
 
                                 console.log('📷 File selected:', f.name, f.type, f.size, 'bytes');
+
+                                // Auto-detect level from filename (e.g., "lvl01.png" or "level1.png")
+                                const levelMatch = f.name.match(/(?:lvl|level)[\s_-]*(\d+)/i);
+                                if (levelMatch) {
+                                    const levelNum = parseInt(levelMatch[1], 10);
+                                    const levelIndex = allLevels.findIndex(l => l.id === levelNum);
+                                    if (levelIndex !== -1) {
+                                        console.log(`🎯 Auto-detected Level ${levelNum} from filename`);
+                                        setImportLevelIndex(levelIndex);
+                                        setCompareLevelIndex(levelIndex);
+
+                                        // Auto-load the level's grid, player start, and theme
+                                        const lvl = allLevels[levelIndex];
+                                        setRows(lvl.grid.length);
+                                        setCols(lvl.grid[0]?.length || 0);
+                                        setGrid(lvl.grid.map(row => [...row]));
+
+                                        if (lvl.playerStart) {
+                                            setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
+                                        }
+                                        if (lvl.theme) {
+                                            setTheme(lvl.theme);
+                                        }
+
+                                        // Enable overlay by default
+                                        setOverlayEnabled(true);
+                                    }
+                                }
+
                                 const url = URL.createObjectURL(f);
                                 console.log('✓ Object URL created:', url);
 
@@ -221,21 +252,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     </div>
                     <div className="mt-2 relative">
                         {imageURL ? (
-                            <>
-                                <div className="flex flex-wrap gap-2 my-2 items-center">
-                                    <label className="text-xs">Zoom</label>
-                                    <input type="range" min={0.5} max={2} step={0.05} value={zoom} onChange={e => setZoom(Number(e.target.value))} />
-                                    <span className="text-xs">{zoom}x</span>
-                                    <label className="text-xs ml-4">Offset X</label>
-                                    <input type="number" className="w-16 px-2 py-1 rounded border bg-background" value={gridOffsetX} onChange={e => setGridOffsetX(Number(e.target.value))} />
-                                    <label className="text-xs ml-2">Y</label>
-                                    <input type="number" className="w-16 px-2 py-1 rounded border bg-background" value={gridOffsetY} onChange={e => setGridOffsetY(Number(e.target.value))} />
-                                    <label className="flex items-center gap-1 text-xs ml-2">
-                                        <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid
-                                    </label>
-                                </div>
-                                <canvas ref={useLevelMapper().canvasRef} style={{ width: `${zoom * 100}%`, height: 'auto' }} className="border rounded" />
-                            </>
+                            <div className="text-sm p-4 border rounded bg-green-50 dark:bg-green-950">
+                                ✅ Image loaded! Switch to <strong>Grid Editor</strong> tab to see the overlay.
+                            </div>
                         ) : (
                             <div className="text-sm text-muted-foreground p-6 border rounded">Upload a screenshot above to get started</div>
                         )}

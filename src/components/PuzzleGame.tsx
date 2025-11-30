@@ -36,6 +36,9 @@ export const PuzzleGame = () => {
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
 
+    // Flashing state for arrow deselection feedback
+    const [isFlashing, setIsFlashing] = useState(false);
+
     const allLevels = getAllLevels();
     const currentLevel = allLevels[currentLevelIndex];
 
@@ -120,13 +123,37 @@ export const PuzzleGame = () => {
       }
     }, [playerPos, currentLevel, moves, currentLevelIndex]);
 
+    // Helper function to check if an arrow can move in any direction
+    const canArrowMove = useCallback((arrowPos: { x: number; y: number }) => {
+      const arrowCell = grid[arrowPos.y]?.[arrowPos.x];
+      if (!arrowCell || !((arrowCell >= 7 && arrowCell <= 10) || arrowCell === 11 || arrowCell === 12 || arrowCell === 13)) {
+        return false;
+      }
+      const state: GameState = { grid, baseGrid, playerPos, selectedArrow: arrowPos, breakableRockStates, isGliding, isComplete } as GameState;
+      
+      // Try all four directions
+      const directions = [
+        { dx: 0, dy: -1 },  // up
+        { dx: 0, dy: 1 },   // down
+        { dx: -1, dy: 0 },  // left
+        { dx: 1, dy: 0 }    // right
+      ];
+      
+      for (const dir of directions) {
+        const outcome = attemptRemoteArrowMove(state, dir.dx, dir.dy);
+        if (outcome.glidePath) {
+          return true; // Can move in at least one direction
+        }
+      }
+      return false; // Cannot move in any direction
+    }, [grid, baseGrid, playerPos, breakableRockStates, isGliding, isComplete]);
+
     const moveArrowRemotely = useCallback((dx: number, dy: number) => {
       if (!selectedArrow || isGliding) return;
       const state: GameState = { grid, baseGrid, playerPos, selectedArrow, breakableRockStates, isGliding, isComplete, } as GameState;
       const outcome = attemptRemoteArrowMove(state, dx, dy);
       if (!outcome.glidePath) {
         toast.info("Arrow can't move further");
-        setSelectedArrow(null);
         return;
       }
       setIsGliding(true);
@@ -144,7 +171,44 @@ export const PuzzleGame = () => {
           if (step === path.length - 1) {
             setMoves(m => m + 1);
             setIsGliding(false);
-            setSelectedArrow(null);
+            const newArrowPos = { x: pos.x, y: pos.y };
+            
+            // Check if arrow can still move in any direction
+            setTimeout(() => {
+              const finalGrid = [...newGrid.map(r => [...r])] as CellType[][];
+              const arrowCell = finalGrid[newArrowPos.y][newArrowPos.x];
+              const testState: GameState = { 
+                grid: finalGrid, 
+                baseGrid, 
+                playerPos, 
+                selectedArrow: newArrowPos, 
+                breakableRockStates, 
+                isGliding: false, 
+                isComplete 
+              } as GameState;
+              
+              const directions = [
+                { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
+              ];
+              
+              let canMove = false;
+              for (const dir of directions) {
+                const testOutcome = attemptRemoteArrowMove(testState, dir.dx, dir.dy);
+                if (testOutcome.glidePath) {
+                  canMove = true;
+                  break;
+                }
+              }
+              
+              if (canMove) {
+                // Keep arrow selected
+                setSelectedArrow(newArrowPos);
+              } else {
+                // Arrow is blocked, return control to player
+                setSelectedArrow(null);
+                toast.info("Arrow blocked - control returned to player");
+              }
+            }, 50); // Small delay to ensure grid is updated
           }
           step++;
           setTimeout(animate, 150);
@@ -201,9 +265,20 @@ export const PuzzleGame = () => {
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
         const key = e.key;
-        // Space toggles selector
+        // Space/Enter: deselect arrow (with flash) OR toggle selector
         if (key === ' ' || key === 'Enter') {
           e.preventDefault();
+          // If arrow is selected, deselect it with flash effect
+          if (selectedArrow && !isSelectorActive) {
+            setIsFlashing(true);
+            setTimeout(() => {
+              setIsFlashing(false);
+              setSelectedArrow(null);
+              toast.info("Arrow deselected");
+            }, 500); // Flash for 500ms before deselecting
+            return;
+          }
+          // Otherwise, handle selector mode
           if (!isSelectorActive) {
             // Activate selector at player position
             setIsSelectorActive(true);
@@ -495,13 +570,24 @@ export const PuzzleGame = () => {
             viewMode={viewMode}
             theme={currentLevel.theme}
             onArrowClick={(x, y) => {
-              if (isGliding) return;
+              if (isGliding || isFlashing) return; // Prevent clicks during gliding or flashing
               const cell = grid[y][x];
               if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) {
                 if (playerPos.x === x && playerPos.y === y) { toast.error("Cannot select arrow while standing on it!"); return; }
                 const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
-                setSelectedArrow(isSameArrow ? null : { x, y });
-                toast.info(isSameArrow ? "Arrow deselected" : "Arrow selected! Use controls to move it remotely.");
+                if (isSameArrow) {
+                  // Flash before deselecting
+                  setIsFlashing(true);
+                  setTimeout(() => {
+                    setIsFlashing(false);
+                    setSelectedArrow(null);
+                    toast.info("Arrow deselected");
+                  }, 500);
+                } else {
+                  // Select new arrow
+                  setSelectedArrow({ x, y });
+                  toast.info("Arrow selected! Use controls to move it remotely.");
+                }
               }
             }}
             onCancelSelection={() => { if (selectedArrow) { setSelectedArrow(null); toast.info("Arrow deselected"); } }}

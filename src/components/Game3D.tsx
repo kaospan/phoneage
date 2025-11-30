@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { themes, type ColorTheme, type ThemeColors } from '@/data/levels';
 
 interface Game3DProps {
@@ -15,6 +15,7 @@ interface Game3DProps {
   theme?: ColorTheme;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
+  isFlashing?: boolean;
 }
 
 // Wall (Non-breakable Brown Rock) - low profile with X marker (unwalkable)
@@ -97,7 +98,8 @@ const ArrowTile = ({
   isSelected,
   hasSelection,
   color,
-  onClick
+  onClick,
+  isFlashing
 }: {
   position: [number, number, number];
   direction: number;
@@ -105,6 +107,7 @@ const ArrowTile = ({
   hasSelection?: boolean;
   color: string;
   onClick?: (e: any) => void;
+  isFlashing?: boolean;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -795,6 +798,144 @@ const WaterTile = ({ position }: { position: [number, number, number] }) => {
   );
 };
 
+// Animated moonlit sky background - floats across entire scene
+const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; gridHeight: number }) => {
+  const cloudGroupRef = useRef<THREE.Group>(null);
+  const cloudRefs = useRef<THREE.Group[]>([]);
+  const backgroundGroupRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock, camera }) => {
+    const time = clock.getElapsedTime();
+
+    // Keep background centered on camera position (only X and Z, not Y)
+    if (backgroundGroupRef.current) {
+      backgroundGroupRef.current.position.x = camera.position.x;
+      backgroundGroupRef.current.position.z = camera.position.z;
+    }
+
+    // Animate clouds horizontally across the screen
+    cloudRefs.current.forEach((cloudGroup, i) => {
+      if (cloudGroup) {
+        // Horizontal drift - each cloud moves at different speeds
+        const speed = 0.5 + (i * 0.2);
+        const xOffset = (time * speed) % (gridWidth + 20);
+        cloudGroup.position.x = xOffset - 10 - gridWidth / 2;
+
+        // Subtle vertical bob
+        cloudGroup.position.y = -1.5 + Math.sin(time * 0.3 + i * 2) * 0.15;
+
+        // Slight opacity variation
+        cloudGroup.children.forEach((mesh) => {
+          if (mesh instanceof THREE.Mesh && mesh.material instanceof THREE.MeshStandardMaterial) {
+            mesh.material.opacity = 0.35 + Math.sin(time * 0.2 + i) * 0.1;
+          }
+        });
+      }
+    });
+  });
+
+  // Generate clouds once with useMemo to prevent regeneration on every render
+  const cloudData = useMemo(() => {
+    return Array.from({ length: 8 }).map((_, i) => ({
+      id: i,
+      startX: (Math.random() - 0.5) * 30,
+      startZ: (Math.random() - 0.5) * 30,
+      scale: 0.6 + Math.random() * 0.6,
+      spheres: [
+        { pos: [0, 0, 0] as [number, number, number], size: 1.5, opacity: 0.4 },
+        { pos: [1.2 + Math.random() * 0.3, 0.1, 0] as [number, number, number], size: 1.2 + Math.random() * 0.3, opacity: 0.35 },
+        { pos: [-1.1 - Math.random() * 0.2, 0, 0.2] as [number, number, number], size: 1.3 + Math.random() * 0.2, opacity: 0.38 },
+        { pos: [0.5, 0.3, 0.3] as [number, number, number], size: 1.0, opacity: 0.33 }
+      ]
+    }));
+  }, []); // Empty dependency array - generate only once
+
+  // Create multiple clouds at different starting positions
+  const clouds = cloudData.map((cloud) => {
+    return (
+      <group
+        key={`cloud-${cloud.id}`}
+        ref={(el) => {
+          if (el) cloudRefs.current[cloud.id] = el;
+        }}
+        position={[cloud.startX, -1.5, cloud.startZ]}
+        scale={cloud.scale}
+      >
+        {/* Cloud made of overlapping spheres */}
+        {cloud.spheres.map((sphere, idx) => (
+          <mesh key={idx} position={sphere.pos}>
+            <sphereGeometry args={[sphere.size, 12, 12]} />
+            <meshStandardMaterial
+              color="#d4e5f5"
+              emissive="#4a6278"
+              emissiveIntensity={0.15}
+              transparent
+              opacity={sphere.opacity}
+              roughness={0.8}
+            />
+          </mesh>
+        ))}
+      </group>
+    );
+  });
+
+  return (
+    <group ref={backgroundGroupRef}>
+      {/* Deep sky background plane - far below the grid */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]}>
+        <planeGeometry args={[gridWidth + 40, gridHeight + 40]} />
+        <meshStandardMaterial
+          color="#0a1929"
+          emissive="#1a2a3a"
+          emissiveIntensity={0.3}
+          roughness={0.9}
+        />
+      </mesh>
+
+      {/* Moonlight - positioned off to the side */}
+      <pointLight
+        position={[10, 3, -10]}
+        intensity={2}
+        color="#b8c5d6"
+        distance={50}
+        decay={1.5}
+      />
+
+      {/* Moon */}
+      <mesh position={[10, 1, -10]}>
+        <sphereGeometry args={[0.8, 16, 16]} />
+        <meshStandardMaterial
+          color="#f5f5f5"
+          emissive="#fff8dc"
+          emissiveIntensity={1.2}
+          roughness={0.7}
+        />
+      </mesh>
+
+      {/* Stars scattered across the sky - fixed positions relative to camera */}
+      {Array.from({ length: 30 }).map((_, i) => {
+        const angle = (i / 30) * Math.PI * 2;
+        const radius = 15 + (i % 3) * 5;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const y = -1 - (i % 5) * 0.1;
+        const size = 0.02 + (i % 4) * 0.01;
+        return (
+          <mesh key={`star-${i}`} position={[x, y, z]}>
+            <sphereGeometry args={[size, 6, 6]} />
+            <meshBasicMaterial color="#ffffff" />
+          </mesh>
+        );
+      })}
+
+      {/* Animated clouds */}
+      <group ref={cloudGroupRef}>
+        {clouds}
+      </group>
+    </group>
+  );
+};
+
 // Camera controller component
 const CameraController = ({
   playerPos,
@@ -962,6 +1103,9 @@ export const Game3D = ({
         <pointLight position={[-5, 5, -5]} intensity={0.6} color={themeColors.wall} />
         <pointLight position={[5, 5, 5]} intensity={0.4} color={themeColors.floor} />
 
+        {/* Animated moonlit sky background */}
+        <AnimatedSkyBackground gridWidth={gridWidth} gridHeight={gridHeight} />
+
         {/* Grid */}
         {grid.map((row, y) =>
           row.map((cell, x) => {
@@ -974,8 +1118,10 @@ export const Game3D = ({
 
             return (
               <group key={`${x}-${y}`}>
-                {/* Only render floor for non-void cells */}
-                {cell !== 5 && (cell === 4 ? <WaterTile position={pos} /> : <FloorTile position={pos} color={themeColors.floor} />)}
+                {/* Render floor for non-void cells, void cells (5) are transparent */}
+                {cell !== 5 && (
+                  cell === 4 ? <WaterTile position={pos} /> : <FloorTile position={pos} color={themeColors.floor} />
+                )}
                 {cell === 1 && <FireWall position={[pos[0], 0.5, pos[2]]} color={themeColors.wall} />}
                 {cell === 2 && <Stone position={[pos[0], 0.4, pos[2]]} color={themeColors.stone} />}
                 {cell === 6 && <BreakableRock position={[pos[0], 0.4, pos[2]]} color={themeColors.breakable} />}

@@ -6,6 +6,7 @@ import { useLevelMapper } from './LevelMapperContext';
 export const GridEditorPanel: React.FC = () => {
     const {
         compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
+        importLevelIndex,
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch,
         exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
@@ -18,6 +19,50 @@ export const GridEditorPanel: React.FC = () => {
     } = useLevelMapper();
 
     const [isSettingPlayerStart, setIsSettingPlayerStart] = React.useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [cellSize, setCellSize] = React.useState(32); // Default cell size
+    const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
+
+    // Calculate cell size based on container width and image
+    React.useEffect(() => {
+        if (!imageURL || !containerRef.current) return;
+
+        const img = new Image();
+        img.onload = () => {
+            setImageNaturalSize({ width: img.width, height: img.height });
+
+            if (overlayEnabled) {
+                // When overlay is enabled, calculate cell size from image dimensions
+                const imageCellWidth = img.width / cols;
+                const imageCellHeight = img.height / rows;
+                // Use the smaller dimension to ensure both fit
+                const calculatedSize = Math.floor(Math.min(imageCellWidth, imageCellHeight));
+                setCellSize(Math.max(20, Math.min(calculatedSize, 100))); // Min 20px, max 100px
+            } else {
+                // Without overlay, fit to container width
+                const containerWidth = containerRef.current!.offsetWidth - 40;
+                const calculatedCellSize = Math.floor(containerWidth / cols);
+                setCellSize(Math.max(24, Math.min(calculatedCellSize, 80)));
+            }
+        };
+        img.src = imageURL;
+    }, [imageURL, cols, rows, overlayEnabled]);
+
+    // Resize observer to update cell size on container resize (only when overlay is off)
+    React.useEffect(() => {
+        if (!containerRef.current || overlayEnabled) return;
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (containerRef.current && !imageURL) {
+                const containerWidth = containerRef.current.offsetWidth - 40;
+                const calculatedCellSize = Math.floor(containerWidth / cols);
+                setCellSize(Math.max(24, Math.min(calculatedCellSize, 80)));
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, [cols, overlayEnabled, imageURL]);
 
     const differences = React.useMemo(() => {
         const ref = compareLevel?.grid || [];
@@ -58,29 +103,49 @@ export const GridEditorPanel: React.FC = () => {
     };
     const endPaint = () => { isPaintingRef.current = false; didPushUndoRef.current = false; };
 
+    // Get the import level info for display
+    const importLevel = importLevelIndex !== null && importLevelIndex !== undefined ? allLevels[importLevelIndex] : null;
+
     return (
         <div className="w-full lg:flex-1 lg:min-w-0 bg-card rounded border p-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-3">
+                    <div className="text-sm font-medium">
+                        Grid Editor ({rows}×{cols} = {rows * cols} cells)
+                    </div>
+                    {importLevel && (
+                        <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-md text-xs font-semibold border border-blue-300 dark:border-blue-700">
+                            📝 Editing: Level {importLevel.id}
+                        </div>
+                    )}
+                    {imageURL && overlayEnabled && (
+                        <div className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs border border-green-300 dark:border-green-700">
+                            🖼️ Image overlay active
+                        </div>
+                    )}
+                </div>
+            </div>
             <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">
-                    Grid Editor ({rows}×{cols} = {rows * cols} cells)
+                <div className="text-xs text-muted-foreground">
+                    Diff cells: {differences.length}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                    <select className="px-2 py-1 rounded border bg-background text-sm" value={compareLevelIndex} onChange={(e) => setCompareLevelIndex(parseInt(e.target.value, 10))}>
-                        {allLevels.map((lvl, idx) => (<option key={lvl.id} value={idx}>Compare: Level {lvl.id}</option>))}
-                    </select>
                     <label className="flex items-center gap-1 text-xs">
                         <input type="checkbox" checked={overlayEnabled} onChange={(e) => setOverlayEnabled(e.target.checked)} /> Overlay image
                     </label>
-                    <div className="flex items-center gap-1 text-xs">
-                        <span>Opacity</span>
-                        <input type="range" min={0} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
-                        <span>{Math.round(overlayOpacity * 100)}%</span>
-                    </div>
-                    <label className="flex items-center gap-1 text-xs">
-                        <input type="checkbox" checked={overlayStretch} onChange={(e) => setOverlayStretch(e.target.checked)} /> Stretch
-                    </label>
+                    {overlayEnabled && (
+                        <div className="flex items-center gap-1 text-xs">
+                            <span>Opacity</span>
+                            <input type="range" min={0} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
+                            <span>{Math.round(overlayOpacity * 100)}%</span>
+                        </div>
+                    )}
+                    {overlayEnabled && imageNaturalSize && (
+                        <span className="text-xs text-muted-foreground">
+                            Image: {imageNaturalSize.width}×{imageNaturalSize.height}px | Cell: {cellSize}px
+                        </span>
+                    )}
                     <Button size="sm" onClick={exportTS}>Copy JSON</Button>
-                    <Button size="sm" variant="outline" onClick={() => { if (compareLevel?.grid) { setRows(compareLevel.grid.length); setCols(compareLevel.grid[0]?.length || 0); setGrid(compareLevel.grid.map(row => [...row])); } }}>Copy Reference</Button>
                     <Button size="sm" variant="outline" onClick={() => { pushUndo(); setGrid(g => { const width = g[0]?.length || cols; return g.map(r => r.map(() => 5)); }); }}>All Void</Button>
                     <Button
                         size="sm"
@@ -121,26 +186,8 @@ export const GridEditorPanel: React.FC = () => {
                 </div>
             </div>
             <div className="text-xs text-muted-foreground mt-1">Diff cells: {differences.length}</div>
-            <div className="mt-2 h-12 bg-green-500/10 hover:bg-green-500/30 transition-all duration-200 opacity-20 hover:opacity-100 flex items-center justify-center cursor-pointer border-2 border-green-500/50 hover:border-green-500 rounded"
-                onClick={addRowTop}
-                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, type: 'row-top' }); }}
-                title="Left click: Add 1 row at top | Right click: Add multiple">
-                <div className="flex items-center gap-1 text-green-600">Top +</div>
-            </div>
-            <div className="mt-2 relative">
-                <div className="absolute left-0 top-0 bottom-0 w-12 bg-blue-500/10 hover:bg-blue-500/30 transition-all duration-200 opacity-20 hover:opacity-100 flex items-center justify-center cursor-pointer z-10 border-l-2 border-blue-500/50 hover:border-blue-500"
-                    onClick={addColumnLeft}
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, type: 'column-left' }); }}
-                    title="Left click: Add 1 column | Right click: Add multiple">
-                    <div className="text-blue-600 text-xs">Left +</div>
-                </div>
-                <div className="absolute right-0 top-0 bottom-0 w-12 bg-blue-500/10 hover:bg-blue-500/30 transition-all duration-200 opacity-20 hover:opacity-100 flex items-center justify-center cursor-pointer z-10 border-r-2 border-blue-500/50 hover:border-blue-500"
-                    onClick={addColumnRight}
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, type: 'column-right' }); }}
-                    title="Left click: Add 1 column | Right click: Add multiple">
-                    <div className="text-blue-600 text-xs">Right +</div>
-                </div>
-                <div className="overflow-auto max-h-[70vh] border rounded flex items-center justify-center p-4">
+            <div className="mt-2">
+                <div ref={containerRef} className="overflow-auto max-h-[70vh] border rounded flex items-center justify-center p-4">
                     <div className="relative inline-block">
                         {overlayEnabled && imageURL && (
                             <img
@@ -149,14 +196,14 @@ export const GridEditorPanel: React.FC = () => {
                                 className="absolute top-0 left-0 pointer-events-none"
                                 style={{
                                     opacity: overlayOpacity,
-                                    width: overlayStretch ? '100%' : 'auto',
-                                    height: overlayStretch ? '100%' : 'auto',
-                                    objectFit: overlayStretch ? 'fill' : 'contain',
+                                    width: `${cols * cellSize}px`,
+                                    height: `${rows * cellSize}px`,
+                                    objectFit: 'fill',
                                     zIndex: 15
                                 }}
                             />
                         )}
-                        <table className="text-xs relative z-10" style={{ tableLayout: 'auto' }}
+                        <table className="text-xs relative z-10 border-collapse" style={{ tableLayout: 'fixed', borderSpacing: 0 }}
                             onMouseUp={endPaint}
                             onMouseLeave={endPaint}
                         >
@@ -167,10 +214,14 @@ export const GridEditorPanel: React.FC = () => {
                                             const diff = compareLevel?.grid?.[r]?.[c] !== undefined && compareLevel.grid[r][c] !== cell;
                                             const isPlayerStart = playerStart?.x === c && playerStart?.y === r;
                                             return (
-                                                <td key={`${r}-${c}`} className="relative">
+                                                <td key={`${r}-${c}`} className="relative p-0" style={{ width: `${cellSize}px`, height: `${cellSize}px` }}>
                                                     <button
-                                                        className="w-8 h-8 border relative"
-                                                        style={{ background: TILE_TYPES.find(t => t.id === cell)?.color || '#000' }}
+                                                        className="w-full h-full border relative"
+                                                        style={{
+                                                            background: TILE_TYPES.find(t => t.id === cell)?.color || '#000',
+                                                            width: `${cellSize}px`,
+                                                            height: `${cellSize}px`,
+                                                        }}
                                                         onMouseDown={(e) => { e.preventDefault(); beginPaint(r, c); }}
                                                         onMouseEnter={() => continuePaint(r, c)}
                                                         title={isPlayerStart ? `Player Start (${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}` : `(${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}`}
@@ -192,12 +243,6 @@ export const GridEditorPanel: React.FC = () => {
                 </div>
             </div>
 
-            <div className="mt-2 h-12 bg-green-500/10 hover:bg-green-500/30 transition-all duration-200 opacity-20 hover:opacity-100 flex items-center justify-center cursor-pointer border-2 border-green-500/50 hover:border-green-500 rounded"
-                onClick={addRowBottom}
-                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, type: 'row-bottom' }); }}
-                title="Left click: Add 1 row at bottom | Right click: Add multiple">
-                <div className="flex items-center gap-1 text-green-600">Bottom +</div>
-            </div>
             {!isSaved && compareLevel?.grid && (
                 <div className="mt-3">
                     <div className="text-xs font-medium">Game (current) Level {compareLevel.id}</div>
