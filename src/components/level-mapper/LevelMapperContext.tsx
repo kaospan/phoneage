@@ -81,13 +81,13 @@ const LevelMapperContext = createContext<LevelMapperContextValue | undefined>(un
 export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     console.log('⚛️ LevelMapperProvider initializing...');
 
-    try {
-        const [gridOffsetX, setGridOffsetX] = useState(0);
-        const [gridOffsetY, setGridOffsetY] = useState(0);
-        const [zoom, setZoom] = useState(1);
-        console.log('✓ Basic state initialized');
+    // All hooks must be called unconditionally (React Rules of Hooks)
+    const [gridOffsetX, setGridOffsetX] = useState(0);
+    const [gridOffsetY, setGridOffsetY] = useState(0);
+    const [zoom, setZoom] = useState(1);
+    console.log('✓ Basic state initialized');
 
-        const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
         const [rows, setRows] = useState(11);
         const [cols, setCols] = useState(20);
         const [activeTile, setActiveTile] = useState(0);
@@ -362,18 +362,6 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;
-    } catch (error) {
-        console.error('❌ Error in LevelMapperProvider:', error);
-        console.error('Stack trace:', (error as Error).stack);
-        return (
-            <div style={{ padding: '20px', color: 'red' }}>
-                <h2>Level Mapper Context Failed</h2>
-                <p>{(error as Error).message}</p>
-                <pre>{(error as Error).stack}</pre>
-                <button onClick={() => window.location.reload()}>Reload</button>
-            </div>
-        );
-    }
 };
 
 console.log('✅ LevelMapperContext.tsx loaded');

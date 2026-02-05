@@ -9,15 +9,16 @@ import { Box, Grid3x3 } from "lucide-react";
 import { CellType, GameState } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 console.log('📦 PuzzleGame.tsx loading...');
 
-export const PuzzleGame = () => {
+const PuzzleGameInner = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
-  try {
-    const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
-    const [grid, setGrid] = useState<CellType[][]>([]);
+  // All hooks must be called unconditionally (React Rules of Hooks)
+  const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
+  const [grid, setGrid] = useState<CellType[][]>([]);
     const [playerPos, setPlayerPos] = useState({ x: 0, y: 0 });
     const [moves, setMoves] = useState(0);
     const [isComplete, setIsComplete] = useState(false);
@@ -625,14 +626,10 @@ export const PuzzleGame = () => {
         )}
       </div>
     );
-  } catch (error) {
-    console.error('❌ Error in PuzzleGame component:', error);
-    return (
-      <div style={{ padding: '20px', color: 'red' }}>
-        <h2>Game Failed to Load</h2>
-        <p>{(error as Error).message}</p>
-        <button onClick={() => window.location.reload()}>Reload</button>
-      </div>
-    );
-  }
 };
+
+export const PuzzleGame = () => (
+  <ErrorBoundary fallbackMessage="Game Failed to Load">
+    <PuzzleGameInner />
+  </ErrorBoundary>
+);
