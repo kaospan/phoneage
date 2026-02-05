@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { useEffect, useRef, useMemo, useState } from 'react';
@@ -106,7 +106,7 @@ const ArrowTile = ({
   isSelected?: boolean;
   hasSelection?: boolean;
   color: string;
-  onClick?: (e: any) => void;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -119,7 +119,7 @@ const ArrowTile = ({
     10: Math.PI / 2 // left - points in -X direction
   };
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     touchStartTimeRef.current = Date.now();
 
@@ -131,7 +131,7 @@ const ArrowTile = ({
     }
   };
 
-  const handlePointerUp = (e: any) => {
+  const handlePointerUp = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
 
     // Clear the timer
@@ -169,7 +169,7 @@ const ArrowTile = ({
     touchStartTimeRef.current = null;
   };
 
-  const handleDoubleClick = (e: any) => {
+  const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onClick?.(e);
   };
@@ -257,14 +257,14 @@ const BidirectionalArrowTile = ({
   isSelected?: boolean;
   hasSelection?: boolean;
   color: string;
-  onClick?: (e: any) => void;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
   const isVertical = direction === 11;
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     touchStartTimeRef.current = Date.now();
 
@@ -276,7 +276,7 @@ const BidirectionalArrowTile = ({
     }
   };
 
-  const handlePointerUp = (e: any) => {
+  const handlePointerUp = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
 
     // Clear the timer
@@ -314,7 +314,7 @@ const BidirectionalArrowTile = ({
     touchStartTimeRef.current = null;
   };
 
-  const handleDoubleClick = (e: any) => {
+  const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onClick?.(e);
   };
@@ -419,13 +419,13 @@ const OmnidirectionalArrowTile = ({
   isSelected?: boolean;
   hasSelection?: boolean;
   color: string;
-  onClick?: (e: any) => void;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     touchStartTimeRef.current = Date.now();
 
@@ -437,7 +437,7 @@ const OmnidirectionalArrowTile = ({
     }
   };
 
-  const handlePointerUp = (e: any) => {
+  const handlePointerUp = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
 
     // Clear the timer
@@ -475,7 +475,7 @@ const OmnidirectionalArrowTile = ({
     touchStartTimeRef.current = null;
   };
 
-  const handleDoubleClick = (e: any) => {
+  const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     onClick?.(e);
   };
@@ -696,7 +696,7 @@ const Player = ({
     }
   });
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     const now = Date.now();
     const timeSinceLastTap = now - lastTapTimeRef.current;

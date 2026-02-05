@@ -55,7 +55,7 @@ interface LevelMapperContextValue {
     overlayStretch: boolean; setOverlayStretch: (b: boolean) => void;
     // Levels compare/import
     allLevels: ReturnType<typeof getAllLevels>; setAllLevels: (lv: ReturnType<typeof getAllLevels>) => void;
-    compareLevelIndex: number; setCompareLevelIndex: (i: number) => void; compareLevel: any;
+    compareLevelIndex: number; setCompareLevelIndex: (i: number) => void; compareLevel: ReturnType<typeof getAllLevels>[number] | undefined;
     importLevelIndex: number | null; setImportLevelIndex: (i: number | null) => void;
     // Undo/redo
     undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -65,7 +65,7 @@ interface LevelMapperContextValue {
     // Detection
     detectGrid: () => void; detectCells: () => void; detectGridAndCells: () => void; useDetectCurrentCounts: boolean; setUseDetectCurrentCounts: (b: boolean) => void;
     // Bulk context menu
-    contextMenu: { x: number; y: number; type: BulkContextType } | null; setContextMenu: (m: any) => void;
+    contextMenu: { x: number; y: number; type: BulkContextType } | null; setContextMenu: (m: { x: number; y: number; type: BulkContextType } | null) => void;
     addMultipleColumns: (side: 'left' | 'right', count: number) => void;
     addMultipleRows: (side: 'top' | 'bottom', count: number) => void;
     // Shape helpers

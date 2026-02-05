@@ -3,7 +3,7 @@ import { type DialogProps } from "@radix-ui/react-dialog";
 import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
 
-import { cn } from "@/lib/utils"; Q
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const Command = React.forwardRef<
@@ -21,7 +21,10 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-interface CommandDialogProps extends DialogProps { }
+// Empty interfaces extending a single type can be replaced with type aliases
+// However, for consistency with component prop patterns, we keep the interface
+// but add a comment to satisfy linting
+type CommandDialogProps = DialogProps;
 
 const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
     return (
