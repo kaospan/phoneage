@@ -49,13 +49,15 @@ console.log('📦 App.tsx loading...');
 const App = () => {
   console.log('⚛️ App component rendering...');
 
+  const basename = import.meta.env.BASE_URL;
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <BrowserRouter basename={basename}>
             <Routes>
               <Route path="/" element={<Index />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
