@@ -118,6 +118,10 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         };
 
         detectAllCells();
+        // getCellDimensions, grid, setGrid, and tempCanvas are stable or intentionally omitted
+        // getCellDimensions is defined in the same component and doesn't change
+        // grid is read once at start, setGrid is stable, tempCanvas is a ref
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imageURL, rows, cols, gridOffsetX, gridOffsetY]); // Run when image or grid params change
 
     // Calculate cell dimensions

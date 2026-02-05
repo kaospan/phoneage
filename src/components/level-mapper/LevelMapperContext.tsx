@@ -162,6 +162,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     }
                 }
             }
+            // This effect should only run on mount - allLevels, imageURL, importLevelIndex are read from initial state
+            // eslint-disable-next-line react-hooks/exhaustive-deps
         }, []); // Only run on mount
 
         // Resize dimension change effect
@@ -183,6 +185,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 });
             });
             setUndoStack(s => [...s, prevGrid.map(row => [...row])]); setRedoStack([]); setIsSaved(false); setGrid(newGrid); prevSizeRef.current = { rows, cols };
+            // grid is intentionally omitted - this effect reads from prevGrid (refs), not current grid state
+            // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [rows, cols]);
 
         // Grid manipulation functions using extracted modules

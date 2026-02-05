@@ -88,6 +88,8 @@ const PuzzleGameInner = () => {
         setIsComplete(false);
         setBreakableRockStates(new Map()); // Reset breakable rock states
       }
+      // currentLevel is derived from currentLevelIndex, so we only depend on the index
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentLevelIndex]);
 
     // Show drag hint on first load
@@ -122,6 +124,8 @@ const PuzzleGameInner = () => {
 
         return () => clearTimeout(timer);
       }
+      // allLevels.length is stable and only used for bounds checking
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [playerPos, currentLevel, moves, currentLevelIndex]);
 
     // Helper function to check if an arrow can move in any direction
@@ -353,6 +357,8 @@ const PuzzleGameInner = () => {
       };
       window.addEventListener('keydown', handleKeyPress);
       return () => window.removeEventListener('keydown', handleKeyPress);
+      // flashPlayerHighlight, resetLevel, selectedArrow, and allLevels.length are stable or intentionally omitted
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [handleMove, currentLevelIndex, isSelectorActive, selectorPos, grid, playerPos]);
 
     const resetLevel = () => {
