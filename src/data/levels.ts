@@ -1,3 +1,5 @@
+import { stageImageSets } from '@/data/assetCatalog';
+
 // Stone Age DOS game levels
 // Legend: 
 // 0 = floor, 1 = wall/fire, 2 = stone, 3 = cave entrance, 4 = water, 5 = void/air, 6 = breakable rock
@@ -106,9 +108,12 @@ export interface Level {
   playerStart: { x: number; y: number };
   cavePos: { x: number; y: number };
   theme?: ColorTheme;
+  image?: string;
+  sources?: string[];
+  autoBuild?: boolean;
 }
 
-export const levels: Level[] = [
+export const manualLevels: Level[] = [
   // Level 1 - User custom grid
   {
     id: 1,
@@ -209,79 +214,38 @@ export const levels: Level[] = [
     playerStart: { x: 16, y: 8 },
     cavePos: { x: 4, y: 8 }
   }
-]
+];
 
-// Generate procedural levels 6-47
-const generateExtraLevels = (): Level[] => {
-  const extraLevels: Level[] = [];
-  
-  for (let i = 7; i <= 47; i++) {
-    const size = 8 + (i % 5);
-    const grid: number[][] = [];
-    
-    // Create base grid with void around walkable path
-    for (let y = 0; y < size; y++) {
-      grid[y] = [];
-      for (let x = 0; x < size; x++) {
-        // Create a path pattern with void around it
-        const isEdge = x === 0 || x === size - 1 || y === 0 || y === size - 1;
-        const isPath = Math.abs(x - size / 2) < size / 3 || Math.abs(y - size / 2) < size / 3;
-        grid[y][x] = (isEdge || !isPath) ? 5 : 0;
-      }
-    }
-    
-    // Ensure player start and cave positions are walkable
-    const playerX = Math.floor(size / 2);
-    const playerY = size - 2;
-    const caveX = 1 + (i % (size - 3));
-    const caveY = 1;
-    
-    grid[playerY][playerX] = 0;
-    grid[caveY][caveX] = 3; // Cave entrance
-    
-    // Create connecting path
-    let cx = playerX, cy = playerY;
-    while (cx !== caveX || cy !== caveY) {
-      grid[cy][cx] = 0;
-      if (cx < caveX) cx++;
-      else if (cx > caveX) cx--;
-      if (cy < caveY) cy++;
-      else if (cy > caveY) cy--;
-    }
-    
-    // Add stones
-    const numStones = 1 + (i % 4);
-    for (let s = 0; s < numStones; s++) {
-      const sx = 2 + ((s * 3) % (size - 4));
-      const sy = 2 + ((s * 2) % (size - 4));
-      if (grid[sy] && grid[sy][sx] === 0) {
-        grid[sy][sx] = 2;
-      }
-    }
-    
-    // Add arrows (directions: 7=up, 8=right, 9=down, 10=left)
-    const numArrows = 1 + (i % 3);
-    for (let a = 0; a < numArrows; a++) {
-      const ax = 1 + ((a * 4) % (size - 2));
-      const ay = 1 + ((a * 3) % (size - 2));
-      const arrowType = 7 + (a % 4); // Cycle through arrow directions
-      if (grid[ay] && grid[ay][ax] === 0) {
-        grid[ay][ax] = arrowType;
-      }
-    }
-    
-    extraLevels.push({
-      id: i,
-      grid,
-      playerStart: { x: playerX, y: playerY },
-      cavePos: { x: caveX, y: caveY },
-    });
+export const manualFallbackById = new Map(manualLevels.map((level) => [level.id, level]));
+
+const buildAutoLevels = (): Level[] => {
+  if (stageImageSets.length === 0) {
+    return manualLevels;
   }
-  
-  return extraLevels;
+
+  const themeCycle: ColorTheme[] = [
+    'default',
+    'ocean',
+    'forest',
+    'sunset',
+    'lava',
+    'crystal',
+    'neon',
+  ];
+
+  return stageImageSets.map((stage) => ({
+    id: stage.id,
+    grid: [[5]],
+    playerStart: { x: 0, y: 0 },
+    cavePos: { x: 0, y: 0 },
+    theme: themeCycle[(stage.id - 1) % themeCycle.length],
+    image: stage.primary,
+    sources: stage.sources,
+    autoBuild: true,
+  }));
 };
 
-export const allLevels = [...levels, ...generateExtraLevels()];
+export const allLevels = buildAutoLevels();
 
 console.log('📦 levels.ts loaded, total levels:', allLevels.length);
 

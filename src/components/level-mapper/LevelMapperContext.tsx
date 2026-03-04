@@ -27,6 +27,7 @@ import {
     useSaveCompareLevel,
     useSaveImportLevel
 } from './mapperHooks';
+import { buildReferenceMatcher } from '@/lib/spriteMatching';
 
 console.log('📦 LevelMapperContext.tsx loading...');
 
@@ -245,8 +246,16 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 const totalCells = rows * cols;
                 let processedCells = 0;
 
-                // Simple fast classifier - just check if cell is mostly dark (stone/void) or light (floor)
-                const classifyCell = (x0: number, y0: number, x1: number, y1: number): number => {
+                const matcher = await buildReferenceMatcher(0.70);
+
+                // Sprite-first classifier with pattern fallback
+                const classifyCell = async (x0: number, y0: number, x1: number, y1: number): Promise<number> => {
+                    if (matcher) {
+                        const cellImageData = ctx.getImageData(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+                        const spriteMatch = await matcher(cellImageData);
+                        if (spriteMatch !== null) return spriteMatch;
+                    }
+
                     let totalBrightness = 0;
                     let pixelCount = 0;
                     let darkPixels = 0;
@@ -282,7 +291,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 // Process in batches using requestAnimationFrame
                 const processBatch = (startCell: number): Promise<void> => {
                     return new Promise((resolve) => {
-                        requestAnimationFrame(() => {
+                        requestAnimationFrame(async () => {
                             const batchSize = 20; // Process 20 cells per frame
                             const endCell = Math.min(startCell + batchSize, totalCells);
 
@@ -295,7 +304,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                 const y0 = Math.max(0, Math.min(ch - 1, Math.floor((r * ch) / rows + gridOffsetY)));
                                 const y1 = Math.max(0, Math.min(ch, Math.floor(((r + 1) * ch) / rows + gridOffsetY)));
 
-                                newGrid[r][c] = classifyCell(x0, y0, x1, y1);
+                                newGrid[r][c] = await classifyCell(x0, y0, x1, y1);
                                 processedCells++;
                             }
 

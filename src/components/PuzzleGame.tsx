@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { getAllLevels, themes } from "@/data/levels";
+import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { TouchControls } from "./TouchControls";
 import { Thumbstick } from "./Thumbstick";
@@ -9,6 +9,9 @@ import { Box, Grid3x3 } from "lucide-react";
 import { CellType, GameState } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
+import { buildLevelFromSources } from "@/lib/levelImageDetection";
+import { saveLevelOverride } from "@/lib/levelOverrides";
+import { seedDefaultReferences } from "@/lib/referenceSeeder";
 
 console.log('📦 PuzzleGame.tsx loading...');
 
@@ -16,9 +19,12 @@ export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
   try {
+    type LevelData = ReturnType<typeof getAllLevels>[number];
     const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
     const [grid, setGrid] = useState<CellType[][]>([]);
     const [playerPos, setPlayerPos] = useState({ x: 0, y: 0 });
+    const [cavePos, setCavePos] = useState({ x: 0, y: 0 });
+    const [activeLevel, setActiveLevel] = useState<LevelData | null>(null);
     const [moves, setMoves] = useState(0);
     const [isComplete, setIsComplete] = useState(false);
     const [viewMode, setViewMode] = useState<"3d" | "2d">("3d");
@@ -38,56 +44,116 @@ export const PuzzleGame = () => {
 
     // Player highlight flash state for control transfer feedback
     const [playerFlashCount, setPlayerFlashCount] = useState(0);
+    const [isBuilding, setIsBuilding] = useState(false);
+    const [buildStatus, setBuildStatus] = useState<string>('');
 
     const allLevels = getAllLevels();
     const currentLevel = allLevels[currentLevelIndex];
 
-    // Initialize level
-    useEffect(() => {
-      if (currentLevel) {
-        setGrid(currentLevel.grid.map(row => [...row]) as CellType[][]);
+    const isPlaceholderGrid = useCallback((levelGrid?: number[][]) => {
+      if (!levelGrid || levelGrid.length === 0) return true;
+      if (levelGrid.length === 1 && levelGrid[0]?.length === 1) return true;
+      return levelGrid.every(row => row.every(cell => cell === 5));
+    }, []);
 
-        // Create base grid - for arrows, look at surrounding terrain to determine what should be underneath
-        const base = currentLevel.grid.map((row, y) =>
-          row.map((cell, x) => {
-            // If it's an arrow, determine what terrain is underneath by checking surroundings
-            if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) {
-              // Collect adjacent non-arrow cells
-              const adjacentCells: CellType[] = [];
-              if (y > 0) adjacentCells.push(currentLevel.grid[y - 1][x] as CellType);
-              if (y < currentLevel.grid.length - 1) adjacentCells.push(currentLevel.grid[y + 1][x] as CellType);
-              if (x > 0) adjacentCells.push(currentLevel.grid[y][x - 1] as CellType);
-              if (x < row.length - 1) adjacentCells.push(currentLevel.grid[y][x + 1] as CellType);
+    const buildBaseGrid = useCallback((levelGrid: CellType[][]) => {
+      return levelGrid.map((row, y) =>
+        row.map((cell, x) => {
+          if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) {
+            const adjacentCells: CellType[] = [];
+            if (y > 0) adjacentCells.push(levelGrid[y - 1][x] as CellType);
+            if (y < levelGrid.length - 1) adjacentCells.push(levelGrid[y + 1][x] as CellType);
+            if (x > 0) adjacentCells.push(levelGrid[y][x - 1] as CellType);
+            if (x < row.length - 1) adjacentCells.push(levelGrid[y][x + 1] as CellType);
 
-              // Filter to only terrain types (not arrows)
-              const terrainTypes = adjacentCells.filter(c =>
-                c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13
-              );
+            const terrainTypes = adjacentCells.filter(c =>
+              c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13
+            );
 
-              if (terrainTypes.length > 0) {
-                // Count occurrences of each terrain type
-                const counts = terrainTypes.reduce((acc, type) => {
-                  acc[type] = (acc[type] || 0) + 1;
-                  return acc;
-                }, {} as Record<number, number>);
+            if (terrainTypes.length > 0) {
+              const counts = terrainTypes.reduce((acc, type) => {
+                acc[type] = (acc[type] || 0) + 1;
+                return acc;
+              }, {} as Record<number, number>);
 
-                // Return the most common terrain type
-                const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-                return Number(mostCommon) as CellType;
-              }
-              return 5; // Default to void if no terrain found
+              const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+              return Number(mostCommon) as CellType;
             }
-            return cell;
-          })
-        );
+            return 5;
+          }
+          return cell;
+        })
+      ) as CellType[][];
+    }, []);
 
-        setBaseGrid(base as CellType[][]);
-        setPlayerPos(currentLevel.playerStart);
-        setMoves(0);
-        setIsComplete(false);
-        setBreakableRockStates(new Map()); // Reset breakable rock states
-      }
-    }, [currentLevelIndex]);
+    const applyLevelState = useCallback((level: LevelData) => {
+      setGrid(level.grid.map(row => [...row]) as CellType[][]);
+      setBaseGrid(buildBaseGrid(level.grid as CellType[][]));
+      setPlayerPos(level.playerStart);
+      setCavePos(level.cavePos);
+      setMoves(0);
+      setIsComplete(false);
+      setBreakableRockStates(new Map());
+      setSelectedArrow(null);
+      setCameraOffset({ x: 0, z: 0 });
+      setActiveLevel(level);
+    }, [buildBaseGrid]);
+
+    // Initialize or auto-build level
+    useEffect(() => {
+      if (!currentLevel) return;
+      let cancelled = false;
+
+      const run = async () => {
+        const needsBuild = currentLevel.autoBuild || isPlaceholderGrid(currentLevel.grid);
+
+        if (!needsBuild) {
+          applyLevelState(currentLevel);
+          return;
+        }
+
+        setIsBuilding(true);
+        setBuildStatus('Analyzing level image...');
+
+        try {
+          await seedDefaultReferences();
+          const sources = currentLevel.sources?.length ? currentLevel.sources : (currentLevel.image ? [currentLevel.image] : []);
+          if (sources.length === 0) {
+            throw new Error('No image sources available for this level');
+          }
+
+          const built = await buildLevelFromSources(sources, { minSimilarity: 0.72 });
+          if (cancelled) return;
+
+          const builtLevel: LevelData = {
+            ...currentLevel,
+            grid: built.grid,
+            playerStart: built.playerStart,
+            cavePos: built.cavePos,
+          };
+
+          saveLevelOverride(currentLevel.id, built.grid, built.playerStart, currentLevel.theme);
+          applyLevelState(builtLevel);
+        } catch (error) {
+          console.error('Auto-build failed:', error);
+          const fallback = manualFallbackById.get(currentLevel.id);
+          if (fallback) {
+            applyLevelState(fallback as LevelData);
+          }
+        } finally {
+          if (!cancelled) {
+            setIsBuilding(false);
+            setBuildStatus('');
+          }
+        }
+      };
+
+      run();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [currentLevelIndex, applyLevelState, isPlaceholderGrid]);
 
     // Show drag hint on first load
     useEffect(() => {
@@ -102,7 +168,7 @@ export const PuzzleGame = () => {
 
     // Check if reached cave
     useEffect(() => {
-      if (playerPos.x === currentLevel.cavePos.x && playerPos.y === currentLevel.cavePos.y) {
+      if (playerPos.x === cavePos.x && playerPos.y === cavePos.y) {
         setIsComplete(true);
         toast.success(`LEVEL ${currentLevel.id} COMPLETE! MOVES: ${moves}`, {
           duration: 3000,
@@ -121,7 +187,7 @@ export const PuzzleGame = () => {
 
         return () => clearTimeout(timer);
       }
-    }, [playerPos, currentLevel, moves, currentLevelIndex]);
+    }, [playerPos, cavePos, currentLevel, moves, currentLevelIndex]);
 
     // Helper function to check if an arrow can move in any direction
     const canArrowMove = useCallback((arrowPos: { x: number; y: number }) => {
@@ -279,6 +345,7 @@ export const PuzzleGame = () => {
     // Keyboard controls (player movement or selector navigation)
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
+        if (isBuilding) return;
         const key = e.key;
         // Space/Enter: deselect arrow (manual) OR toggle selector
         if (key === ' ' || key === 'Enter') {
@@ -352,20 +419,22 @@ export const PuzzleGame = () => {
       };
       window.addEventListener('keydown', handleKeyPress);
       return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [handleMove, currentLevelIndex, isSelectorActive, selectorPos, grid, playerPos]);
+    }, [handleMove, currentLevelIndex, isSelectorActive, selectorPos, grid, playerPos, isBuilding]);
 
     const resetLevel = () => {
+      const levelToReset = activeLevel ?? currentLevel;
+      if (!levelToReset) return;
       setSelectedArrow(null);
       setCameraOffset({ x: 0, z: 0 });
-      setGrid(currentLevel.grid.map(row => [...row]) as CellType[][]);
-      const base = currentLevel.grid.map((row, y) =>
+      setGrid(levelToReset.grid.map(row => [...row]) as CellType[][]);
+      const base = levelToReset.grid.map((row, y) =>
         row.map((cell, x) => {
           if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) {
             const adjacentCells: CellType[] = [];
-            if (y > 0) adjacentCells.push(currentLevel.grid[y - 1][x] as CellType);
-            if (y < currentLevel.grid.length - 1) adjacentCells.push(currentLevel.grid[y + 1][x] as CellType);
-            if (x > 0) adjacentCells.push(currentLevel.grid[y][x - 1] as CellType);
-            if (x < row.length - 1) adjacentCells.push(currentLevel.grid[y][x + 1] as CellType);
+            if (y > 0) adjacentCells.push(levelToReset.grid[y - 1][x] as CellType);
+            if (y < levelToReset.grid.length - 1) adjacentCells.push(levelToReset.grid[y + 1][x] as CellType);
+            if (x > 0) adjacentCells.push(levelToReset.grid[y][x - 1] as CellType);
+            if (x < row.length - 1) adjacentCells.push(levelToReset.grid[y][x + 1] as CellType);
             const terrainTypes = adjacentCells.filter(c => c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13);
             if (terrainTypes.length > 0) return terrainTypes[0];
             return 5;
@@ -374,7 +443,8 @@ export const PuzzleGame = () => {
         })
       );
       setBaseGrid(base as CellType[][]);
-      setPlayerPos(currentLevel.playerStart);
+      setPlayerPos(levelToReset.playerStart);
+      setCavePos(levelToReset.cavePos);
       setMoves(0);
       setIsComplete(false);
       setBreakableRockStates(new Map());
@@ -457,13 +527,30 @@ export const PuzzleGame = () => {
       toast.info("View reset");
     };
 
+    const levelBackground = currentLevel?.image;
+
     return (
       <div className={`w-full h-screen flex flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'} relative`}>
+        {levelBackground && (
+          <div
+            className="absolute inset-0 opacity-30 bg-cover bg-center blur-[2px]"
+            style={{ backgroundImage: `url(${levelBackground})` }}
+          />
+        )}
+        <div className="absolute inset-0 bg-black/30" />
         {isSelectorActive && (
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] pointer-events-none z-10 transition-opacity" />
         )}
-        <TouchControls onMove={handleMove} disabled={isComplete} />
-        <Thumbstick onMove={handleMove} disabled={isComplete} />
+        {isBuilding && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 text-white">
+            <div className="bg-black/70 border border-white/20 rounded-lg px-6 py-4 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-3"></div>
+              <div className="text-sm font-semibold">{buildStatus || 'Building level...'}</div>
+            </div>
+          </div>
+        )}
+        <TouchControls onMove={handleMove} disabled={isComplete || isBuilding} />
+        <Thumbstick onMove={handleMove} disabled={isComplete || isBuilding} />
         <div className="absolute top-2 left-0 right-0 z-50 flex justify-center">
           <div className="bg-card/95 backdrop-blur px-6 py-3 rounded-lg shadow-lg border border-border/50 flex items-center gap-4">
             {/* Previous Level Button */}
@@ -575,7 +662,7 @@ export const PuzzleGame = () => {
           <Game3D
             grid={grid}
             playerPos={playerPos}
-            cavePos={currentLevel.cavePos}
+            cavePos={cavePos}
             selectedArrow={selectedArrow}
             selectorPos={isSelectorActive ? selectorPos : null}
             cameraOffset={cameraOffset}

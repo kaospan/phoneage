@@ -217,3 +217,73 @@ export const findBestMatch = async (
 
     return bestMatch ? bestMatch.tileType : null;
 };
+
+export interface ReferenceImageData {
+    tileType: number;
+    imageData: ImageData;
+}
+
+export const findBestMatchFromReferences = async (
+    cellImageData: ImageData,
+    references: ReferenceImageData[],
+    minSimilarity: number = 0.70
+): Promise<number | null> => {
+    if (references.length === 0) return null;
+
+    let cellBrightness = 0;
+    for (let i = 0; i < cellImageData.data.length; i += 4) {
+        cellBrightness += (cellImageData.data[i] + cellImageData.data[i + 1] + cellImageData.data[i + 2]) / 3;
+    }
+    cellBrightness /= (cellImageData.width * cellImageData.height);
+
+    const adaptiveThreshold = (cellBrightness < 50 || cellBrightness > 140) ? 0.80 : 0.65;
+    let bestMatch: { tileType: number; similarity: number } | null = null;
+
+    for (const ref of references) {
+        let comparisonImageData = cellImageData;
+        if (cellImageData.width !== ref.imageData.width || cellImageData.height !== ref.imageData.height) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = ref.imageData.width;
+            tempCanvas.height = ref.imageData.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            if (!tempCtx) continue;
+
+            const sourceCanvas = document.createElement('canvas');
+            sourceCanvas.width = cellImageData.width;
+            sourceCanvas.height = cellImageData.height;
+            const sourceCtx = sourceCanvas.getContext('2d');
+            if (!sourceCtx) continue;
+            sourceCtx.putImageData(cellImageData, 0, 0);
+
+            tempCtx.drawImage(sourceCanvas, 0, 0, ref.imageData.width, ref.imageData.height);
+            comparisonImageData = tempCtx.getImageData(0, 0, ref.imageData.width, ref.imageData.height);
+        }
+
+        const similarity = await compareImages(comparisonImageData, ref.imageData);
+        const threshold = Math.max(minSimilarity, adaptiveThreshold);
+
+        if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
+            bestMatch = { tileType: ref.tileType, similarity };
+        }
+    }
+
+    return bestMatch ? bestMatch.tileType : null;
+};
+
+export const buildReferenceMatcher = async (
+    minSimilarity: number = 0.70
+): Promise<((cellImageData: ImageData) => Promise<number | null>) | null> => {
+    const references = getCellReferences();
+    if (references.length === 0) return null;
+
+    const imageDataRefs: ReferenceImageData[] = [];
+    for (const ref of references) {
+        const imgData = await loadImageData(ref.imageData);
+        if (!imgData) continue;
+        imageDataRefs.push({ tileType: ref.tileType, imageData: imgData });
+    }
+
+    if (imageDataRefs.length === 0) return null;
+
+    return (cellImageData: ImageData) => findBestMatchFromReferences(cellImageData, imageDataRefs, minSimilarity);
+};

@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { seedDefaultReferences } from "@/lib/referenceSeeder";
 
 console.log('🚀 main.tsx starting...');
 
@@ -15,6 +16,10 @@ try {
 
   console.log('🎯 Creating React root...');
   const root = createRoot(rootElement);
+
+  seedDefaultReferences().catch((error) => {
+    console.warn('Failed to seed default references:', error);
+  });
 
   console.log('⚛️ Rendering App...');
   root.render(
