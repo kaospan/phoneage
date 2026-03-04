@@ -157,3 +157,38 @@ export const runBulkBuildAndDownload = async (options: BulkBuildOptions = {}) =>
 
   return report;
 };
+
+export const runBulkBuildReport = async (options: BulkBuildOptions = {}) => {
+  const result = await runBulkBuild(options);
+
+  const edgeCases = result.levels
+    .filter((level) =>
+      level.stats.spriteMatchRatio < 0.05 ||
+      level.stats.voidRatio > 0.8 ||
+      level.stats.confidenceScore < 0.25 ||
+      level.stats.caveAutoPlaced ||
+      level.stats.playerAdjusted
+    )
+    .map((level) => ({
+      id: level.id,
+      source: level.source,
+      confidenceScore: level.stats.confidenceScore,
+      spriteMatchRatio: level.stats.spriteMatchRatio,
+      voidRatio: level.stats.voidRatio,
+      caveAutoPlaced: level.stats.caveAutoPlaced,
+      playerAdjusted: level.stats.playerAdjusted
+    }));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    summary: {
+      total: result.total,
+      built: result.built,
+      skipped: result.skipped,
+      failed: result.failed
+    },
+    errors: result.errors,
+    edgeCases,
+    levels: result.levels
+  };
+};

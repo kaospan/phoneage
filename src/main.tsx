@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
-import { runBulkBuildAndDownload } from "@/lib/levelBulkBuilder";
+import { runBulkBuildAndDownload, runBulkBuildReport } from "@/lib/levelBulkBuilder";
 
 console.log('🚀 main.tsx starting...');
 
@@ -24,6 +24,7 @@ try {
 
   if (typeof window !== 'undefined') {
     (window as any).runBulkBuildAndDownload = runBulkBuildAndDownload;
+    (window as any).runBulkBuildReport = runBulkBuildReport;
 
     const params = new URLSearchParams(window.location.search);
     if (params.has('bulkbuild') && sessionStorage.getItem('bulkbuild-ran') !== '1') {
