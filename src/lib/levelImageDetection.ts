@@ -15,6 +15,19 @@ export interface BuiltLevel {
   rows: number;
   cols: number;
   source: string;
+  stats: {
+    totalCells: number;
+    spriteMatches: number;
+    heuristicMatches: number;
+    nonVoidCount: number;
+    voidRatio: number;
+    spriteMatchRatio: number;
+    confidenceScore: number;
+    caveAutoPlaced: boolean;
+    playerAdjusted: boolean;
+    sourceWidth: number;
+    sourceHeight: number;
+  };
 }
 
 const loadImage = (url: string, timeoutMs = 8000): Promise<HTMLImageElement> => {
@@ -134,6 +147,8 @@ export const buildLevelFromImage = async (
   const grid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(5));
   const cellWidth = image.width / cols;
   const cellHeight = image.height / rows;
+  let spriteMatches = 0;
+  let heuristicMatches = 0;
 
   for (let r = 0; r < rows; r += 1) {
     if (r % 2 === 0) {
@@ -152,10 +167,14 @@ export const buildLevelFromImage = async (
 
       if (matcher) {
         cellType = await matcher(cellImageData);
+        if (cellType !== null) {
+          spriteMatches += 1;
+        }
       }
 
       if (cellType === null) {
         cellType = heuristicClassify(cellImageData);
+        heuristicMatches += 1;
       }
 
       grid[r][c] = cellType;
@@ -163,17 +182,27 @@ export const buildLevelFromImage = async (
   }
 
   let cavePos = findTile(grid, 3);
+  let caveAutoPlaced = false;
   if (!cavePos) {
     cavePos = findFloorNearTop(grid);
     grid[cavePos.y][cavePos.x] = 3;
+    caveAutoPlaced = true;
   }
 
   let playerStart = findFloorNearBottom(grid);
+  let playerAdjusted = false;
   if (playerStart.x === cavePos.x && playerStart.y === cavePos.y) {
     playerStart = findFloorNearBottom(grid.map((row, y) =>
       row.map((cell, x) => (x === cavePos.x && y === cavePos.y ? 2 : cell))
     ));
+    playerAdjusted = true;
   }
+
+  const totalCells = rows * cols;
+  const nonVoidCount = grid.flat().filter((cell) => cell !== 5).length;
+  const voidRatio = totalCells > 0 ? 1 - nonVoidCount / totalCells : 1;
+  const spriteMatchRatio = totalCells > 0 ? spriteMatches / totalCells : 0;
+  const confidenceScore = Math.max(0, Math.min(1, spriteMatchRatio * 0.7 + (nonVoidCount / totalCells) * 0.3));
 
   return {
     grid,
@@ -182,6 +211,19 @@ export const buildLevelFromImage = async (
     rows,
     cols,
     source: imageUrl,
+    stats: {
+      totalCells,
+      spriteMatches,
+      heuristicMatches,
+      nonVoidCount,
+      voidRatio,
+      spriteMatchRatio,
+      confidenceScore,
+      caveAutoPlaced,
+      playerAdjusted,
+      sourceWidth: image.width,
+      sourceHeight: image.height
+    }
   };
 };
 

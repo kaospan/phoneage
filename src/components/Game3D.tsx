@@ -3,6 +3,11 @@ import { PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { themes, type ColorTheme, type ThemeColors } from '@/data/levels';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
+import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader';
 
 interface Game3DProps {
   grid: number[][];
@@ -20,7 +25,15 @@ interface Game3DProps {
 }
 
 // Wall (Non-breakable Brown Rock) - low profile with X marker (unwalkable)
-const FireWall = ({ position, color }: { position: [number, number, number]; color: string }) => {
+const FireWall = ({
+  position,
+  color,
+  noiseMap
+}: {
+  position: [number, number, number];
+  color: string;
+  noiseMap?: THREE.Texture | null;
+}) => {
   return (
     <group position={position}>
       {/* Low-profile tile cap with gradient effect */}
@@ -32,6 +45,10 @@ const FireWall = ({ position, color }: { position: [number, number, number]; col
           metalness={0.2}
           emissive={color}
           emissiveIntensity={0.1}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.03}
+          envMapIntensity={0.4}
         />
       </mesh>
 
@@ -59,7 +76,15 @@ const FireWall = ({ position, color }: { position: [number, number, number]; col
 };
 
 // Stone - enhanced with better colors
-const Stone = ({ position, color }: { position: [number, number, number]; color: string }) => {
+const Stone = ({
+  position,
+  color,
+  noiseMap
+}: {
+  position: [number, number, number];
+  color: string;
+  noiseMap?: THREE.Texture | null;
+}) => {
   return (
     <mesh position={[position[0], 0.25, position[2]]} castShadow receiveShadow>
       <dodecahedronGeometry args={[0.45, 1]} />
@@ -69,13 +94,25 @@ const Stone = ({ position, color }: { position: [number, number, number]; color:
         metalness={0.2}
         emissive={color}
         emissiveIntensity={0.05}
+        roughnessMap={noiseMap ?? undefined}
+        bumpMap={noiseMap ?? undefined}
+        bumpScale={0.08}
+        envMapIntensity={0.45}
       />
     </mesh>
   );
 };
 
 // Breakable Rock - enhanced with glowing effect
-const BreakableRock = ({ position, color }: { position: [number, number, number]; color: string }) => {
+const BreakableRock = ({
+  position,
+  color,
+  noiseMap
+}: {
+  position: [number, number, number];
+  color: string;
+  noiseMap?: THREE.Texture | null;
+}) => {
   return (
     <mesh position={[position[0], 0.28, position[2]]} castShadow receiveShadow>
       <dodecahedronGeometry args={[0.48, 1]} />
@@ -87,6 +124,10 @@ const BreakableRock = ({ position, color }: { position: [number, number, number]
         metalness={0.4}
         transparent
         opacity={0.95}
+        roughnessMap={noiseMap ?? undefined}
+        bumpMap={noiseMap ?? undefined}
+        bumpScale={0.1}
+        envMapIntensity={0.6}
       />
     </mesh>
   );
@@ -99,7 +140,8 @@ const ArrowTile = ({
   isSelected,
   hasSelection,
   color,
-  onClick
+  onClick,
+  noiseMap
 }: {
   position: [number, number, number];
   direction: number;
@@ -107,6 +149,7 @@ const ArrowTile = ({
   hasSelection?: boolean;
   color: string;
   onClick?: (e: any) => void;
+  noiseMap?: THREE.Texture | null;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -193,6 +236,10 @@ const ArrowTile = ({
           emissiveIntensity={isSelected ? 0.5 : 0.2}
           roughness={0.6}
           metalness={0.3}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.03}
+          envMapIntensity={0.5}
         />
       </mesh>
 
@@ -211,6 +258,8 @@ const ArrowTile = ({
           emissive="#FF4444"
           emissiveIntensity={0.6}
           roughness={0.3}
+          metalness={0.2}
+          envMapIntensity={0.6}
         />
       </mesh>
 
@@ -250,7 +299,8 @@ const BidirectionalArrowTile = ({
   isSelected,
   hasSelection,
   color,
-  onClick
+  onClick,
+  noiseMap
 }: {
   position: [number, number, number];
   direction: 11 | 12;
@@ -258,6 +308,7 @@ const BidirectionalArrowTile = ({
   hasSelection?: boolean;
   color: string;
   onClick?: (e: any) => void;
+  noiseMap?: THREE.Texture | null;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -337,6 +388,10 @@ const BidirectionalArrowTile = ({
           emissiveIntensity={isSelected ? 0.5 : 0.2}
           roughness={0.6}
           metalness={0.3}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.03}
+          envMapIntensity={0.5}
         />
       </mesh>
 
@@ -356,6 +411,7 @@ const BidirectionalArrowTile = ({
           emissiveIntensity={0.7}
           roughness={0.3}
           metalness={0.2}
+          envMapIntensity={0.6}
         />
       </mesh>
 
@@ -375,6 +431,7 @@ const BidirectionalArrowTile = ({
           emissiveIntensity={0.7}
           roughness={0.3}
           metalness={0.2}
+          envMapIntensity={0.6}
         />
       </mesh>
 
@@ -413,13 +470,15 @@ const OmnidirectionalArrowTile = ({
   isSelected,
   hasSelection,
   color,
-  onClick
+  onClick,
+  noiseMap
 }: {
   position: [number, number, number];
   isSelected?: boolean;
   hasSelection?: boolean;
   color: string;
   onClick?: (e: any) => void;
+  noiseMap?: THREE.Texture | null;
 }) => {
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -498,6 +557,10 @@ const OmnidirectionalArrowTile = ({
           emissiveIntensity={isSelected ? 0.5 : 0.2}
           roughness={0.6}
           metalness={0.3}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.03}
+          envMapIntensity={0.5}
         />
       </mesh>
 
@@ -518,6 +581,7 @@ const OmnidirectionalArrowTile = ({
           emissiveIntensity={0.7}
           roughness={0.3}
           metalness={0.2}
+          envMapIntensity={0.6}
         />
       </mesh>
 
@@ -537,6 +601,7 @@ const OmnidirectionalArrowTile = ({
           emissiveIntensity={0.7}
           roughness={0.3}
           metalness={0.2}
+          envMapIntensity={0.6}
         />
       </mesh>
 
@@ -556,6 +621,7 @@ const OmnidirectionalArrowTile = ({
           emissiveIntensity={0.7}
           roughness={0.3}
           metalness={0.2}
+          envMapIntensity={0.6}
         />
       </mesh>
 
@@ -575,6 +641,7 @@ const OmnidirectionalArrowTile = ({
           emissiveIntensity={0.7}
           roughness={0.3}
           metalness={0.2}
+          envMapIntensity={0.6}
         />
       </mesh>
 
@@ -608,7 +675,15 @@ const OmnidirectionalArrowTile = ({
 };
 
 // Cave entrance - detailed
-const Cave = ({ position, color }: { position: [number, number, number]; color: string }) => {
+const Cave = ({
+  position,
+  color,
+  noiseMap
+}: {
+  position: [number, number, number];
+  color: string;
+  noiseMap?: THREE.Texture | null;
+}) => {
   return (
     <group position={position}>
       {/* Base platform */}
@@ -618,6 +693,9 @@ const Cave = ({ position, color }: { position: [number, number, number]; color: 
           color={color}
           roughness={0.8}
           metalness={0.1}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.04}
         />
       </mesh>
 
@@ -629,6 +707,10 @@ const Cave = ({ position, color }: { position: [number, number, number]; color: 
           emissive={color}
           emissiveIntensity={0.5}
           roughness={0.6}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.05}
+          envMapIntensity={0.35}
         />
       </mesh>
 
@@ -645,6 +727,7 @@ const Cave = ({ position, color }: { position: [number, number, number]; color: 
               roughness={0.9}
               emissive={color}
               emissiveIntensity={0.2}
+              roughnessMap={noiseMap ?? undefined}
             />
           </mesh>
         );
@@ -774,6 +857,16 @@ const Player = ({
             clearcoatRoughness={0.2}
           />
         </mesh>
+        {/* Rim shell */}
+        <mesh position={[0, 0.34, 0]} scale={[1.06, 1.06, 1.06]}>
+          <capsuleGeometry args={[0.26, 0.55, 12, 20]} />
+          <meshBasicMaterial
+            color="#a6ffb6"
+            transparent
+            opacity={0.18}
+            side={THREE.BackSide}
+          />
+        </mesh>
 
         {/* Belly */}
         <mesh position={[0, 0.26, 0.09]} castShadow>
@@ -851,6 +944,15 @@ const Player = ({
             clearcoat={0.2}
           />
         </mesh>
+        <mesh scale={[1.08, 1.08, 1.08]}>
+          <sphereGeometry args={[0.3, 18, 18]} />
+          <meshBasicMaterial
+            color="#baffc7"
+            transparent
+            opacity={0.16}
+            side={THREE.BackSide}
+          />
+        </mesh>
         <mesh position={[0, -0.05, 0.22]} castShadow>
           <boxGeometry args={[0.2, 0.12, 0.28]} />
           <meshStandardMaterial color={palette.highlight} roughness={0.5} />
@@ -892,22 +994,39 @@ const Player = ({
 };
 
 // Floor tile
-const FloorTile = ({ position, color }: { position: [number, number, number]; color: string }) => {
+const FloorTile = ({
+  position,
+  color,
+  noiseMap
+}: {
+  position: [number, number, number];
+  color: string;
+  noiseMap?: THREE.Texture | null;
+}) => {
   return (
     <mesh position={position} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[1, 1]} />
+      <planeGeometry args={[1, 1, 8, 8]} />
       <meshStandardMaterial
         color={color}
         roughness={0.7}
         emissive={color}
         emissiveIntensity={0.05}
+        roughnessMap={noiseMap ?? undefined}
+        bumpMap={noiseMap ?? undefined}
+        bumpScale={0.02}
       />
     </mesh>
   );
 };
 
 // Water tile - animated shimmer
-const WaterTile = ({ position }: { position: [number, number, number] }) => {
+const WaterTile = ({
+  position,
+  noiseMap
+}: {
+  position: [number, number, number];
+  noiseMap?: THREE.Texture | null;
+}) => {
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -935,6 +1054,7 @@ const WaterTile = ({ position }: { position: [number, number, number] }) => {
           metalness={0.6}
           emissive="#2aa9ff"
           emissiveIntensity={0.2}
+          roughnessMap={noiseMap ?? undefined}
         />
       </mesh>
       {/* Subtle glow */}
@@ -1218,6 +1338,61 @@ export const Game3D = ({
   const initialCameraZ = is2D ? 0.5 : 6;
   const fov = is2D ? 42 : 50;
 
+  const noiseTexture = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const imageData = ctx.createImageData(size, size);
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      const value = 90 + Math.random() * 80;
+      imageData.data[i] = value;
+      imageData.data[i + 1] = value;
+      imageData.data[i + 2] = value;
+      imageData.data[i + 3] = 255;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(6, 6);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+
+  const environmentMap = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const makeFace = (top: string, bottom: string) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return canvas;
+      const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+      gradient.addColorStop(0, top);
+      gradient.addColorStop(1, bottom);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 256, 256);
+      return canvas;
+    };
+    const faces = [
+      makeFace('#1c2a3a', '#0f172a'),
+      makeFace('#1c2a3a', '#0f172a'),
+      makeFace('#243b55', '#0f172a'),
+      makeFace('#0f172a', '#05070f'),
+      makeFace('#1c2a3a', '#0f172a'),
+      makeFace('#1c2a3a', '#0f172a')
+    ];
+    const cube = new THREE.CubeTexture(faces);
+    cube.needsUpdate = true;
+    cube.colorSpace = THREE.SRGBColorSpace;
+    return cube;
+  }, []);
+
   return (
     <div className="w-full h-full bg-gradient-to-b from-stone-950 via-stone-900 to-slate-900 overflow-hidden touch-none relative z-30">
       <Canvas
@@ -1231,6 +1406,8 @@ export const Game3D = ({
         }}
         onClick={() => onCancelSelection?.()}
       >
+        <EnvironmentSetup envMap={environmentMap} />
+        <PostProcessing />
         <PerspectiveCamera
           makeDefault
           position={[0, initialCameraY, initialCameraZ]}
@@ -1267,6 +1444,7 @@ export const Game3D = ({
         <pointLight position={[-5, 5, -5]} intensity={0.7} color={themeColors.wall} />
         <pointLight position={[5, 6, 5]} intensity={0.5} color={themeColors.floor} />
         <pointLight position={[0, 8, 0]} intensity={0.25} color="#ffffff" />
+        <directionalLight position={[-6, 6, 14]} intensity={0.45} color="#9dffcc" />
 
         {/* Animated moonlit sky background */}
         <AnimatedSkyBackground gridWidth={gridWidth} gridHeight={gridHeight} />
@@ -1285,11 +1463,13 @@ export const Game3D = ({
               <group key={`${x}-${y}`}>
                 {/* Render floor for non-void cells, void cells (5) are transparent */}
                 {cell !== 5 && (
-                  cell === 4 ? <WaterTile position={pos} /> : <FloorTile position={pos} color={themeColors.floor} />
+                  cell === 4
+                    ? <WaterTile position={pos} noiseMap={noiseTexture} />
+                    : <FloorTile position={pos} color={themeColors.floor} noiseMap={noiseTexture} />
                 )}
-                {cell === 1 && <FireWall position={[pos[0], 0.5, pos[2]]} color={themeColors.wall} />}
-                {cell === 2 && <Stone position={[pos[0], 0.4, pos[2]]} color={themeColors.stone} />}
-                {cell === 6 && <BreakableRock position={[pos[0], 0.4, pos[2]]} color={themeColors.breakable} />}
+                {cell === 1 && <FireWall position={[pos[0], 0.5, pos[2]]} color={themeColors.wall} noiseMap={noiseTexture} />}
+                {cell === 2 && <Stone position={[pos[0], 0.4, pos[2]]} color={themeColors.stone} noiseMap={noiseTexture} />}
+                {cell === 6 && <BreakableRock position={[pos[0], 0.4, pos[2]]} color={themeColors.breakable} noiseMap={noiseTexture} />}
                 {isArrowTile && (
                   <group>
                     <ArrowTile
@@ -1298,6 +1478,7 @@ export const Game3D = ({
                       isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
                       hasSelection={hasSelection}
                       color={themeColors.arrow}
+                      noiseMap={noiseTexture}
                       onClick={(e) => {
                         e.stopPropagation();
                         onArrowClick?.(x, y);
@@ -1321,6 +1502,7 @@ export const Game3D = ({
                       isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
                       hasSelection={hasSelection}
                       color={themeColors.arrow}
+                      noiseMap={noiseTexture}
                       onClick={(e) => {
                         e.stopPropagation();
                         onArrowClick?.(x, y);
@@ -1345,6 +1527,7 @@ export const Game3D = ({
                       isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
                       hasSelection={hasSelection}
                       color={themeColors.arrow}
+                      noiseMap={noiseTexture}
                       onClick={(e) => {
                         e.stopPropagation();
                         onArrowClick?.(x, y);
@@ -1361,7 +1544,7 @@ export const Game3D = ({
                     )}
                   </group>
                 )}
-                {isCave && <Cave position={[pos[0], 0.05, pos[2]]} color={themeColors.cave} />}
+                {isCave && <Cave position={[pos[0], 0.05, pos[2]]} color={themeColors.cave} noiseMap={noiseTexture} />}
                 {/* Show player at ground level when not on arrow */}
                 {isPlayer && !isArrowTile && !isBidirectionalArrow && !isOmnidirectionalArrow && (
                   <Player
@@ -1410,4 +1593,56 @@ export const Game3D = ({
       </Canvas>
     </div >
   );
+};
+
+const EnvironmentSetup = ({ envMap }: { envMap: THREE.CubeTexture | null }) => {
+  const { scene } = useThree();
+
+  useEffect(() => {
+    if (!envMap) return;
+    const previous = scene.environment;
+    scene.environment = envMap;
+    return () => {
+      scene.environment = previous;
+    };
+  }, [envMap, scene]);
+
+  return null;
+};
+
+const PostProcessing = () => {
+  const { gl, scene, camera, size } = useThree();
+  const composerRef = useRef<EffectComposer | null>(null);
+
+  useEffect(() => {
+    const composer = new EffectComposer(gl);
+    composer.addPass(new RenderPass(scene, camera));
+
+    const bloom = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 0.6, 0.8, 0.85);
+    composer.addPass(bloom);
+
+    const vignette = new ShaderPass(VignetteShader);
+    vignette.uniforms.offset.value = 1.08;
+    vignette.uniforms.darkness.value = 1.15;
+    composer.addPass(vignette);
+
+    composerRef.current = composer;
+    return () => {
+      composerRef.current = null;
+    };
+  }, [gl, scene, camera, size.width, size.height]);
+
+  useEffect(() => {
+    if (composerRef.current) {
+      composerRef.current.setSize(size.width, size.height);
+    }
+  }, [size.width, size.height]);
+
+  useFrame(() => {
+    if (composerRef.current) {
+      composerRef.current.render();
+    }
+  }, 1);
+
+  return null;
 };

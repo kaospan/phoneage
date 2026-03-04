@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
+import { runBulkBuildAndDownload } from "@/lib/levelBulkBuilder";
 
 console.log('🚀 main.tsx starting...');
 
@@ -20,6 +21,26 @@ try {
   seedDefaultReferences().catch((error) => {
     console.warn('Failed to seed default references:', error);
   });
+
+  if (typeof window !== 'undefined') {
+    (window as any).runBulkBuildAndDownload = runBulkBuildAndDownload;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('bulkbuild') && sessionStorage.getItem('bulkbuild-ran') !== '1') {
+      sessionStorage.setItem('bulkbuild-ran', '1');
+      setTimeout(() => {
+        runBulkBuildAndDownload({
+          onProgress: (status) => console.log(`[bulkbuild] ${status}`)
+        })
+          .then((report) => {
+            console.log('[bulkbuild] complete', report.summary, 'edge cases', report.edgeCases?.length ?? 0);
+          })
+          .catch((error) => {
+            console.error('[bulkbuild] failed', error);
+          });
+      }, 500);
+    }
+  }
 
   console.log('⚛️ Rendering App...');
   root.render(
