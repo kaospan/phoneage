@@ -4,6 +4,8 @@ export interface BuildLevelOptions {
   rows?: number;
   cols?: number;
   minSimilarity?: number;
+  timeoutMs?: number;
+  onProgress?: (status: string) => void;
 }
 
 export interface BuiltLevel {
@@ -15,11 +17,31 @@ export interface BuiltLevel {
   source: string;
 }
 
-const loadImage = (url: string): Promise<HTMLImageElement> => {
+const loadImage = (url: string, timeoutMs = 8000): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = (err) => reject(err);
+
+    timeoutId = setTimeout(() => {
+      timeoutId = null;
+      reject(new Error(`Image load timeout (${timeoutMs}ms): ${url}`));
+    }, timeoutMs);
+
+    const clearTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    img.onload = () => {
+      clearTimer();
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      clearTimer();
+      reject(err);
+    };
     img.src = url;
   });
 };
@@ -93,7 +115,8 @@ export const buildLevelFromImage = async (
   imageUrl: string,
   options: BuildLevelOptions = {}
 ): Promise<BuiltLevel> => {
-  const image = await loadImage(imageUrl);
+  options.onProgress?.(`Loading image ${imageUrl.split('/').pop()}`);
+  const image = await loadImage(imageUrl, options.timeoutMs ?? 8000);
   const { rows, cols } = options.rows && options.cols
     ? { rows: options.rows, cols: options.cols }
     : guessGrid(image.width, image.height);
@@ -105,6 +128,7 @@ export const buildLevelFromImage = async (
   if (!ctx) throw new Error('Canvas context unavailable');
   ctx.drawImage(image, 0, 0);
 
+  options.onProgress?.('Preparing sprite references');
   const matcher = await buildReferenceMatcher(options.minSimilarity ?? 0.72);
 
   const grid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(5));
@@ -112,6 +136,9 @@ export const buildLevelFromImage = async (
   const cellHeight = image.height / rows;
 
   for (let r = 0; r < rows; r += 1) {
+    if (r % 2 === 0) {
+      options.onProgress?.(`Scanning row ${r + 1}/${rows}`);
+    }
     for (let c = 0; c < cols; c += 1) {
       const x0 = Math.floor(c * cellWidth + cellWidth * 0.1);
       const y0 = Math.floor(r * cellHeight + cellHeight * 0.1);
@@ -162,10 +189,16 @@ export const buildLevelFromSources = async (
   sources: string[],
   options: BuildLevelOptions = {}
 ): Promise<BuiltLevel> => {
+  const usableSources = sources.filter(Boolean);
+  if (usableSources.length === 0) {
+    throw new Error('No usable sources supplied for level build');
+  }
+
   let best: BuiltLevel | null = null;
 
-  for (const source of sources) {
+  for (const source of usableSources) {
     try {
+      options.onProgress?.(`Analyzing source ${source.split('/').pop()}`);
       const built = await buildLevelFromImage(source, options);
       const nonVoid = built.grid.flat().filter((cell) => cell !== 5).length;
 

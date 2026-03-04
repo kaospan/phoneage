@@ -113,7 +113,7 @@ export const PuzzleGame = () => {
         }
 
         setIsBuilding(true);
-        setBuildStatus('Analyzing level image...');
+          setBuildStatus('Analyzing level image...');
 
         try {
           await seedDefaultReferences();
@@ -122,7 +122,13 @@ export const PuzzleGame = () => {
             throw new Error('No image sources available for this level');
           }
 
-          const built = await buildLevelFromSources(sources, { minSimilarity: 0.72 });
+          const built = await buildLevelFromSources(sources, {
+            minSimilarity: 0.72,
+            timeoutMs: 8000,
+            onProgress: (status) => {
+              if (!cancelled) setBuildStatus(status);
+            },
+          });
           if (cancelled) return;
 
           const builtLevel: LevelData = {
