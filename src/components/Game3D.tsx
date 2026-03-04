@@ -1378,12 +1378,6 @@ export const Game3D = ({
     breakableMaterial.needsUpdate = true;
   }, [themeColors, noiseTexture, floorMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
 
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    waterMaterial.emissiveIntensity = 0.18 + Math.sin(t * 2.2) * 0.06;
-    waterMaterial.opacity = 0.78 + Math.sin(t * 1.6) * 0.04;
-  });
-
   return (
     <div className="w-full h-full bg-gradient-to-b from-stone-950 via-stone-900 to-slate-900 overflow-hidden touch-none relative z-30">
       <Canvas
@@ -1399,6 +1393,7 @@ export const Game3D = ({
       >
         <EnvironmentSetup envMap={environmentMap} />
         <PostProcessing />
+        <WaterAnimator material={waterMaterial} />
         <PerspectiveCamera
           makeDefault
           position={[0, initialCameraY, initialCameraZ]}
@@ -1656,6 +1651,16 @@ const PostProcessing = () => {
       composerRef.current.render();
     }
   }, 1);
+
+  return null;
+};
+
+const WaterAnimator = ({ material }: { material: THREE.MeshStandardMaterial }) => {
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    material.emissiveIntensity = 0.18 + Math.sin(t * 2.2) * 0.06;
+    material.opacity = 0.78 + Math.sin(t * 1.6) * 0.04;
+  });
 
   return null;
 };

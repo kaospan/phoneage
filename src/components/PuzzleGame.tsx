@@ -174,18 +174,30 @@ export const PuzzleGame = () => {
       if (!currentLevel) return;
       let cancelled = false;
 
+      const needsBuild = currentLevel.autoBuild || isPlaceholderGrid(currentLevel.grid);
+      if (!needsBuild) {
+        applyLevelState(currentLevel);
+        return;
+      }
+
+      if (buildInFlightRef.current.has(currentLevel.id)) {
+        return;
+      }
+      buildInFlightRef.current.add(currentLevel.id);
+
       const run = async () => {
-        const needsBuild = currentLevel.autoBuild || isPlaceholderGrid(currentLevel.grid);
-
-        if (!needsBuild) {
-          applyLevelState(currentLevel);
-          return;
-        }
-
         setIsBuilding(true);
-          setBuildStatus('Analyzing level image...');
+        setBuildStatus('Analyzing level image...');
 
         try {
+          await new Promise<void>((resolve) => {
+            if (typeof requestIdleCallback !== 'undefined') {
+              requestIdleCallback(() => resolve());
+            } else {
+              setTimeout(resolve, 0);
+            }
+          });
+
           await seedDefaultReferences();
           const sources = currentLevel.sources?.length ? currentLevel.sources : (currentLevel.image ? [currentLevel.image] : []);
           if (sources.length === 0) {
@@ -195,6 +207,7 @@ export const PuzzleGame = () => {
           const buildPromise = buildLevelFromSources(sources, {
             minSimilarity: 0.72,
             timeoutMs: 8000,
+            yieldEveryRows: 1,
             onProgress: (status) => {
               if (!cancelled) setBuildStatus(status);
             },
@@ -231,6 +244,7 @@ export const PuzzleGame = () => {
             applyLevelState(fallback as LevelData);
           }
         } finally {
+          buildInFlightRef.current.delete(currentLevel.id);
           if (!cancelled) {
             setIsBuilding(false);
             setBuildStatus('');
