@@ -682,18 +682,62 @@ const Player = ({
   showFlash?: boolean;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
+  const headRef = useRef<THREE.Group>(null);
+  const tailRef = useRef<THREE.Group>(null);
+  const torsoRef = useRef<THREE.Group>(null);
+  const leftEyeRef = useRef<THREE.Mesh>(null);
+  const rightEyeRef = useRef<THREE.Mesh>(null);
   const targetPos = useRef(new THREE.Vector3(...position));
   const lastTapTimeRef = useRef<number>(0);
+  const blinkTimerRef = useRef(0);
+
+  const palette = useMemo(() => {
+    const base = new THREE.Color(color).lerp(new THREE.Color('#27d36b'), 0.65);
+    return {
+      base,
+      belly: base.clone().lerp(new THREE.Color('#b7ff9a'), 0.55),
+      dark: base.clone().multiplyScalar(0.65),
+      spike: new THREE.Color('#1f6b3a'),
+      stripe: base.clone().multiplyScalar(0.8),
+      highlight: base.clone().lerp(new THREE.Color('#eaffd6'), 0.5),
+    };
+  }, [color]);
 
   useEffect(() => {
     targetPos.current.set(...position);
   }, [position]);
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
     if (groupRef.current) {
       // Smooth interpolation to target position
       groupRef.current.position.lerp(targetPos.current, 0.3);
     }
+
+    const t = clock.getElapsedTime();
+    const bob = Math.sin(t * 4) * 0.03;
+    const sway = Math.sin(t * 2.2) * 0.12;
+    const tailSwing = Math.sin(t * 3.2) * 0.35;
+    const headNod = Math.sin(t * 2.4) * 0.18;
+
+    if (torsoRef.current) {
+      torsoRef.current.position.y = 0.05 + bob;
+      torsoRef.current.rotation.z = sway * 0.15;
+    }
+    if (tailRef.current) {
+      tailRef.current.rotation.y = tailSwing;
+      tailRef.current.rotation.x = -0.1 + Math.sin(t * 2.8) * 0.05;
+    }
+    if (headRef.current) {
+      headRef.current.rotation.x = -0.1 + headNod * 0.4;
+      headRef.current.rotation.y = sway * 0.4;
+    }
+
+    // Blink logic
+    blinkTimerRef.current += 0.016;
+    const blinkPhase = Math.sin(t * 1.8 + Math.sin(t * 0.3));
+    const blink = blinkPhase > 0.92 ? 0.15 : 1;
+    if (leftEyeRef.current) leftEyeRef.current.scale.y = blink;
+    if (rightEyeRef.current) rightEyeRef.current.scale.y = blink;
   });
 
   const handlePointerDown = (e: any) => {
@@ -718,75 +762,131 @@ const Player = ({
           <meshBasicMaterial color="#FFD700" transparent opacity={0.8} />
         </mesh>
       )}
-      {/* Body - more detailed */}
-      <mesh position={[0, 0.35, 0]} castShadow>
-        <capsuleGeometry args={[0.22, 0.5, 12, 20]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.3}
-          roughness={0.6}
-          metalness={0.2}
-        />
-      </mesh>
-
-      {/* Head - larger and more detailed */}
-      <mesh position={[0, 0.85, 0.15]} castShadow>
-        <sphereGeometry args={[0.28, 20, 20]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.2}
-          roughness={0.5}
-        />
-      </mesh>
-
-      {/* Snout */}
-      <mesh position={[0, 0.8, 0.35]} castShadow>
-        <boxGeometry args={[0.15, 0.12, 0.2]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.1}
-        />
-      </mesh>
-
-      {/* Eyes */}
-      <mesh position={[0.12, 0.9, 0.3]}>
-        <sphereGeometry args={[0.05, 12, 12]} />
-        <meshStandardMaterial color="#ffffff" emissive="#ffff00" emissiveIntensity={0.2} />
-      </mesh>
-      <mesh position={[-0.12, 0.9, 0.3]}>
-        <sphereGeometry args={[0.05, 12, 12]} />
-        <meshStandardMaterial color="#ffffff" emissive="#ffff00" emissiveIntensity={0.2} />
-      </mesh>
-
-      {/* Spikes on back */}
-      {[0, 1, 2, 3].map((i) => (
-        <mesh key={i} position={[0, 0.65 - i * 0.15, -0.15 - i * 0.08]} rotation={[0, 0, 0]}>
-          <coneGeometry args={[0.08, 0.2, 4]} />
-          <meshStandardMaterial color="#4a7c23" />
+      <group ref={torsoRef} position={[0, 0, 0]}>
+        {/* Body core */}
+        <mesh position={[0, 0.34, 0]} castShadow>
+          <capsuleGeometry args={[0.26, 0.55, 14, 24]} />
+          <meshPhysicalMaterial
+            color={palette.base}
+            roughness={0.45}
+            metalness={0.08}
+            clearcoat={0.25}
+            clearcoatRoughness={0.2}
+          />
         </mesh>
-      ))}
 
-      {/* Tail - longer and more detailed */}
-      <mesh position={[0, 0.25, -0.4]} rotation={[0.6, 0, 0]}>
-        <coneGeometry args={[0.12, 0.6, 8]} />
-        <meshStandardMaterial color="#2d5016" />
-      </mesh>
+        {/* Belly */}
+        <mesh position={[0, 0.26, 0.09]} castShadow>
+          <sphereGeometry args={[0.22, 16, 16]} />
+          <meshStandardMaterial color={palette.belly} roughness={0.6} />
+        </mesh>
 
-      {/* Legs */}
-      <mesh position={[0.15, 0.1, 0.15]}>
-        <cylinderGeometry args={[0.08, 0.06, 0.25, 8]} />
-        <meshStandardMaterial color="#264014" />
-      </mesh>
-      <mesh position={[-0.15, 0.1, 0.15]}>
-        <cylinderGeometry args={[0.08, 0.06, 0.25, 8]} />
-        <meshStandardMaterial color="#264014" />
-      </mesh>
+        {/* Shoulder plates */}
+        {[-0.22, 0.22].map((x, idx) => (
+          <mesh key={`shoulder-${idx}`} position={[x, 0.43, 0.02]} castShadow>
+            <sphereGeometry args={[0.14, 12, 12]} />
+            <meshStandardMaterial color={palette.highlight} roughness={0.4} />
+          </mesh>
+        ))}
 
-      {/* Glow effect */}
-      <pointLight position={[0, 0.6, 0]} intensity={0.5} color="#6ab82e" distance={2.5} />
+        {/* Arms */}
+        {[-0.25, 0.25].map((x, idx) => (
+          <group key={`arm-${idx}`} position={[x, 0.22, 0.2]} rotation={[0.2, idx === 0 ? 0.3 : -0.3, 0]}>
+            <mesh castShadow>
+              <capsuleGeometry args={[0.06, 0.2, 8, 12]} />
+              <meshStandardMaterial color={palette.dark} roughness={0.7} />
+            </mesh>
+            <mesh position={[0, -0.14, 0.05]} castShadow>
+              <coneGeometry args={[0.05, 0.12, 6]} />
+              <meshStandardMaterial color={palette.spike} />
+            </mesh>
+          </group>
+        ))}
+
+        {/* Legs */}
+        {[-0.16, 0.16].map((x, idx) => (
+          <group key={`leg-${idx}`} position={[x, 0.08, -0.05]} rotation={[0.1, 0, 0]}>
+            <mesh castShadow>
+              <cylinderGeometry args={[0.1, 0.12, 0.28, 10]} />
+              <meshStandardMaterial color={palette.dark} roughness={0.8} />
+            </mesh>
+            <mesh position={[0, -0.16, 0.08]} castShadow>
+              <boxGeometry args={[0.18, 0.08, 0.24]} />
+              <meshStandardMaterial color={palette.spike} roughness={0.5} />
+            </mesh>
+          </group>
+        ))}
+
+        {/* Back spikes */}
+        {[0, 1, 2, 3, 4].map((i) => (
+          <mesh key={`spike-${i}`} position={[0, 0.62 - i * 0.12, -0.12 - i * 0.1]}>
+            <coneGeometry args={[0.08 - i * 0.008, 0.22, 6]} />
+            <meshStandardMaterial color={palette.spike} roughness={0.6} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Tail */}
+      <group ref={tailRef} position={[0, 0.24, -0.45]} rotation={[0.2, 0, 0]}>
+        {[0, 1, 2].map((i) => (
+          <mesh key={`tail-${i}`} position={[0, 0, -i * 0.2]} castShadow>
+            <coneGeometry args={[0.14 - i * 0.03, 0.28, 8]} />
+            <meshStandardMaterial color={palette.dark} roughness={0.7} />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.02, -0.6]} castShadow>
+          <coneGeometry args={[0.05, 0.2, 8]} />
+          <meshStandardMaterial color={palette.spike} />
+        </mesh>
+      </group>
+
+      {/* Head */}
+      <group ref={headRef} position={[0, 0.85, 0.18]}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.3, 22, 22]} />
+          <meshPhysicalMaterial
+            color={palette.base}
+            roughness={0.4}
+            metalness={0.1}
+            clearcoat={0.2}
+          />
+        </mesh>
+        <mesh position={[0, -0.05, 0.22]} castShadow>
+          <boxGeometry args={[0.2, 0.12, 0.28]} />
+          <meshStandardMaterial color={palette.highlight} roughness={0.5} />
+        </mesh>
+        {/* Jaw */}
+        <mesh position={[0, -0.12, 0.26]} castShadow>
+          <boxGeometry args={[0.22, 0.08, 0.26]} />
+          <meshStandardMaterial color={palette.belly} roughness={0.6} />
+        </mesh>
+        {/* Nostrils */}
+        {[-0.05, 0.05].map((x, idx) => (
+          <mesh key={`nostril-${idx}`} position={[x, -0.02, 0.36]}>
+            <sphereGeometry args={[0.02, 8, 8]} />
+            <meshStandardMaterial color="#1a1a1a" />
+          </mesh>
+        ))}
+        {/* Eyes */}
+        <mesh ref={leftEyeRef} position={[0.12, 0.06, 0.26]}>
+          <sphereGeometry args={[0.05, 12, 12]} />
+          <meshStandardMaterial color="#f5fffa" emissive="#b6ffd1" emissiveIntensity={0.3} />
+        </mesh>
+        <mesh ref={rightEyeRef} position={[-0.12, 0.06, 0.26]}>
+          <sphereGeometry args={[0.05, 12, 12]} />
+          <meshStandardMaterial color="#f5fffa" emissive="#b6ffd1" emissiveIntensity={0.3} />
+        </mesh>
+        {/* Pupils */}
+        {[-0.12, 0.12].map((x, idx) => (
+          <mesh key={`pupil-${idx}`} position={[x, 0.06, 0.3]}>
+            <sphereGeometry args={[0.02, 8, 8]} />
+            <meshStandardMaterial color="#111111" />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Ambient glow */}
+      <pointLight position={[0.1, 0.6, 0.1]} intensity={0.7} color="#7dff9b" distance={2.8} />
     </group>
   );
 };
@@ -806,24 +906,39 @@ const FloorTile = ({ position, color }: { position: [number, number, number]; co
   );
 };
 
-// Water tile - improved with wave effect
+// Water tile - animated shimmer
 const WaterTile = ({ position }: { position: [number, number, number] }) => {
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (materialRef.current) {
+      materialRef.current.emissiveIntensity = 0.18 + Math.sin(t * 2.2) * 0.06;
+      materialRef.current.opacity = 0.78 + Math.sin(t * 1.6) * 0.04;
+    }
+    if (meshRef.current) {
+      meshRef.current.position.y = Math.sin(t * 1.4) * 0.015;
+    }
+  });
+
   return (
     <group position={position}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[1, 1]} />
+      <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[1, 1, 8, 8]} />
         <meshStandardMaterial
+          ref={materialRef}
           color="#1e90ff"
           transparent
           opacity={0.8}
-          roughness={0.1}
-          metalness={0.5}
-          emissive="#0066cc"
+          roughness={0.08}
+          metalness={0.6}
+          emissive="#2aa9ff"
           emissiveIntensity={0.2}
         />
       </mesh>
       {/* Subtle glow */}
-      <pointLight position={[0, 0.2, 0]} intensity={0.3} color="#1e90ff" distance={1.5} />
+      <pointLight position={[0, 0.2, 0]} intensity={0.35} color="#2aa9ff" distance={1.6} />
     </group>
   );
 };
@@ -1104,8 +1219,18 @@ export const Game3D = ({
   const fov = is2D ? 42 : 50;
 
   return (
-    <div className="w-full h-full bg-gradient-to-b from-stone-900 to-stone-800 overflow-hidden touch-none relative z-30">
-      <Canvas shadows onClick={() => onCancelSelection?.()}>
+    <div className="w-full h-full bg-gradient-to-b from-stone-950 via-stone-900 to-slate-900 overflow-hidden touch-none relative z-30">
+      <Canvas
+        shadows
+        dpr={[1, 2]}
+        gl={{
+          antialias: true,
+          physicallyCorrectLights: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          outputColorSpace: THREE.SRGBColorSpace
+        }}
+        onClick={() => onCancelSelection?.()}
+      >
         <PerspectiveCamera
           makeDefault
           position={[0, initialCameraY, initialCameraZ]}
@@ -1122,18 +1247,26 @@ export const Game3D = ({
           viewMode={viewMode}
         />
 
+        {/* Scene mood */}
+        <fog attach="fog" args={['#0a141f', 10, 40]} />
+
         {/* Enhanced Lighting with theme-based ambient */}
-        <ambientLight intensity={0.4} color={themeColors.ambient} />
+        <ambientLight intensity={0.35} color={themeColors.ambient} />
+        <hemisphereLight intensity={0.35} color="#dff6ff" groundColor="#1b2a3a" />
         <directionalLight
           position={[10, 15, 10]}
-          intensity={1.2}
+          intensity={1.35}
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
+          shadow-bias={-0.0008}
+          shadow-radius={3}
           color="#ffffff"
         />
-        <pointLight position={[-5, 5, -5]} intensity={0.6} color={themeColors.wall} />
-        <pointLight position={[5, 5, 5]} intensity={0.4} color={themeColors.floor} />
+        <directionalLight position={[-12, 8, -6]} intensity={0.6} color="#9cc7ff" />
+        <pointLight position={[-5, 5, -5]} intensity={0.7} color={themeColors.wall} />
+        <pointLight position={[5, 6, 5]} intensity={0.5} color={themeColors.floor} />
+        <pointLight position={[0, 8, 0]} intensity={0.25} color="#ffffff" />
 
         {/* Animated moonlit sky background */}
         <AnimatedSkyBackground gridWidth={gridWidth} gridHeight={gridHeight} />
