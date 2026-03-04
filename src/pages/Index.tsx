@@ -1,6 +1,7 @@
 import { PuzzleGame } from "@/components/PuzzleGame";
 import LevelMapper from "@/components/LevelMapper";
 import bgImage from "@/assets/stone-age-bg.png";
+import { useLocation } from "react-router-dom";
 
 console.log('📄 Index.tsx loading...');
 
@@ -8,7 +9,10 @@ const Index = () => {
     console.log('⚛️ Index component rendering...');
 
     try {
-        const showMapper = typeof window !== 'undefined' && window.location.search.includes('mapper');
+        const location = useLocation();
+        const showMapper =
+            location.pathname.includes("mapper") ||
+            location.search.includes("mapper");
         console.log('🎮 Show mapper:', showMapper);
 
         return (
@@ -30,8 +34,8 @@ const Index = () => {
                         backgroundPosition: 'center',
                     }}
                 />
-                {/* Dark overlay for better readability */}
-                <div className="absolute inset-0 bg-black/40 scanline" />
+                {/* Cool blue overlay for better readability */}
+                <div className="absolute inset-0 bg-blue-900/40 scanline" />
 
                 {/* Game content - prioritize playable area */}
                 <div className="relative z-10 min-h-screen">

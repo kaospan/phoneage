@@ -1,3 +1,4 @@
+/* @refresh reset */
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -52,46 +53,46 @@ interface SimulationState {
   cavePos: Position;
 }
 
+type LevelData = ReturnType<typeof getAllLevels>[number];
+
 export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
-  try {
-    type LevelData = ReturnType<typeof getAllLevels>[number];
-    const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
-    const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
-    const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
-    const [renderCavePos, setRenderCavePos] = useState({ x: 0, y: 0 });
-    const [activeLevel, setActiveLevel] = useState<LevelData | null>(null);
-    const [moves, setMoves] = useState(0);
-    const [isComplete, setIsComplete] = useState(false);
-    const [viewMode, setViewMode] = useState<"3d" | "2d">("3d");
-    const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
-    const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
-    // Selector navigation state for keyboard-based arrow selection
-    const [selectorPos, setSelectorPos] = useState<{ x: number; y: number } | null>(null);
-    const [isSelectorActive, setIsSelectorActive] = useState(false);
+  const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
+  const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
+  const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
+  const [renderCavePos, setRenderCavePos] = useState({ x: 0, y: 0 });
+  const [activeLevel, setActiveLevel] = useState<LevelData | null>(null);
+  const [moves, setMoves] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+  const [viewMode, setViewMode] = useState<"3d" | "2d">("3d");
+  const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
+  const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
+  // Selector navigation state for keyboard-based arrow selection
+  const [selectorPos, setSelectorPos] = useState<{ x: number; y: number } | null>(null);
+  const [isSelectorActive, setIsSelectorActive] = useState(false);
 
-    // Dragging state for panning the view
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-    const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
+  // Dragging state for panning the view
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
 
-    // Player highlight flash state for control transfer feedback
-    const [playerFlashCount, setPlayerFlashCount] = useState(0);
-    const [isBuilding, setIsBuilding] = useState(false);
-    const [buildStatus, setBuildStatus] = useState<string>('');
-    const [networkStatus, setNetworkStatus] = useState<'offline' | 'connecting' | 'online'>('offline');
+  // Player highlight flash state for control transfer feedback
+  const [playerFlashCount, setPlayerFlashCount] = useState(0);
+  const [isBuilding, setIsBuilding] = useState(false);
+  const [buildStatus, setBuildStatus] = useState<string>('');
+  const [networkStatus, setNetworkStatus] = useState<'offline' | 'connecting' | 'online'>('offline');
 
-    const simRef = useRef<SimulationState | null>(null);
-    const inputQueueRef = useRef<Map<PlayerId, InputCommand[]>>(new Map());
-    const localPlayerIdRef = useRef<PlayerId>('local');
-    const inputSeqRef = useRef(0);
-    const wsRef = useRef<WebSocket | null>(null);
-    const lastRenderRef = useRef(0);
-    const buildInFlightRef = useRef<Set<number>>(new Set());
+  const simRef = useRef<SimulationState | null>(null);
+  const inputQueueRef = useRef<Map<PlayerId, InputCommand[]>>(new Map());
+  const localPlayerIdRef = useRef<PlayerId>('local');
+  const inputSeqRef = useRef(0);
+  const wsRef = useRef<WebSocket | null>(null);
+  const lastRenderRef = useRef(0);
+  const buildInFlightRef = useRef<Set<number>>(new Set());
 
-    const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex]);
-    const currentLevel = allLevels[currentLevelIndex];
+  const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex]);
+  const currentLevel = allLevels[currentLevelIndex];
 
     const isPlaceholderGrid = useCallback((levelGrid?: number[][]) => {
       if (!levelGrid || levelGrid.length === 0) return true;
@@ -174,7 +175,7 @@ export const PuzzleGame = () => {
       if (!currentLevel) return;
       let cancelled = false;
 
-      const needsBuild = currentLevel.autoBuild || isPlaceholderGrid(currentLevel.grid);
+      const needsBuild = isPlaceholderGrid(currentLevel.grid);
       if (!needsBuild) {
         applyLevelState(currentLevel);
         return;
@@ -587,63 +588,18 @@ export const PuzzleGame = () => {
     );
     const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
 
-    // Keyboard controls (player movement or selector navigation)
+    // Keyboard controls (player movement)
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
         if (isBuilding) return;
         const key = e.key;
-        // Space/Enter: deselect arrow (manual) OR toggle selector
+        // Space/Enter: deselect arrow (manual)
         if (key === ' ' || key === 'Enter') {
           e.preventDefault();
-          // If arrow is selected, deselect it manually
-          if (selectedArrow && !isSelectorActive) {
+          if (selectedArrow) {
             enqueueInput({ type: "deselect" });
             flashPlayerHighlight();
             toast.info("Arrow deselected - control returned to player");
-            return;
-          }
-          // Otherwise, handle selector mode
-          if (!isSelectorActive) {
-            // Activate selector at player position
-            setIsSelectorActive(true);
-            setSelectorPos({ x: localPlayerPos.x, y: localPlayerPos.y });
-            enqueueInput({ type: "deselect" });
-          } else {
-            if (selectorPos) {
-              const cell = renderGrid[selectorPos.y]?.[selectorPos.x];
-              if (cell !== undefined && isArrowCell(cell)) {
-                enqueueInput({ type: "select", x: selectorPos.x, y: selectorPos.y });
-                toast.info("Arrow selected via keyboard selector");
-                setIsSelectorActive(false);
-                setSelectorPos(null);
-              } else {
-                setIsSelectorActive(false);
-                setSelectorPos(null);
-              }
-            } else {
-              setIsSelectorActive(false);
-            }
-          }
-          return;
-        }
-        // If selector active, navigate highlight instead of moving player/arrow
-        if (isSelectorActive && selectorPos) {
-          let dx = 0, dy = 0;
-          switch (key) {
-            case 'ArrowUp': case 'w': case 'W': dy = -1; break;
-            case 'ArrowDown': case 's': case 'S': dy = 1; break;
-            case 'ArrowLeft': case 'a': case 'A': dx = -1; break;
-            case 'ArrowRight': case 'd': case 'D': dx = 1; break;
-            default: break;
-          }
-          if (dx !== 0 || dy !== 0) {
-            e.preventDefault();
-            setSelectorPos(pos => {
-              if (!pos || renderGrid.length === 0) return pos;
-              const nx = Math.max(0, Math.min(renderGrid[0].length - 1, pos.x + dx));
-              const ny = Math.max(0, Math.min(renderGrid.length - 1, pos.y + dy));
-              return { x: nx, y: ny };
-            });
           }
           return;
         }
@@ -660,7 +616,7 @@ export const PuzzleGame = () => {
       };
       window.addEventListener('keydown', handleKeyPress);
       return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [enqueueInput, currentLevelIndex, isSelectorActive, selectorPos, renderGrid, localPlayerPos, isBuilding, queueMove, flashPlayerHighlight, selectedArrow]);
+    }, [enqueueInput, currentLevelIndex, isBuilding, queueMove, flashPlayerHighlight, selectedArrow]);
 
     const resetLevel = () => {
       const levelToReset = activeLevel ?? currentLevel;
@@ -934,14 +890,4 @@ export const PuzzleGame = () => {
         )}
       </div>
     );
-  } catch (error) {
-    console.error('❌ Error in PuzzleGame component:', error);
-    return (
-      <div style={{ padding: '20px', color: 'red' }}>
-        <h2>Game Failed to Load</h2>
-        <p>{(error as Error).message}</p>
-        <button onClick={() => window.location.reload()}>Reload</button>
-      </div>
-    );
-  }
 };

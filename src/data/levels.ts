@@ -217,6 +217,7 @@ export const manualLevels: Level[] = [
 ];
 
 export const manualFallbackById = new Map(manualLevels.map((level) => [level.id, level]));
+const manualById = new Map(manualLevels.map((level) => [level.id, level]));
 
 const buildAutoLevels = (): Level[] => {
   if (stageImageSets.length === 0) {
@@ -233,16 +234,28 @@ const buildAutoLevels = (): Level[] => {
     'neon',
   ];
 
-  return stageImageSets.map((stage) => ({
-    id: stage.id,
-    grid: [[5]],
-    playerStart: { x: 0, y: 0 },
-    cavePos: { x: 0, y: 0 },
-    theme: themeCycle[(stage.id - 1) % themeCycle.length],
-    image: stage.primary,
-    sources: stage.sources,
-    autoBuild: true,
-  }));
+  return stageImageSets.map((stage) => {
+    const manual = manualById.get(stage.id);
+    if (manual) {
+      return {
+        ...manual,
+        image: stage.primary,
+        sources: stage.sources,
+        autoBuild: false,
+      };
+    }
+
+    return {
+      id: stage.id,
+      grid: [[5]],
+      playerStart: { x: 0, y: 0 },
+      cavePos: { x: 0, y: 0 },
+      theme: themeCycle[(stage.id - 1) % themeCycle.length],
+      image: stage.primary,
+      sources: stage.sources,
+      autoBuild: true,
+    };
+  });
 };
 
 export const allLevels = buildAutoLevels();
@@ -264,6 +277,7 @@ export const getAllLevels = (): Level[] => {
     
     console.log('🔍 Checking localStorage for overrides...');
     const withOverrides = base.map(l => {
+      if (l.autoBuild === false) return l;
       const key = `level_override_${l.id}`;
       const raw = localStorage.getItem(key);
       if (!raw) return l;

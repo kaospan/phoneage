@@ -1379,7 +1379,7 @@ export const Game3D = ({
   }, [themeColors, noiseTexture, floorMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
 
   return (
-    <div className="w-full h-full bg-gradient-to-b from-stone-950 via-stone-900 to-slate-900 overflow-hidden touch-none relative z-30">
+    <div className="w-full h-full bg-gradient-to-b from-blue-950 via-slate-900 to-blue-950 overflow-hidden touch-none relative z-30">
       <Canvas
         shadows
         dpr={[1, 2]}
