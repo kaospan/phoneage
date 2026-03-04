@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "report:levels": "node scripts/level-build-report.mjs"
+    "report:levels": "node scripts/level-build-report.mjs",
+    "ws:server": "node server/ws-server.mjs"
     },
     "dependencies": {
         "@hookform/resolvers": "^3.10.0",
@@ -61,9 +62,10 @@
         "sonner": "^1.7.4",
         "tailwind-merge": "^2.6.0",
         "tailwindcss-animate": "^1.0.7",
-        "three": "^0.160.1",
-        "vaul": "^0.9.9",
-        "zod": "^3.25.76"
+    "three": "^0.160.1",
+    "vaul": "^0.9.9",
+    "zod": "^3.25.76",
+    "ws": "^8.18.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.32.0",

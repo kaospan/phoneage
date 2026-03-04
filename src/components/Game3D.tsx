@@ -1,8 +1,9 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { useEffect, useRef, useMemo, useState } from 'react';
-import { themes, type ColorTheme, type ThemeColors } from '@/data/levels';
+import { useEffect, useRef, useMemo, useLayoutEffect } from 'react';
+import { themes, type ColorTheme } from '@/data/levels';
+import { isArrowCell } from '@/game/arrows';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
@@ -11,127 +12,20 @@ import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader';
 
 interface Game3DProps {
   grid: number[][];
-  playerPos: { x: number; y: number };
   cavePos: { x: number; y: number };
   selectedArrow?: { x: number; y: number } | null;
   selectorPos?: { x: number; y: number } | null;
   cameraOffset?: { x: number; z: number };
   viewMode?: '2d' | '3d';
   theme?: ColorTheme;
+  players: Array<{ id: string; pos: { x: number; y: number }; color: string; isLocal?: boolean }>;
+  localPlayerId?: string;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
   onPlayerClick?: () => void;
   playerFlashCount?: number;
 }
 
-// Wall (Non-breakable Brown Rock) - low profile with X marker (unwalkable)
-const FireWall = ({
-  position,
-  color,
-  noiseMap
-}: {
-  position: [number, number, number];
-  color: string;
-  noiseMap?: THREE.Texture | null;
-}) => {
-  return (
-    <group position={position}>
-      {/* Low-profile tile cap with gradient effect */}
-      <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.98, 0.2, 0.98]} />
-        <meshStandardMaterial
-          color={color}
-          roughness={0.7}
-          metalness={0.2}
-          emissive={color}
-          emissiveIntensity={0.1}
-          roughnessMap={noiseMap ?? undefined}
-          bumpMap={noiseMap ?? undefined}
-          bumpScale={0.03}
-          envMapIntensity={0.4}
-        />
-      </mesh>
-
-      {/* X marker to indicate blocked/unwalkable */}
-      <mesh position={[0, 0.12, 0]} rotation={[0, Math.PI / 4, 0]}>
-        <boxGeometry args={[0.96, 0.02, 0.08]} />
-        <meshStandardMaterial
-          color="#000000"
-          emissive="#ff0000"
-          emissiveIntensity={0.3}
-          roughness={0.8}
-        />
-      </mesh>
-      <mesh position={[0, 0.12, 0]} rotation={[0, -Math.PI / 4, 0]}>
-        <boxGeometry args={[0.96, 0.02, 0.08]} />
-        <meshStandardMaterial
-          color="#000000"
-          emissive="#ff0000"
-          emissiveIntensity={0.3}
-          roughness={0.8}
-        />
-      </mesh>
-    </group>
-  );
-};
-
-// Stone - enhanced with better colors
-const Stone = ({
-  position,
-  color,
-  noiseMap
-}: {
-  position: [number, number, number];
-  color: string;
-  noiseMap?: THREE.Texture | null;
-}) => {
-  return (
-    <mesh position={[position[0], 0.25, position[2]]} castShadow receiveShadow>
-      <dodecahedronGeometry args={[0.45, 1]} />
-      <meshStandardMaterial
-        color={color}
-        roughness={0.8}
-        metalness={0.2}
-        emissive={color}
-        emissiveIntensity={0.05}
-        roughnessMap={noiseMap ?? undefined}
-        bumpMap={noiseMap ?? undefined}
-        bumpScale={0.08}
-        envMapIntensity={0.45}
-      />
-    </mesh>
-  );
-};
-
-// Breakable Rock - enhanced with glowing effect
-const BreakableRock = ({
-  position,
-  color,
-  noiseMap
-}: {
-  position: [number, number, number];
-  color: string;
-  noiseMap?: THREE.Texture | null;
-}) => {
-  return (
-    <mesh position={[position[0], 0.28, position[2]]} castShadow receiveShadow>
-      <dodecahedronGeometry args={[0.48, 1]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={color}
-        emissiveIntensity={0.4}
-        roughness={0.5}
-        metalness={0.4}
-        transparent
-        opacity={0.95}
-        roughnessMap={noiseMap ?? undefined}
-        bumpMap={noiseMap ?? undefined}
-        bumpScale={0.1}
-        envMapIntensity={0.6}
-      />
-    </mesh>
-  );
-};
 
 // Directional Arrow Block - raft platform
 const ArrowTile = ({
@@ -993,73 +887,48 @@ const Player = ({
   );
 };
 
-// Floor tile
-const FloorTile = ({
-  position,
-  color,
-  noiseMap
-}: {
-  position: [number, number, number];
-  color: string;
-  noiseMap?: THREE.Texture | null;
-}) => {
-  return (
-    <mesh position={position} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[1, 1, 8, 8]} />
-      <meshStandardMaterial
-        color={color}
-        roughness={0.7}
-        emissive={color}
-        emissiveIntensity={0.05}
-        roughnessMap={noiseMap ?? undefined}
-        bumpMap={noiseMap ?? undefined}
-        bumpScale={0.02}
-      />
-    </mesh>
-  );
-};
 
-// Water tile - animated shimmer
-const WaterTile = ({
-  position,
-  noiseMap
+const InstancedMeshSet = ({
+  positions,
+  geometry,
+  material,
+  castShadow = false,
+  receiveShadow = true,
+  rotation,
+  scale
 }: {
-  position: [number, number, number];
-  noiseMap?: THREE.Texture | null;
+  positions: Array<[number, number, number]>;
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  castShadow?: boolean;
+  receiveShadow?: boolean;
+  rotation?: THREE.Euler;
+  scale?: THREE.Vector3;
 }) => {
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
-  const meshRef = useRef<THREE.Mesh>(null);
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const tempObject = useMemo(() => new THREE.Object3D(), []);
 
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (materialRef.current) {
-      materialRef.current.emissiveIntensity = 0.18 + Math.sin(t * 2.2) * 0.06;
-      materialRef.current.opacity = 0.78 + Math.sin(t * 1.6) * 0.04;
-    }
-    if (meshRef.current) {
-      meshRef.current.position.y = Math.sin(t * 1.4) * 0.015;
-    }
-  });
+  useLayoutEffect(() => {
+    if (!meshRef.current) return;
+    positions.forEach((pos, index) => {
+      tempObject.position.set(pos[0], pos[1], pos[2]);
+      if (rotation) tempObject.rotation.copy(rotation);
+      if (scale) tempObject.scale.copy(scale);
+      tempObject.updateMatrix();
+      meshRef.current!.setMatrixAt(index, tempObject.matrix);
+    });
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  }, [positions, rotation, scale, tempObject]);
+
+  if (positions.length === 0) return null;
 
   return (
-    <group position={position}>
-      <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[1, 1, 8, 8]} />
-        <meshStandardMaterial
-          ref={materialRef}
-          color="#1e90ff"
-          transparent
-          opacity={0.8}
-          roughness={0.08}
-          metalness={0.6}
-          emissive="#2aa9ff"
-          emissiveIntensity={0.2}
-          roughnessMap={noiseMap ?? undefined}
-        />
-      </mesh>
-      {/* Subtle glow */}
-      <pointLight position={[0, 0.2, 0]} intensity={0.35} color="#2aa9ff" distance={1.6} />
-    </group>
+    <instancedMesh
+      ref={meshRef}
+      args={[geometry, material, positions.length]}
+      castShadow={castShadow}
+      receiveShadow={receiveShadow}
+    />
   );
 };
 
@@ -1307,13 +1176,14 @@ const CameraController = ({
 
 export const Game3D = ({
   grid,
-  playerPos,
   cavePos,
   selectedArrow,
   selectorPos,
   cameraOffset,
   viewMode = '3d',
   theme = 'default',
+  players,
+  localPlayerId,
   onArrowClick,
   onCancelSelection,
   onPlayerClick,
@@ -1330,6 +1200,8 @@ export const Game3D = ({
   const offsetZ = -gridHeight / 2;
 
   const hasSelection = selectedArrow !== null && selectedArrow !== undefined;
+  const focusPlayer = players.find((p) => p.id === localPlayerId) ?? players[0];
+  const focusPlayerPos = focusPlayer?.pos ?? { x: 0, y: 0 };
 
   // Camera settings based on view mode
   const is2D = viewMode === '2d';
@@ -1359,7 +1231,7 @@ export const Game3D = ({
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(6, 6);
-    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.colorSpace = THREE.NoColorSpace;
     texture.needsUpdate = true;
     return texture;
   }, []);
@@ -1393,6 +1265,125 @@ export const Game3D = ({
     return cube;
   }, []);
 
+  const tileData = useMemo(() => {
+    const floor: Array<[number, number, number]> = [];
+    const water: Array<[number, number, number]> = [];
+    const wallBase: Array<[number, number, number]> = [];
+    const wallBars: Array<[number, number, number]> = [];
+    const stone: Array<[number, number, number]> = [];
+    const breakable: Array<[number, number, number]> = [];
+    const arrows: Array<{ x: number; y: number; cell: number }> = [];
+
+    for (let y = 0; y < grid.length; y += 1) {
+      for (let x = 0; x < grid[y].length; x += 1) {
+        const cell = grid[y][x];
+        if (cell === 5) continue;
+        const pos: [number, number, number] = [x + offsetX, 0, y + offsetZ];
+        if (cell === 4) {
+          water.push(pos);
+        } else {
+          floor.push(pos);
+        }
+        if (cell === 1) {
+          wallBase.push([pos[0], 0.1, pos[2]]);
+          wallBars.push([pos[0], 0.12, pos[2]]);
+        }
+        if (cell === 2) stone.push([pos[0], 0.25, pos[2]]);
+        if (cell === 6) breakable.push([pos[0], 0.28, pos[2]]);
+        if (isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13) {
+          arrows.push({ x, y, cell });
+        }
+      }
+    }
+
+    return { floor, water, wallBase, wallBars, stone, breakable, arrows };
+  }, [grid, offsetX, offsetZ]);
+
+  const floorGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
+  const waterGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
+  const wallGeometry = useMemo(() => new THREE.BoxGeometry(0.98, 0.2, 0.98), []);
+  const wallBarGeometry = useMemo(() => new THREE.BoxGeometry(0.96, 0.02, 0.08), []);
+  const stoneGeometry = useMemo(() => new THREE.DodecahedronGeometry(0.45, 1), []);
+  const breakableGeometry = useMemo(() => new THREE.DodecahedronGeometry(0.48, 1), []);
+  const planeRotation = useMemo(() => new THREE.Euler(-Math.PI / 2, 0, 0), []);
+  const wallBarRotA = useMemo(() => new THREE.Euler(0, Math.PI / 4, 0), []);
+  const wallBarRotB = useMemo(() => new THREE.Euler(0, -Math.PI / 4, 0), []);
+
+  const floorMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+  const waterMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+  const wallMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+  const wallBarMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+  const stoneMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+  const breakableMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+
+  useEffect(() => {
+    floorMaterial.color = new THREE.Color(themeColors.floor);
+    floorMaterial.roughness = 0.7;
+    floorMaterial.emissive = new THREE.Color(themeColors.floor);
+    floorMaterial.emissiveIntensity = 0.05;
+    floorMaterial.roughnessMap = noiseTexture ?? null;
+    floorMaterial.bumpMap = noiseTexture ?? null;
+    floorMaterial.bumpScale = 0.02;
+    floorMaterial.needsUpdate = true;
+
+    waterMaterial.color = new THREE.Color('#1e90ff');
+    waterMaterial.transparent = true;
+    waterMaterial.opacity = 0.82;
+    waterMaterial.roughness = 0.08;
+    waterMaterial.metalness = 0.6;
+    waterMaterial.emissive = new THREE.Color('#2aa9ff');
+    waterMaterial.emissiveIntensity = 0.2;
+    waterMaterial.roughnessMap = noiseTexture ?? null;
+    waterMaterial.needsUpdate = true;
+
+    wallMaterial.color = new THREE.Color(themeColors.wall);
+    wallMaterial.roughness = 0.7;
+    wallMaterial.metalness = 0.2;
+    wallMaterial.emissive = new THREE.Color(themeColors.wall);
+    wallMaterial.emissiveIntensity = 0.1;
+    wallMaterial.roughnessMap = noiseTexture ?? null;
+    wallMaterial.bumpMap = noiseTexture ?? null;
+    wallMaterial.bumpScale = 0.03;
+    wallMaterial.envMapIntensity = 0.4;
+    wallMaterial.needsUpdate = true;
+
+    wallBarMaterial.color = new THREE.Color('#000000');
+    wallBarMaterial.emissive = new THREE.Color('#ff0000');
+    wallBarMaterial.emissiveIntensity = 0.3;
+    wallBarMaterial.roughness = 0.8;
+    wallBarMaterial.needsUpdate = true;
+
+    stoneMaterial.color = new THREE.Color(themeColors.stone);
+    stoneMaterial.roughness = 0.8;
+    stoneMaterial.metalness = 0.2;
+    stoneMaterial.emissive = new THREE.Color(themeColors.stone);
+    stoneMaterial.emissiveIntensity = 0.05;
+    stoneMaterial.roughnessMap = noiseTexture ?? null;
+    stoneMaterial.bumpMap = noiseTexture ?? null;
+    stoneMaterial.bumpScale = 0.08;
+    stoneMaterial.envMapIntensity = 0.45;
+    stoneMaterial.needsUpdate = true;
+
+    breakableMaterial.color = new THREE.Color(themeColors.breakable);
+    breakableMaterial.emissive = new THREE.Color(themeColors.breakable);
+    breakableMaterial.emissiveIntensity = 0.4;
+    breakableMaterial.roughness = 0.5;
+    breakableMaterial.metalness = 0.4;
+    breakableMaterial.transparent = true;
+    breakableMaterial.opacity = 0.95;
+    breakableMaterial.roughnessMap = noiseTexture ?? null;
+    breakableMaterial.bumpMap = noiseTexture ?? null;
+    breakableMaterial.bumpScale = 0.1;
+    breakableMaterial.envMapIntensity = 0.6;
+    breakableMaterial.needsUpdate = true;
+  }, [themeColors, noiseTexture, floorMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    waterMaterial.emissiveIntensity = 0.18 + Math.sin(t * 2.2) * 0.06;
+    waterMaterial.opacity = 0.78 + Math.sin(t * 1.6) * 0.04;
+  });
+
   return (
     <div className="w-full h-full bg-gradient-to-b from-stone-950 via-stone-900 to-slate-900 overflow-hidden touch-none relative z-30">
       <Canvas
@@ -1415,7 +1406,7 @@ export const Game3D = ({
           key={`camera-${viewMode}-${initialCameraY}-${initialCameraZ}`}
         />
         <CameraController
-          playerPos={playerPos}
+          playerPos={focusPlayerPos}
           offsetX={offsetX}
           offsetZ={offsetZ}
           gridWidth={gridWidth}
@@ -1449,115 +1440,137 @@ export const Game3D = ({
         {/* Animated moonlit sky background */}
         <AnimatedSkyBackground gridWidth={gridWidth} gridHeight={gridHeight} />
 
-        {/* Grid */}
-        {grid.map((row, y) =>
-          row.map((cell, x) => {
-            const pos: [number, number, number] = [x + offsetX, 0, y + offsetZ];
-            const isPlayer = playerPos.x === x && playerPos.y === y;
-            const isCave = cavePos.x === x && cavePos.y === y;
-            const isArrowTile = cell >= 7 && cell <= 10;
-            const isBidirectionalArrow = cell === 11 || cell === 12;
-            const isOmnidirectionalArrow = cell === 13;
+        {/* Grid (Instanced) */}
+        <InstancedMeshSet
+          positions={tileData.floor}
+          geometry={floorGeometry}
+          material={floorMaterial}
+          rotation={planeRotation}
+          receiveShadow
+        />
+        <InstancedMeshSet
+          positions={tileData.water}
+          geometry={waterGeometry}
+          material={waterMaterial}
+          rotation={planeRotation}
+          receiveShadow
+        />
+        <InstancedMeshSet
+          positions={tileData.wallBase}
+          geometry={wallGeometry}
+          material={wallMaterial}
+          castShadow
+          receiveShadow
+        />
+        <InstancedMeshSet
+          positions={tileData.wallBars}
+          geometry={wallBarGeometry}
+          material={wallBarMaterial}
+          castShadow
+          receiveShadow
+          rotation={wallBarRotA}
+        />
+        <InstancedMeshSet
+          positions={tileData.wallBars}
+          geometry={wallBarGeometry}
+          material={wallBarMaterial}
+          castShadow
+          receiveShadow
+          rotation={wallBarRotB}
+        />
+        <InstancedMeshSet
+          positions={tileData.stone}
+          geometry={stoneGeometry}
+          material={stoneMaterial}
+          castShadow
+          receiveShadow
+        />
+        <InstancedMeshSet
+          positions={tileData.breakable}
+          geometry={breakableGeometry}
+          material={breakableMaterial}
+          castShadow
+          receiveShadow
+        />
 
+        {/* Arrows (interactive) */}
+        {tileData.arrows.map((arrow) => {
+          const pos: [number, number, number] = [arrow.x + offsetX, 0, arrow.y + offsetZ];
+          const isArrowTile = arrow.cell >= 7 && arrow.cell <= 10;
+          const isBidirectionalArrow = arrow.cell === 11 || arrow.cell === 12;
+          const isOmnidirectionalArrow = arrow.cell === 13;
+
+          if (isArrowTile) {
             return (
-              <group key={`${x}-${y}`}>
-                {/* Render floor for non-void cells, void cells (5) are transparent */}
-                {cell !== 5 && (
-                  cell === 4
-                    ? <WaterTile position={pos} noiseMap={noiseTexture} />
-                    : <FloorTile position={pos} color={themeColors.floor} noiseMap={noiseTexture} />
-                )}
-                {cell === 1 && <FireWall position={[pos[0], 0.5, pos[2]]} color={themeColors.wall} noiseMap={noiseTexture} />}
-                {cell === 2 && <Stone position={[pos[0], 0.4, pos[2]]} color={themeColors.stone} noiseMap={noiseTexture} />}
-                {cell === 6 && <BreakableRock position={[pos[0], 0.4, pos[2]]} color={themeColors.breakable} noiseMap={noiseTexture} />}
-                {isArrowTile && (
-                  <group>
-                    <ArrowTile
-                      position={[pos[0], 0, pos[2]]}
-                      direction={cell}
-                      isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
-                      hasSelection={hasSelection}
-                      color={themeColors.arrow}
-                      noiseMap={noiseTexture}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onArrowClick?.(x, y);
-                      }}
-                    />
-                    {/* Show player on top of arrow when riding */}
-                    {isPlayer && (
-                      <Player
-                        position={[pos[0], 0.25, pos[2]]}
-                        color={themeColors.player}
-                        onClick={onPlayerClick}
-                        showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
-                      />
-                    )}
-                  </group>
-                )}
-                {isBidirectionalArrow && (
-                  <group>
-                    <BidirectionalArrowTile
-                      position={[pos[0], 0, pos[2]]}
-                      isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
-                      hasSelection={hasSelection}
-                      color={themeColors.arrow}
-                      noiseMap={noiseTexture}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onArrowClick?.(x, y);
-                      }}
-                      direction={cell as 11 | 12}
-                    />
-                    {/* Show player on top of arrow when riding */}
-                    {isPlayer && (
-                      <Player
-                        position={[pos[0], 0.25, pos[2]]}
-                        color={themeColors.player}
-                        onClick={onPlayerClick}
-                        showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
-                      />
-                    )}
-                  </group>
-                )}
-                {isOmnidirectionalArrow && (
-                  <group>
-                    <OmnidirectionalArrowTile
-                      position={[pos[0], 0, pos[2]]}
-                      isSelected={selectedArrow?.x === x && selectedArrow?.y === y}
-                      hasSelection={hasSelection}
-                      color={themeColors.arrow}
-                      noiseMap={noiseTexture}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onArrowClick?.(x, y);
-                      }}
-                    />
-                    {/* Show player on top of arrow when riding */}
-                    {isPlayer && (
-                      <Player
-                        position={[pos[0], 0.25, pos[2]]}
-                        color={themeColors.player}
-                        onClick={onPlayerClick}
-                        showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
-                      />
-                    )}
-                  </group>
-                )}
-                {isCave && <Cave position={[pos[0], 0.05, pos[2]]} color={themeColors.cave} noiseMap={noiseTexture} />}
-                {/* Show player at ground level when not on arrow */}
-                {isPlayer && !isArrowTile && !isBidirectionalArrow && !isOmnidirectionalArrow && (
-                  <Player
-                    position={[pos[0], 0, pos[2]]}
-                    color={themeColors.player}
-                    onClick={onPlayerClick}
-                    showFlash={playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
-                  />
-                )}
-              </group>
+              <ArrowTile
+                key={`arrow-${arrow.x}-${arrow.y}`}
+                position={[pos[0], 0, pos[2]]}
+                direction={arrow.cell}
+                isSelected={selectedArrow?.x === arrow.x && selectedArrow?.y === arrow.y}
+                hasSelection={hasSelection}
+                color={themeColors.arrow}
+                noiseMap={noiseTexture}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArrowClick?.(arrow.x, arrow.y);
+                }}
+              />
             );
-          })
-        )}
+          }
+          if (isBidirectionalArrow) {
+            return (
+              <BidirectionalArrowTile
+                key={`arrow-${arrow.x}-${arrow.y}`}
+                position={[pos[0], 0, pos[2]]}
+                isSelected={selectedArrow?.x === arrow.x && selectedArrow?.y === arrow.y}
+                hasSelection={hasSelection}
+                color={themeColors.arrow}
+                noiseMap={noiseTexture}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArrowClick?.(arrow.x, arrow.y);
+                }}
+                direction={arrow.cell as 11 | 12}
+              />
+            );
+          }
+          if (isOmnidirectionalArrow) {
+            return (
+              <OmnidirectionalArrowTile
+                key={`arrow-${arrow.x}-${arrow.y}`}
+                position={[pos[0], 0, pos[2]]}
+                isSelected={selectedArrow?.x === arrow.x && selectedArrow?.y === arrow.y}
+                hasSelection={hasSelection}
+                color={themeColors.arrow}
+                noiseMap={noiseTexture}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArrowClick?.(arrow.x, arrow.y);
+                }}
+              />
+            );
+          }
+          return null;
+        })}
+
+        {/* Cave */}
+        <Cave position={[cavePos.x + offsetX, 0.05, cavePos.y + offsetZ]} color={themeColors.cave} noiseMap={noiseTexture} />
+
+        {/* Players */}
+        {players.map((player) => {
+          const cell = grid[player.pos.y]?.[player.pos.x];
+          const isOnArrow = cell !== undefined && isArrowCell(cell);
+          const height = isOnArrow ? 0.25 : 0;
+          return (
+            <Player
+              key={player.id}
+              position={[player.pos.x + offsetX, height, player.pos.y + offsetZ]}
+              color={player.color}
+              onClick={player.isLocal ? onPlayerClick : undefined}
+              showFlash={player.isLocal && playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
+            />
+          );
+        })}
 
         {/* Ground plane - lighter for better visibility */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>

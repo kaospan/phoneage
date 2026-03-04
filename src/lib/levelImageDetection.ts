@@ -6,6 +6,7 @@ export interface BuildLevelOptions {
   minSimilarity?: number;
   timeoutMs?: number;
   onProgress?: (status: string) => void;
+  yieldEveryRows?: number;
 }
 
 export interface BuiltLevel {
@@ -150,6 +151,8 @@ export const buildLevelFromImage = async (
   let spriteMatches = 0;
   let heuristicMatches = 0;
 
+  const yieldEvery = options.yieldEveryRows ?? 2;
+
   for (let r = 0; r < rows; r += 1) {
     if (r % 2 === 0) {
       options.onProgress?.(`Scanning row ${r + 1}/${rows}`);
@@ -178,6 +181,16 @@ export const buildLevelFromImage = async (
       }
 
       grid[r][c] = cellType;
+    }
+
+    if (yieldEvery > 0 && r % yieldEvery === 0) {
+      await new Promise<void>((resolve) => {
+        if (typeof requestAnimationFrame !== 'undefined') {
+          requestAnimationFrame(() => resolve());
+        } else {
+          setTimeout(resolve, 0);
+        }
+      });
     }
   }
 

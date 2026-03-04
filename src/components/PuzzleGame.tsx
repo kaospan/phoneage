@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
@@ -6,7 +6,7 @@ import { Game3D } from "./Game3D";
 import { TouchControls } from "./TouchControls";
 import { Thumbstick } from "./Thumbstick";
 import { Box, Grid3x3 } from "lucide-react";
-import { CellType, GameState } from "@/game/types";
+import { CellType, GameState, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
@@ -15,24 +15,58 @@ import { seedDefaultReferences } from "@/lib/referenceSeeder";
 
 console.log('📦 PuzzleGame.tsx loading...');
 
+type PlayerId = string;
+
+type InputCommand =
+  | { type: "move"; dx: number; dy: number; seq: number }
+  | { type: "select"; x: number; y: number; seq: number }
+  | { type: "deselect"; seq: number };
+
+interface SimPlayer {
+  id: PlayerId;
+  pos: Position;
+  isLocal: boolean;
+  color: string;
+  selectedArrow: Position | null;
+  isGliding: boolean;
+  glidePath: Position[] | null;
+  glideArrowType: CellType | null;
+  glideIndex: number;
+  moves: number;
+}
+
+interface ArrowGlide {
+  ownerId: PlayerId;
+  from: Position;
+  path: Position[];
+  arrowType: CellType;
+  index: number;
+}
+
+interface SimulationState {
+  grid: CellType[][];
+  baseGrid: CellType[][];
+  breakableRockStates: Map<string, boolean>;
+  players: Map<PlayerId, SimPlayer>;
+  arrowGlides: ArrowGlide[];
+  cavePos: Position;
+}
+
 export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
   try {
     type LevelData = ReturnType<typeof getAllLevels>[number];
     const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
-    const [grid, setGrid] = useState<CellType[][]>([]);
-    const [playerPos, setPlayerPos] = useState({ x: 0, y: 0 });
-    const [cavePos, setCavePos] = useState({ x: 0, y: 0 });
+    const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
+    const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
+    const [renderCavePos, setRenderCavePos] = useState({ x: 0, y: 0 });
     const [activeLevel, setActiveLevel] = useState<LevelData | null>(null);
     const [moves, setMoves] = useState(0);
     const [isComplete, setIsComplete] = useState(false);
     const [viewMode, setViewMode] = useState<"3d" | "2d">("3d");
-    const [isGliding, setIsGliding] = useState(false);
-    const [baseGrid, setBaseGrid] = useState<CellType[][]>([]); // Track original terrain under arrows
     const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
     const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
-    const [breakableRockStates, setBreakableRockStates] = useState<Map<string, boolean>>(new Map()); // Track which breakable rocks have been stepped on
     // Selector navigation state for keyboard-based arrow selection
     const [selectorPos, setSelectorPos] = useState<{ x: number; y: number } | null>(null);
     const [isSelectorActive, setIsSelectorActive] = useState(false);
@@ -46,6 +80,15 @@ export const PuzzleGame = () => {
     const [playerFlashCount, setPlayerFlashCount] = useState(0);
     const [isBuilding, setIsBuilding] = useState(false);
     const [buildStatus, setBuildStatus] = useState<string>('');
+    const [networkStatus, setNetworkStatus] = useState<'offline' | 'connecting' | 'online'>('offline');
+
+    const simRef = useRef<SimulationState | null>(null);
+    const inputQueueRef = useRef<Map<PlayerId, InputCommand[]>>(new Map());
+    const localPlayerIdRef = useRef<PlayerId>('local');
+    const inputSeqRef = useRef(0);
+    const wsRef = useRef<WebSocket | null>(null);
+    const lastRenderRef = useRef(0);
+    const buildInFlightRef = useRef<Set<number>>(new Set());
 
     const allLevels = getAllLevels();
     const currentLevel = allLevels[currentLevelIndex];
@@ -87,13 +130,40 @@ export const PuzzleGame = () => {
     }, []);
 
     const applyLevelState = useCallback((level: LevelData) => {
-      setGrid(level.grid.map(row => [...row]) as CellType[][]);
-      setBaseGrid(buildBaseGrid(level.grid as CellType[][]));
-      setPlayerPos(level.playerStart);
-      setCavePos(level.cavePos);
+      const gridCopy = level.grid.map(row => [...row]) as CellType[][];
+      const baseGridCopy = buildBaseGrid(gridCopy);
+      const cave = { ...level.cavePos };
+      const localId = localPlayerIdRef.current;
+      const localPlayer: SimPlayer = {
+        id: localId,
+        pos: { ...level.playerStart },
+        isLocal: true,
+        color: themes[level.theme ?? 'default']?.player ?? '#7dff9b',
+        selectedArrow: null,
+        isGliding: false,
+        glidePath: null,
+        glideArrowType: null,
+        glideIndex: 0,
+        moves: 0
+      };
+
+      const players = new Map<PlayerId, SimPlayer>();
+      players.set(localId, localPlayer);
+
+      simRef.current = {
+        grid: gridCopy,
+        baseGrid: baseGridCopy,
+        breakableRockStates: new Map(),
+        players,
+        arrowGlides: [],
+        cavePos: cave
+      };
+
+      setRenderGrid(gridCopy.map(row => [...row]));
+      setRenderPlayers(Array.from(players.values()));
+      setRenderCavePos(cave);
       setMoves(0);
       setIsComplete(false);
-      setBreakableRockStates(new Map());
       setSelectedArrow(null);
       setCameraOffset({ x: 0, z: 0 });
       setActiveLevel(level);
@@ -186,54 +256,6 @@ export const PuzzleGame = () => {
       }
     }, []);
 
-    // Check if reached cave
-    useEffect(() => {
-      if (playerPos.x === cavePos.x && playerPos.y === cavePos.y) {
-        setIsComplete(true);
-        toast.success(`LEVEL ${currentLevel.id} COMPLETE! MOVES: ${moves}`, {
-          duration: 3000,
-        });
-
-        // Auto-advance to next level after 2 seconds
-        const timer = setTimeout(() => {
-          if (currentLevelIndex < allLevels.length - 1) {
-            setCurrentLevelIndex(i => i + 1);
-          } else {
-            toast.success("ALL LEVELS COMPLETE! YOU WIN!", {
-              duration: 5000,
-            });
-          }
-        }, 2000);
-
-        return () => clearTimeout(timer);
-      }
-    }, [playerPos, cavePos, currentLevel, moves, currentLevelIndex]);
-
-    // Helper function to check if an arrow can move in any direction
-    const canArrowMove = useCallback((arrowPos: { x: number; y: number }) => {
-      const arrowCell = grid[arrowPos.y]?.[arrowPos.x];
-      if (!arrowCell || !((arrowCell >= 7 && arrowCell <= 10) || arrowCell === 11 || arrowCell === 12 || arrowCell === 13)) {
-        return false;
-      }
-      const state: GameState = { grid, baseGrid, playerPos, selectedArrow: arrowPos, breakableRockStates, isGliding, isComplete } as GameState;
-
-      // Try all four directions
-      const directions = [
-        { dx: 0, dy: -1 },  // up
-        { dx: 0, dy: 1 },   // down
-        { dx: -1, dy: 0 },  // left
-        { dx: 1, dy: 0 }    // right
-      ];
-
-      for (const dir of directions) {
-        const outcome = attemptRemoteArrowMove(state, dir.dx, dir.dy);
-        if (outcome.glidePath) {
-          return true; // Can move in at least one direction
-        }
-      }
-      return false; // Cannot move in any direction
-    }, [grid, baseGrid, playerPos, breakableRockStates, isGliding, isComplete]);
-
     // Helper function to flash player highlight twice
     const flashPlayerHighlight = useCallback(() => {
       setPlayerFlashCount(2); // Start with 2 flashes
@@ -248,119 +270,308 @@ export const PuzzleGame = () => {
       }, 300); // Flash every 300ms
     }, []);
 
-    const moveArrowRemotely = useCallback((dx: number, dy: number) => {
-      if (!selectedArrow || isGliding) return;
-      const state: GameState = { grid, baseGrid, playerPos, selectedArrow, breakableRockStates, isGliding, isComplete, } as GameState;
-      const outcome = attemptRemoteArrowMove(state, dx, dy);
-      if (!outcome.glidePath) {
-        toast.info("Arrow can't move further");
+    const enqueueInput = useCallback((command: Omit<InputCommand, "seq">) => {
+      const sim = simRef.current;
+      if (!sim) return;
+      const localId = localPlayerIdRef.current;
+      const seq = ++inputSeqRef.current;
+      const input = { ...command, seq } as InputCommand;
+      const queue = inputQueueRef.current.get(localId) ?? [];
+      queue.push(input);
+      inputQueueRef.current.set(localId, queue);
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "input", id: localId, input }));
+      }
+    }, []);
+
+    const queueMove = useCallback((dx: number, dy: number) => {
+      if (isComplete || isBuilding) return;
+      enqueueInput({ type: "move", dx, dy });
+    }, [enqueueInput, isComplete, isBuilding]);
+
+    useEffect(() => {
+      const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
+      if (!wsUrl) {
+        setNetworkStatus('offline');
         return;
       }
-      setIsGliding(true);
-      const { path, arrowType } = outcome.glidePath;
-      const newGrid = grid.map(r => [...r]);
-      let step = 0;
-      const animate = () => {
-        if (step < path.length) {
-          const pos = path[step];
-          const prevX = step === 0 ? selectedArrow.x : path[step - 1].x;
-          const prevY = step === 0 ? selectedArrow.y : path[step - 1].y;
-          if (step === 0) newGrid[selectedArrow.y][selectedArrow.x] = 5; else newGrid[prevY][prevX] = baseGrid[prevY][prevX];
-          newGrid[pos.y][pos.x] = arrowType;
-          setGrid([...newGrid.map(r => [...r])] as CellType[][]);
-          if (step === path.length - 1) {
-            setMoves(m => m + 1);
-            setIsGliding(false);
-            const newArrowPos = { x: pos.x, y: pos.y };
 
-            // Check if arrow can still move in any direction
-            setTimeout(() => {
-              const finalGrid = [...newGrid.map(r => [...r])] as CellType[][];
-              const arrowCell = finalGrid[newArrowPos.y][newArrowPos.x];
-              const testState: GameState = {
-                grid: finalGrid,
-                baseGrid,
-                playerPos,
-                selectedArrow: newArrowPos,
-                breakableRockStates,
+      setNetworkStatus('connecting');
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => setNetworkStatus('online');
+      ws.onclose = () => setNetworkStatus('offline');
+      ws.onerror = () => setNetworkStatus('offline');
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'welcome' && msg.id) {
+            const sim = simRef.current;
+            if (sim && sim.players.has(localPlayerIdRef.current) && !sim.players.has(msg.id)) {
+              const local = sim.players.get(localPlayerIdRef.current)!;
+              sim.players.delete(localPlayerIdRef.current);
+              local.id = msg.id;
+              local.isLocal = true;
+              sim.players.set(msg.id, local);
+              setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
+            }
+            localPlayerIdRef.current = msg.id;
+          } else if (msg.type === 'input' && msg.id && msg.input) {
+            const sim = simRef.current;
+            if (sim && !sim.players.has(msg.id)) {
+              const palette = ['#5fd5ff', '#ffb347', '#ff6b6b', '#9bffd0', '#c7a6ff'];
+              const spawn = sim.players.get(localPlayerIdRef.current)?.pos ?? sim.cavePos;
+              sim.players.set(msg.id, {
+                id: msg.id,
+                pos: { ...spawn },
+                isLocal: false,
+                color: palette[sim.players.size % palette.length],
+                selectedArrow: null,
                 isGliding: false,
-                isComplete
-              } as GameState;
-
-              const directions = [
-                { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
-              ];
-
-              let canMove = false;
-              for (const dir of directions) {
-                const testOutcome = attemptRemoteArrowMove(testState, dir.dx, dir.dy);
-                if (testOutcome.glidePath) {
-                  canMove = true;
-                  break;
-                }
-              }
-
-              if (canMove) {
-                // Keep arrow selected
-                setSelectedArrow(newArrowPos);
-              } else {
-                // Arrow is blocked, return control to player with flash
-                setSelectedArrow(null);
-                flashPlayerHighlight();
-                toast.info("Arrow blocked - control returned to player");
-              }
-            }, 50); // Small delay to ensure grid is updated
+                glidePath: null,
+                glideArrowType: null,
+                glideIndex: 0,
+                moves: 0
+              });
+              setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
+            }
+            const queue = inputQueueRef.current.get(msg.id) ?? [];
+            queue.push(msg.input);
+            inputQueueRef.current.set(msg.id, queue);
           }
-          step++;
-          setTimeout(animate, 150);
+        } catch (err) {
+          console.warn('Invalid WS message', err);
         }
       };
-      animate();
-    }, [selectedArrow, isGliding, grid, baseGrid, playerPos, breakableRockStates, isComplete, flashPlayerHighlight]);
 
-    const movePlayer = useCallback((dx: number, dy: number) => {
-      if (isComplete || isGliding) return;
-      const state: GameState = { grid, baseGrid, playerPos, selectedArrow, breakableRockStates, isGliding, isComplete } as GameState;
-      const outcome = attemptPlayerMove(state, dx, dy);
-      if (outcome.glidePath && outcome.startGlide) {
-        setIsGliding(true);
-        const { path, arrowType } = outcome.glidePath;
-        const newGrid = grid.map(r => [...r]);
-        let step = 0;
-        const animate = () => {
-          if (step < path.length) {
-            const pos = path[step];
-            const prevX = step === 0 ? playerPos.x : path[step - 1].x;
-            const prevY = step === 0 ? playerPos.y : path[step - 1].y;
-            if (step === 0) newGrid[playerPos.y][playerPos.x] = 5; else newGrid[prevY][prevX] = baseGrid[prevY][prevX];
-            newGrid[pos.y][pos.x] = arrowType;
-            setGrid([...newGrid.map(r => [...r])] as CellType[][]);
-            setPlayerPos({ x: pos.x, y: pos.y });
-            if (step === path.length - 1) {
-              setMoves(m => m + 1);
-              setIsGliding(false);
+      return () => {
+        ws.close();
+      };
+    }, []);
+
+    const stepSimulation = useCallback(() => {
+      const sim = simRef.current;
+      if (!sim) return;
+
+      let gridDirty = false;
+      let playersDirty = false;
+      let localMoves = moves;
+      let localSelected = selectedArrow;
+      let localComplete = isComplete;
+
+      // Advance arrow glides
+      if (sim.arrowGlides.length > 0) {
+        sim.arrowGlides = sim.arrowGlides.filter((glide) => {
+          const next = glide.path[glide.index];
+          const prev = glide.index === 0 ? glide.from : glide.path[glide.index - 1];
+          if (!next) return false;
+
+          if (glide.index === 0) sim.grid[glide.from.y][glide.from.x] = 5;
+          else sim.grid[prev.y][prev.x] = sim.baseGrid[prev.y][prev.x];
+          sim.grid[next.y][next.x] = glide.arrowType;
+          glide.index += 1;
+          gridDirty = true;
+
+          if (glide.index >= glide.path.length) {
+            const owner = sim.players.get(glide.ownerId);
+            if (owner) {
+              owner.isGliding = false;
+              const newArrowPos = { x: next.x, y: next.y };
+              const testState: GameState = {
+                grid: sim.grid,
+                baseGrid: sim.baseGrid,
+                playerPos: owner.pos,
+                selectedArrow: newArrowPos,
+                breakableRockStates: sim.breakableRockStates,
+                isGliding: false,
+                isComplete: false
+              } as GameState;
+              const dirs = [
+                { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
+              ];
+              const canMove = dirs.some((dir) => attemptRemoteArrowMove(testState, dir.dx, dir.dy).glidePath);
+              owner.selectedArrow = canMove ? newArrowPos : null;
+              if (owner.isLocal) {
+                localSelected = owner.selectedArrow;
+              }
             }
-            step++;
-            setTimeout(animate, 150);
+            return false;
           }
-        };
-        animate();
-        return;
+          return true;
+        });
       }
-      if (outcome.newGrid) setGrid(outcome.newGrid as CellType[][]);
-      if (outcome.brokeRock) toast.info("ROCK CRUMBLED!");
-      if (outcome.newPlayerPos) setPlayerPos(outcome.newPlayerPos);
-      if (outcome.consumedMove) setMoves(m => m + 1);
-    }, [grid, baseGrid, playerPos, selectedArrow, breakableRockStates, isComplete, isGliding]);
 
-    // Unified move handler
-    const handleMove = useCallback((dx: number, dy: number) => {
-      if (selectedArrow) {
-        moveArrowRemotely(dx, dy);
-      } else {
-        movePlayer(dx, dy);
+      // Advance player glides and inputs
+      sim.players.forEach((player, id) => {
+        if (player.isGliding && player.glidePath && player.glideIndex < player.glidePath.length) {
+          const stepPos = player.glidePath[player.glideIndex];
+          const prevPos = player.glideIndex === 0 ? player.pos : player.glidePath[player.glideIndex - 1];
+          if (player.glideIndex === 0) {
+            sim.grid[player.pos.y][player.pos.x] = 5;
+          } else {
+            sim.grid[prevPos.y][prevPos.x] = sim.baseGrid[prevPos.y][prevPos.x];
+          }
+          sim.grid[stepPos.y][stepPos.x] = player.glideArrowType ?? sim.grid[stepPos.y][stepPos.x];
+          player.pos = { ...stepPos };
+          player.glideIndex += 1;
+          gridDirty = true;
+          playersDirty = true;
+
+          if (player.glideIndex >= player.glidePath.length) {
+            player.isGliding = false;
+            player.glidePath = null;
+            player.glideArrowType = null;
+            player.glideIndex = 0;
+            player.moves += 1;
+            if (player.isLocal) localMoves = player.moves;
+          }
+          return;
+        }
+
+        if (player.isGliding) return;
+
+        const queue = inputQueueRef.current.get(id);
+        if (!queue || queue.length === 0) return;
+
+        const input = queue.shift();
+        if (!input) return;
+
+        if (input.type === 'select') {
+          if (player.pos.x === input.x && player.pos.y === input.y) return;
+          const cell = sim.grid[input.y]?.[input.x];
+          if (cell !== undefined && isArrowCell(cell)) {
+            player.selectedArrow = { x: input.x, y: input.y };
+            if (player.isLocal) localSelected = player.selectedArrow;
+          }
+          return;
+        }
+
+        if (input.type === 'deselect') {
+          player.selectedArrow = null;
+          if (player.isLocal) localSelected = null;
+          return;
+        }
+
+        if (input.type === 'move') {
+          if (player.selectedArrow) {
+            const state: GameState = {
+              grid: sim.grid,
+              baseGrid: sim.baseGrid,
+              playerPos: player.pos,
+              selectedArrow: player.selectedArrow,
+              breakableRockStates: sim.breakableRockStates,
+              isGliding: false,
+              isComplete: false
+            } as GameState;
+            const outcome = attemptRemoteArrowMove(state, input.dx, input.dy);
+            if (outcome.glidePath) {
+              sim.arrowGlides.push({
+                ownerId: player.id,
+                from: { ...player.selectedArrow },
+                path: outcome.glidePath.path,
+                arrowType: outcome.glidePath.arrowType,
+                index: 0
+              });
+              player.isGliding = true;
+              player.moves += 1;
+              if (player.isLocal) localMoves = player.moves;
+            }
+            return;
+          }
+
+          const state: GameState = {
+            grid: sim.grid,
+            baseGrid: sim.baseGrid,
+            playerPos: player.pos,
+            selectedArrow: player.selectedArrow,
+            breakableRockStates: sim.breakableRockStates,
+            isGliding: false,
+            isComplete: false
+          } as GameState;
+          const outcome = attemptPlayerMove(state, input.dx, input.dy);
+
+          if (outcome.glidePath && outcome.startGlide) {
+            player.isGliding = true;
+            player.glidePath = outcome.glidePath.path;
+            player.glideArrowType = outcome.glidePath.arrowType;
+            player.glideIndex = 0;
+            return;
+          }
+
+          if (outcome.newGrid) {
+            sim.grid = outcome.newGrid as CellType[][];
+            gridDirty = true;
+          }
+          if (outcome.newPlayerPos) {
+            player.pos = { ...outcome.newPlayerPos };
+            playersDirty = true;
+          }
+          if (outcome.brokeRock && player.isLocal) {
+            toast.info("ROCK CRUMBLED!");
+          }
+          if (outcome.consumedMove) {
+            player.moves += 1;
+            if (player.isLocal) localMoves = player.moves;
+          }
+        }
+      });
+
+      const localPlayer = sim.players.get(localPlayerIdRef.current);
+      if (localPlayer && localPlayer.pos.x === sim.cavePos.x && localPlayer.pos.y === sim.cavePos.y && !localComplete) {
+        localComplete = true;
+        setIsComplete(true);
+        toast.success(`LEVEL ${currentLevel.id} COMPLETE! MOVES: ${localPlayer.moves}`, {
+          duration: 3000,
+        });
+
+        const timer = setTimeout(() => {
+          if (currentLevelIndex < allLevels.length - 1) {
+            setCurrentLevelIndex(i => i + 1);
+          } else {
+            toast.success("ALL LEVELS COMPLETE! YOU WIN!", {
+              duration: 5000,
+            });
+          }
+        }, 2000);
+
+        setTimeout(() => clearTimeout(timer), 2100);
       }
-    }, [selectedArrow, moveArrowRemotely, movePlayer]);
+
+      if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
+      if (playersDirty || gridDirty) setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
+      if (localMoves !== moves) setMoves(localMoves);
+      if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
+      if (sim.cavePos.x !== renderCavePos.x || sim.cavePos.y !== renderCavePos.y) setRenderCavePos(sim.cavePos);
+    }, [allLevels.length, currentLevel?.id, currentLevelIndex, moves, renderCavePos.x, renderCavePos.y, selectedArrow]);
+
+    useEffect(() => {
+      let raf = 0;
+      let last = performance.now();
+      let accumulator = 0;
+      const step = 1000 / 60;
+
+      const frame = (now: number) => {
+        const delta = now - last;
+        last = now;
+        accumulator += delta;
+        while (accumulator >= step) {
+          stepSimulation();
+          accumulator -= step;
+        }
+        raf = requestAnimationFrame(frame);
+      };
+
+      raf = requestAnimationFrame(frame);
+      return () => cancelAnimationFrame(raf);
+    }, [stepSimulation]);
+
+    const localPlayer = useMemo(
+      () => renderPlayers.find((p) => p.isLocal) ?? renderPlayers[0],
+      [renderPlayers]
+    );
+    const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
 
     // Keyboard controls (player movement or selector navigation)
     useEffect(() => {
@@ -372,7 +583,7 @@ export const PuzzleGame = () => {
           e.preventDefault();
           // If arrow is selected, deselect it manually
           if (selectedArrow && !isSelectorActive) {
-            setSelectedArrow(null);
+            enqueueInput({ type: "deselect" });
             flashPlayerHighlight();
             toast.info("Arrow deselected - control returned to player");
             return;
@@ -381,21 +592,17 @@ export const PuzzleGame = () => {
           if (!isSelectorActive) {
             // Activate selector at player position
             setIsSelectorActive(true);
-            setSelectorPos({ x: playerPos.x, y: playerPos.y });
-            // Deselect any arrow currently selected
-            setSelectedArrow(null);
+            setSelectorPos({ x: localPlayerPos.x, y: localPlayerPos.y });
+            enqueueInput({ type: "deselect" });
           } else {
-            // Attempt selection
             if (selectorPos) {
-              const cell = grid[selectorPos.y]?.[selectorPos.x];
-              if (cell !== undefined && ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13)) {
-                // Select arrow and exit selector mode
-                setSelectedArrow({ x: selectorPos.x, y: selectorPos.y });
+              const cell = renderGrid[selectorPos.y]?.[selectorPos.x];
+              if (cell !== undefined && isArrowCell(cell)) {
+                enqueueInput({ type: "select", x: selectorPos.x, y: selectorPos.y });
                 toast.info("Arrow selected via keyboard selector");
                 setIsSelectorActive(false);
                 setSelectorPos(null);
               } else {
-                // Exit selector mode without selection
                 setIsSelectorActive(false);
                 setSelectorPos(null);
               }
@@ -418,20 +625,20 @@ export const PuzzleGame = () => {
           if (dx !== 0 || dy !== 0) {
             e.preventDefault();
             setSelectorPos(pos => {
-              if (!pos) return pos;
-              const nx = Math.max(0, Math.min(grid[0].length - 1, pos.x + dx));
-              const ny = Math.max(0, Math.min(grid.length - 1, pos.y + dy));
+              if (!pos || renderGrid.length === 0) return pos;
+              const nx = Math.max(0, Math.min(renderGrid[0].length - 1, pos.x + dx));
+              const ny = Math.max(0, Math.min(renderGrid.length - 1, pos.y + dy));
               return { x: nx, y: ny };
             });
           }
-          return; // Do not process movement keys for gameplay while selector active
+          return;
         }
         // Normal gameplay controls
         switch (key) {
-          case 'ArrowUp': case 'w': case 'W': e.preventDefault(); handleMove(0, -1); break;
-          case 'ArrowDown': case 's': case 'S': e.preventDefault(); handleMove(0, 1); break;
-          case 'ArrowLeft': case 'a': case 'A': e.preventDefault(); handleMove(-1, 0); break;
-          case 'ArrowRight': case 'd': case 'D': e.preventDefault(); handleMove(1, 0); break;
+          case 'ArrowUp': case 'w': case 'W': e.preventDefault(); queueMove(0, -1); break;
+          case 'ArrowDown': case 's': case 'S': e.preventDefault(); queueMove(0, 1); break;
+          case 'ArrowLeft': case 'a': case 'A': e.preventDefault(); queueMove(-1, 0); break;
+          case 'ArrowRight': case 'd': case 'D': e.preventDefault(); queueMove(1, 0); break;
           case 'r': case 'R': e.preventDefault(); resetLevel(); break;
           case 'n': case 'N': e.preventDefault(); if (currentLevelIndex < allLevels.length - 1) { setCurrentLevelIndex(i => i + 1); toast.info("SKIPPED TO NEXT LEVEL"); } break;
           case 'p': case 'P': e.preventDefault(); if (currentLevelIndex > 0) { setCurrentLevelIndex(i => i - 1); toast.info("PREVIOUS LEVEL"); } break;
@@ -439,35 +646,12 @@ export const PuzzleGame = () => {
       };
       window.addEventListener('keydown', handleKeyPress);
       return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [handleMove, currentLevelIndex, isSelectorActive, selectorPos, grid, playerPos, isBuilding]);
+    }, [enqueueInput, currentLevelIndex, isSelectorActive, selectorPos, renderGrid, localPlayerPos, isBuilding, queueMove, flashPlayerHighlight, selectedArrow]);
 
     const resetLevel = () => {
       const levelToReset = activeLevel ?? currentLevel;
       if (!levelToReset) return;
-      setSelectedArrow(null);
-      setCameraOffset({ x: 0, z: 0 });
-      setGrid(levelToReset.grid.map(row => [...row]) as CellType[][]);
-      const base = levelToReset.grid.map((row, y) =>
-        row.map((cell, x) => {
-          if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) {
-            const adjacentCells: CellType[] = [];
-            if (y > 0) adjacentCells.push(levelToReset.grid[y - 1][x] as CellType);
-            if (y < levelToReset.grid.length - 1) adjacentCells.push(levelToReset.grid[y + 1][x] as CellType);
-            if (x > 0) adjacentCells.push(levelToReset.grid[y][x - 1] as CellType);
-            if (x < row.length - 1) adjacentCells.push(levelToReset.grid[y][x + 1] as CellType);
-            const terrainTypes = adjacentCells.filter(c => c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13);
-            if (terrainTypes.length > 0) return terrainTypes[0];
-            return 5;
-          }
-          return cell;
-        })
-      );
-      setBaseGrid(base as CellType[][]);
-      setPlayerPos(levelToReset.playerStart);
-      setCavePos(levelToReset.cavePos);
-      setMoves(0);
-      setIsComplete(false);
-      setBreakableRockStates(new Map());
+      applyLevelState(levelToReset);
       toast.info("LEVEL RESET");
     };
 
@@ -569,8 +753,8 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        <TouchControls onMove={handleMove} disabled={isComplete || isBuilding} />
-        <Thumbstick onMove={handleMove} disabled={isComplete || isBuilding} />
+        <TouchControls onMove={queueMove} disabled={isComplete || isBuilding} />
+        <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding} />
         <div className="absolute top-2 left-0 right-0 z-50 flex justify-center">
           <div className="bg-card/95 backdrop-blur px-6 py-3 rounded-lg shadow-lg border border-border/50 flex items-center gap-4">
             {/* Previous Level Button */}
@@ -605,7 +789,7 @@ export const PuzzleGame = () => {
               onClick={resetLevel}
               variant="outline"
               size="default"
-              disabled={isComplete || isGliding}
+              disabled={isComplete || localPlayer?.isGliding}
               className="h-10 px-4 text-base font-semibold hover:bg-primary/20"
               title="Restart level (R)"
             >
@@ -680,44 +864,48 @@ export const PuzzleGame = () => {
           style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         >
           <Game3D
-            grid={grid}
-            playerPos={playerPos}
-            cavePos={cavePos}
+            grid={renderGrid}
+            cavePos={renderCavePos}
             selectedArrow={selectedArrow}
             selectorPos={isSelectorActive ? selectorPos : null}
             cameraOffset={cameraOffset}
             viewMode={viewMode}
             theme={currentLevel.theme}
+            players={renderPlayers}
+            localPlayerId={localPlayer?.id}
             onPlayerClick={flashPlayerHighlight}
             playerFlashCount={playerFlashCount}
             onArrowClick={(x, y) => {
-              if (isGliding) return;
-              const cell = grid[y][x];
-              if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) {
-                if (playerPos.x === x && playerPos.y === y) { toast.error("Cannot select arrow while standing on it!"); return; }
+              if (localPlayer?.isGliding) return;
+              const cell = renderGrid[y]?.[x];
+              if (cell !== undefined && isArrowCell(cell)) {
+                if (localPlayerPos.x === x && localPlayerPos.y === y) { toast.error("Cannot select arrow while standing on it!"); return; }
                 const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
                 if (isSameArrow) {
-                  // Deselect arrow with flash
-                  setSelectedArrow(null);
+                  enqueueInput({ type: "deselect" });
                   flashPlayerHighlight();
                   toast.info("Arrow deselected - control returned to player");
                 } else {
-                  // Select new arrow
-                  setSelectedArrow({ x, y });
+                  enqueueInput({ type: "select", x, y });
                   toast.info("Arrow selected! Use controls to move it remotely.");
                 }
               }
             }}
-            onCancelSelection={() => { if (selectedArrow) { setSelectedArrow(null); toast.info("Arrow deselected"); } }}
+            onCancelSelection={() => {
+              if (selectedArrow) {
+                enqueueInput({ type: "deselect" });
+                toast.info("Arrow deselected");
+              }
+            }}
           />
         </div>
         <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
           <div className="bg-card/95 backdrop-blur border border-border/50 px-2 py-1 rounded shadow-md">
             <div className="grid grid-cols-4 gap-1">
-              <Button onClick={() => selectedArrow ? moveArrowRemotely(0, -1) : handleMove(0, -1)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">↑</Button>
-              <Button onClick={() => selectedArrow ? moveArrowRemotely(0, 1) : handleMove(0, 1)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">↓</Button>
-              <Button onClick={() => selectedArrow ? moveArrowRemotely(-1, 0) : handleMove(-1, 0)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">←</Button>
-              <Button onClick={() => selectedArrow ? moveArrowRemotely(1, 0) : handleMove(1, 0)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">→</Button>
+              <Button onClick={() => queueMove(0, -1)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">↑</Button>
+              <Button onClick={() => queueMove(0, 1)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">↓</Button>
+              <Button onClick={() => queueMove(-1, 0)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">←</Button>
+              <Button onClick={() => queueMove(1, 0)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">→</Button>
             </div>
           </div>
         </div>
