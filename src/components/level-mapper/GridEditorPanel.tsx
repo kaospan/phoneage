@@ -20,7 +20,8 @@ export const GridEditorPanel: React.FC = () => {
 
     const [isSettingPlayerStart, setIsSettingPlayerStart] = React.useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [cellSize, setCellSize] = React.useState(32); // Default cell size
+    const [cellWidth, setCellWidth] = React.useState(32);
+    const [cellHeight, setCellHeight] = React.useState(32);
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
 
     // Calculate cell size based on container width and image
@@ -35,20 +36,29 @@ export const GridEditorPanel: React.FC = () => {
                     setImageNaturalSize({ width: img.width, height: img.height });
                     const imageCellWidth = img.width / cols;
                     const imageCellHeight = img.height / rows;
-                    const calculatedSize = Math.floor(Math.min(imageCellWidth, imageCellHeight));
-                    setCellSize(Math.max(20, Math.min(calculatedSize, 100)));
+                    if (overlayStretch) {
+                        setCellWidth(imageCellWidth);
+                        setCellHeight(imageCellHeight);
+                    } else {
+                        const calculatedSize = Math.floor(Math.min(imageCellWidth, imageCellHeight));
+                        const clamped = Math.max(20, Math.min(calculatedSize, 100));
+                        setCellWidth(clamped);
+                        setCellHeight(clamped);
+                    }
                 };
                 img.src = imageURL;
             } else {
                 // Without overlay, fit to container width
                 const containerWidth = containerRef.current.offsetWidth - 40;
                 const calculatedCellSize = Math.floor(containerWidth / cols);
-                setCellSize(Math.max(24, Math.min(calculatedCellSize, 80)));
+                const clamped = Math.max(24, Math.min(calculatedCellSize, 80));
+                setCellWidth(clamped);
+                setCellHeight(clamped);
             }
         };
 
         updateCellSize();
-    }, [imageURL, cols, rows, overlayEnabled]);
+    }, [imageURL, cols, rows, overlayEnabled, overlayStretch]);
 
     // Resize observer to update cell size on container resize
     React.useEffect(() => {
@@ -58,7 +68,9 @@ export const GridEditorPanel: React.FC = () => {
             if (containerRef.current && !overlayEnabled) {
                 const containerWidth = containerRef.current.offsetWidth - 40;
                 const calculatedCellSize = Math.floor(containerWidth / cols);
-                setCellSize(Math.max(24, Math.min(calculatedCellSize, 80)));
+                const clamped = Math.max(24, Math.min(calculatedCellSize, 80));
+                setCellWidth(clamped);
+                setCellHeight(clamped);
             }
         });
 
@@ -142,9 +154,14 @@ export const GridEditorPanel: React.FC = () => {
                             <span>{Math.round(overlayOpacity * 100)}%</span>
                         </div>
                     )}
+                    {overlayEnabled && (
+                        <label className="flex items-center gap-1 text-xs">
+                            <input type="checkbox" checked={overlayStretch} onChange={(e) => setOverlayStretch(e.target.checked)} /> Stretch to image
+                        </label>
+                    )}
                     {overlayEnabled && imageNaturalSize && (
                         <span className="text-xs text-muted-foreground">
-                            Image: {imageNaturalSize.width}×{imageNaturalSize.height}px | Cell: {cellSize}px
+                            Image: {imageNaturalSize.width}×{imageNaturalSize.height}px | Cell: {cellWidth.toFixed(1)}×{cellHeight.toFixed(1)}px
                         </span>
                     )}
                     <Button size="sm" onClick={exportTS}>Copy JSON</Button>
@@ -198,9 +215,9 @@ export const GridEditorPanel: React.FC = () => {
                                 className="absolute top-0 left-0 pointer-events-none"
                                 style={{
                                     opacity: overlayOpacity,
-                                    width: `${cols * cellSize}px`,
-                                    height: `${rows * cellSize}px`,
-                                    objectFit: 'fill',
+                                    width: `${cols * cellWidth}px`,
+                                    height: `${rows * cellHeight}px`,
+                                    objectFit: overlayStretch ? 'fill' : 'contain',
                                     zIndex: 15
                                 }}
                             />
@@ -216,13 +233,13 @@ export const GridEditorPanel: React.FC = () => {
                                             const diff = compareLevel?.grid?.[r]?.[c] !== undefined && compareLevel.grid[r][c] !== cell;
                                             const isPlayerStart = playerStart?.x === c && playerStart?.y === r;
                                             return (
-                                                <td key={`${r}-${c}`} className="relative p-0" style={{ width: `${cellSize}px`, height: `${cellSize}px` }}>
+                                                <td key={`${r}-${c}`} className="relative p-0" style={{ width: `${cellWidth}px`, height: `${cellHeight}px` }}>
                                                     <button
                                                         className="w-full h-full border relative"
                                                         style={{
                                                             background: TILE_TYPES.find(t => t.id === cell)?.color || '#000',
-                                                            width: `${cellSize}px`,
-                                                            height: `${cellSize}px`,
+                                                            width: `${cellWidth}px`,
+                                                            height: `${cellHeight}px`,
                                                         }}
                                                         onMouseDown={(e) => { e.preventDefault(); beginPaint(r, c); }}
                                                         onMouseEnter={() => continuePaint(r, c)}
