@@ -1,7 +1,6 @@
 import { PuzzleGame } from "@/components/PuzzleGame";
 import LevelMapper from "@/components/LevelMapper";
 import bgImage from "@/assets/stone-age-bg.png";
-import { uiImages } from "@/data/assetCatalog";
 
 console.log('📄 Index.tsx loading...');
 
@@ -22,16 +21,15 @@ const Index = () => {
                     backgroundAttachment: 'fixed',
                 }}
             >
-                {uiImages.menu && (
-                    <div
-                        className="absolute inset-0 opacity-20 mix-blend-screen pointer-events-none"
-                        style={{
-                            backgroundImage: `url(${uiImages.menu})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                        }}
-                    />
-                )}
+                <div
+                    className="absolute inset-0 opacity-40 pointer-events-none"
+                    style={{
+                        backgroundImage:
+                            'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.08), transparent 40%), radial-gradient(circle at 80% 30%, rgba(255,220,170,0.08), transparent 45%), linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.35) 100%)',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    }}
+                />
                 {/* Dark overlay for better readability */}
                 <div className="absolute inset-0 bg-black/40 scanline" />
 
