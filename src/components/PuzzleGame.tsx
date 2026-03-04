@@ -90,7 +90,7 @@ export const PuzzleGame = () => {
     const lastRenderRef = useRef(0);
     const buildInFlightRef = useRef<Set<number>>(new Set());
 
-    const allLevels = getAllLevels();
+    const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex]);
     const currentLevel = allLevels[currentLevelIndex];
 
     const isPlaceholderGrid = useCallback((levelGrid?: number[][]) => {
@@ -206,7 +206,7 @@ export const PuzzleGame = () => {
 
           const buildPromise = buildLevelFromSources(sources, {
             minSimilarity: 0.72,
-            timeoutMs: 8000,
+            timeoutMs: 12000,
             yieldEveryRows: 1,
             onProgress: (status) => {
               if (!cancelled) setBuildStatus(status);
@@ -218,7 +218,7 @@ export const PuzzleGame = () => {
             timeoutId = setTimeout(() => {
               timeoutId = null;
               reject(new Error('Level build timed out'));
-            }, 15000);
+            }, 30000);
           });
 
           const built = await Promise.race([buildPromise, timeoutPromise]);
