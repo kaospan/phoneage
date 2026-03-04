@@ -122,13 +122,27 @@ export const PuzzleGame = () => {
             throw new Error('No image sources available for this level');
           }
 
-          const built = await buildLevelFromSources(sources, {
+          const buildPromise = buildLevelFromSources(sources, {
             minSimilarity: 0.72,
             timeoutMs: 8000,
             onProgress: (status) => {
               if (!cancelled) setBuildStatus(status);
             },
           });
+
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+              timeoutId = null;
+              reject(new Error('Level build timed out'));
+            }, 15000);
+          });
+
+          const built = await Promise.race([buildPromise, timeoutPromise]);
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
           if (cancelled) return;
 
           const builtLevel: LevelData = {
