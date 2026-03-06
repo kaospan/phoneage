@@ -10,6 +10,12 @@ export interface CellReference {
 }
 
 export const STORAGE_KEY = 'stone-age-cell-references';
+export const CELL_REFERENCES_UPDATED_EVENT = 'stone-age-cell-references-updated';
+
+const notifyCellReferencesUpdated = () => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(CELL_REFERENCES_UPDATED_EVENT));
+};
 
 export const getCellReferences = (): CellReference[] => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -27,6 +33,7 @@ export const getReferencesForType = (tileType: number): CellReference[] => {
 
 export const saveCellReferences = (references: CellReference[]): void => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(references));
+    notifyCellReferencesUpdated();
 };
 
 export const appendCellReferences = (

@@ -234,6 +234,14 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         <input className="w-16 px-2 py-1 rounded border bg-background" type="number" min={1} value={rows} onChange={(e) => setRows(parseInt(e.target.value || '1', 10))} />
                         <label className="text-xs text-muted-foreground">Cols</label>
                         <input className="w-16 px-2 py-1 rounded border bg-background" type="number" min={1} value={cols} onChange={(e) => setCols(parseInt(e.target.value || '1', 10))} />
+                        <label className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1 text-xs">
+                            <input
+                                type="checkbox"
+                                checked={useDetectCurrentCounts}
+                                onChange={(e) => setUseDetectCurrentCounts(e.target.checked)}
+                            />
+                            Lock current rows/cols
+                        </label>
                         <select
                             className="px-2 py-1 rounded border bg-background text-xs"
                             value={importLevelIndex ?? ''}
@@ -283,6 +291,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         >
                             Auto-detect Cells
                         </Button>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                        Grid detection now auto-detects row and column counts from the screenshot. Enable `Lock current rows/cols` only when you want detection constrained to the values above.
                     </div>
 
                     {/* Theme Selector */}
@@ -334,7 +345,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         gridOffsetY={gridOffsetY}
                         gridFrameWidth={gridFrameWidth}
                         gridFrameHeight={gridFrameHeight}
-                        zoom={zoom}
                         grid={grid}
                         setGrid={setGrid}
                         onCapture={handleSpriteCapture}

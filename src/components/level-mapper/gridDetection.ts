@@ -1,3 +1,9 @@
+const MIN_DETECTED_ROWS = 8;
+const MAX_DETECTED_ROWS = 16;
+const MIN_DETECTED_COLS = 8;
+const MAX_DETECTED_COLS = 24;
+const MAX_DETECTED_CELLS = 320;
+
 // Grid line detection logic
 export const detectGridLines = (
     canvas: HTMLCanvasElement,
@@ -107,10 +113,15 @@ export const detectGridLines = (
         return null;
     }
 
-    const detectedCols = Math.max(2, Math.round(width / xSpacing.size));
-    const detectedRows = Math.max(2, Math.round(height / ySpacing.size));
+    const detectedCols = Math.max(MIN_DETECTED_COLS, Math.min(MAX_DETECTED_COLS, Math.round(width / xSpacing.size)));
+    const detectedRows = Math.max(MIN_DETECTED_ROWS, Math.min(MAX_DETECTED_ROWS, Math.round(height / ySpacing.size)));
     const finalCols = useDetectCurrentCounts ? currentCols : detectedCols;
     const finalRows = useDetectCurrentCounts ? currentRows : detectedRows;
+
+    if (!useDetectCurrentCounts && finalRows * finalCols > MAX_DETECTED_CELLS) {
+        console.error(`❌ Grid detection produced an unsafe cell count: ${finalRows}x${finalCols}`);
+        return null;
+    }
 
     console.log(`✓ Grid detected: ${finalRows}x${finalCols} (cell ~ ${xSpacing.size}px × ${ySpacing.size}px)`);
     return { rows: finalRows, cols: finalCols, offsetX: xSpacing.offset, offsetY: ySpacing.offset };

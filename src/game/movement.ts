@@ -2,6 +2,8 @@ import { CellType, GameState, Position } from './types';
 import { isArrowCell, getArrowDirections } from './arrows';
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from './glide';
 
+const isKeyCell = (cell: CellType) => cell === 14 || cell === 15;
+
 export interface PlayerMoveOutcome {
   glidePath?: { path: Position[]; arrowType: CellType };
   newPlayerPos?: Position;
@@ -24,8 +26,18 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
   // If on arrow
   if (isArrowCell(playerCell)) {
     // Step priority (floor, cave, arrow, fresh breakable rock)
-    if (targetCell === 0 || targetCell === 3 || isArrowCell(targetCell)) {
-      return { newPlayerPos: { x: targetX, y: targetY }, consumedMove: true };
+    if (targetCell === 0 || targetCell === 3 || isArrowCell(targetCell) || isKeyCell(targetCell)) {
+      const outcome: PlayerMoveOutcome = {
+        newPlayerPos: { x: targetX, y: targetY },
+        consumedMove: true
+      };
+      if (isKeyCell(baseGrid[playerPos.y][playerPos.x])) {
+        const newGrid = grid.map(r => [...r]);
+        newGrid[playerPos.y][playerPos.x] = 0;
+        baseGrid[playerPos.y][playerPos.x] = 0;
+        outcome.newGrid = newGrid;
+      }
+      return outcome;
     }
     if (targetCell === 6) { // breakable rock first time
       const key = `${targetX},${targetY}`;
@@ -90,8 +102,14 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     newPlayerPos: { x: targetX, y: targetY },
     consumedMove: true
   };
+  if (isKeyCell(baseGrid[playerPos.y][playerPos.x])) {
+    const newGrid = outcome.newGrid ?? grid.map(r => [...r]);
+    newGrid[playerPos.y][playerPos.x] = 0;
+    baseGrid[playerPos.y][playerPos.x] = 0;
+    outcome.newGrid = newGrid;
+  }
   if (willBreakRock) {
-    const newGrid = grid.map(r => [...r]);
+    const newGrid = outcome.newGrid ?? grid.map(r => [...r]);
     newGrid[playerPos.y][playerPos.x] = 5; // becomes void
     outcome.newGrid = newGrid;
     outcome.brokeRock = true;

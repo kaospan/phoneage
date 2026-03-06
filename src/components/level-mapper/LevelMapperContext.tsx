@@ -32,6 +32,9 @@ import { normalizeMapperImage } from './imageNormalization';
 
 console.log('📦 LevelMapperContext.tsx loading...');
 
+const CELL_SAMPLE_INSET_RATIO = 0.08;
+const MAX_AUTO_DETECT_CELLS = 320;
+
 // Types
 export type BulkContextType = 'column-left' | 'column-right' | 'row-top' | 'row-bottom';
 
@@ -130,7 +133,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [overlayEnabled, setOverlayEnabled] = useState(false);
         const [overlayOpacity, setOverlayOpacity] = useState(0.5);
         const [overlayStretch, setOverlayStretch] = useState(true);
-        const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(true);
+        const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(false);
 
         // Use custom hooks for side effects
         useJsonSync(grid, setJsonInput);
@@ -256,7 +259,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 void applyGridBounds();
             } else {
                 console.error('❌ Grid detection failed');
-                alert('Grid detection failed (not enough line candidates).');
+                alert('Grid detection failed. Try locking the current rows/cols if you already know them, or adjust the crop so the board edges are cleaner.');
             }
         };
 
@@ -296,6 +299,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
                 const newGrid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
                 const totalCells = rows * cols;
+                if (totalCells > MAX_AUTO_DETECT_CELLS) {
+                    throw new Error(`Unsafe auto-detect size ${rows}x${cols}. Reduce rows/cols or re-run grid detection with cleaner borders.`);
+                }
                 let processedCells = 0;
 
                 const matcher = await buildReferenceMatcher(0.70);
@@ -351,10 +357,12 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                 const r = Math.floor(cellIndex / cols);
                                 const c = cellIndex % cols;
 
-                                const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(gridOffsetX + c * cellWidth)));
-                                const x1 = Math.max(0, Math.min(image.width, Math.floor(gridOffsetX + (c + 1) * cellWidth)));
-                                const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(gridOffsetY + r * cellHeight)));
-                                const y1 = Math.max(0, Math.min(image.height, Math.floor(gridOffsetY + (r + 1) * cellHeight)));
+                                const insetX = Math.min(cellWidth * CELL_SAMPLE_INSET_RATIO, Math.max(1, cellWidth / 4));
+                                const insetY = Math.min(cellHeight * CELL_SAMPLE_INSET_RATIO, Math.max(1, cellHeight / 4));
+                                const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(gridOffsetX + c * cellWidth + insetX)));
+                                const x1 = Math.max(x0 + 1, Math.min(image.width, Math.ceil(gridOffsetX + (c + 1) * cellWidth - insetX)));
+                                const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(gridOffsetY + r * cellHeight + insetY)));
+                                const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(gridOffsetY + (r + 1) * cellHeight - insetY)));
 
                                 newGrid[r][c] = await classifyCell(x0, y0, x1, y1);
                                 processedCells++;

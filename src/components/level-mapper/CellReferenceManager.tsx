@@ -6,17 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { X, Upload, Save, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-
-interface CellReference {
-    id: string;
-    tileType: number;
-    imageData: string; // base64
-    timestamp: number;
-    gridPosition?: { row: number; col: number };
-    sourceName?: string; // e.g., "level7"
-}
-
-const STORAGE_KEY = 'stone-age-cell-references';
+import { STORAGE_KEY, saveCellReferences, type CellReference } from '@/lib/spriteMatching';
 
 export const CellReferenceManager: React.FC = () => {
     const [references, setReferences] = useState<CellReference[]>([]);
@@ -37,7 +27,7 @@ export const CellReferenceManager: React.FC = () => {
 
     // Save references to localStorage
     const saveReferences = (refs: CellReference[]) => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(refs));
+        saveCellReferences(refs);
         setReferences(refs);
     };
 
@@ -74,6 +64,23 @@ export const CellReferenceManager: React.FC = () => {
         saveReferences(references.filter(ref => ref.id !== id));
     };
 
+    const updateReference = (id: string, updates: Partial<CellReference>) => {
+        saveReferences(
+            references.map((ref) => (ref.id === id ? { ...ref, ...updates } : ref))
+        );
+    };
+
+    const replaceReferenceImage = (id: string, file: File | null) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const imageData = event.target?.result as string;
+            if (!imageData) return;
+            updateReference(id, { imageData, timestamp: Date.now() });
+        };
+        reader.readAsDataURL(file);
+    };
+
     // Get tile type name
     const getTileTypeName = (type: number) => {
         return TILE_TYPES.find(t => t.id === type)?.name || `Type ${type}`;
@@ -95,7 +102,7 @@ export const CellReferenceManager: React.FC = () => {
 
             <Alert>
                 <AlertDescription>
-                    Upload cropped cell images to use as reference sprites for detection. These help identify specific tile types.
+                    Upload cropped cell images to use as reference sprites for detection. You can also change a saved sprite's tile type or replace its image if it was categorized incorrectly.
                 </AlertDescription>
             </Alert>
 
@@ -199,7 +206,7 @@ export const CellReferenceManager: React.FC = () => {
                                 </div>
                                 <div className="grid grid-cols-4 gap-2">
                                     {refs.map((ref) => (
-                                        <div key={ref.id} className="relative group">
+                                        <div key={ref.id} className="relative space-y-2 rounded border border-border/60 bg-background/40 p-2">
                                             <div className="border rounded overflow-hidden bg-muted/20 aspect-square">
                                                 <img
                                                     src={ref.imageData}
@@ -207,10 +214,35 @@ export const CellReferenceManager: React.FC = () => {
                                                     className="w-full h-full object-contain"
                                                 />
                                             </div>
+                                            <select
+                                                value={ref.tileType}
+                                                onChange={(e) => updateReference(ref.id, { tileType: parseInt(e.target.value, 10) })}
+                                                className="w-full rounded border bg-background px-2 py-1 text-xs"
+                                                title="Change the tile type for this saved reference"
+                                            >
+                                                {TILE_TYPES.map((tile) => (
+                                                    <option key={tile.id} value={tile.id}>
+                                                        {tile.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <label className="flex w-full cursor-pointer items-center justify-center gap-1 rounded border px-2 py-1 text-xs hover:bg-muted">
+                                                <Upload className="h-3 w-3" />
+                                                Replace Image
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={(e) => {
+                                                        replaceReferenceImage(ref.id, e.target.files?.[0] ?? null);
+                                                        e.currentTarget.value = '';
+                                                    }}
+                                                />
+                                            </label>
                                             <Button
                                                 variant="destructive"
                                                 size="icon"
-                                                className="absolute -top-2 -right-2 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="absolute -top-2 -right-2 h-6 w-6"
                                                 onClick={() => deleteReference(ref.id)}
                                             >
                                                 <Trash2 className="w-3 h-3" />

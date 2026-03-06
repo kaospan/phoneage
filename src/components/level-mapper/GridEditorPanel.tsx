@@ -102,6 +102,38 @@ export const GridEditorPanel: React.FC = () => {
     const displayOffsetY = gridOffsetY * overlayScaleY;
     const naturalFrameWidth = gridFrameWidth ?? imageNaturalSize?.width ?? 0;
     const naturalFrameHeight = gridFrameHeight ?? imageNaturalSize?.height ?? 0;
+    const cropInsets = React.useMemo(() => {
+        if (!imageNaturalSize) return null;
+
+        const left = Math.max(0, Math.round(gridOffsetX));
+        const top = Math.max(0, Math.round(gridOffsetY));
+        const right = Math.max(0, Math.round(imageNaturalSize.width - (gridOffsetX + naturalFrameWidth)));
+        const bottom = Math.max(0, Math.round(imageNaturalSize.height - (gridOffsetY + naturalFrameHeight)));
+
+        return { left, top, right, bottom };
+    }, [gridOffsetX, gridOffsetY, imageNaturalSize, naturalFrameHeight, naturalFrameWidth]);
+
+    const applyCropInsets = React.useCallback((next: {
+        left?: number;
+        top?: number;
+        right?: number;
+        bottom?: number;
+    }) => {
+        if (!imageNaturalSize || !cropInsets) return;
+
+        const left = Math.max(0, Math.min(imageNaturalSize.width - 1, Math.round(next.left ?? cropInsets.left)));
+        const top = Math.max(0, Math.min(imageNaturalSize.height - 1, Math.round(next.top ?? cropInsets.top)));
+        const right = Math.max(0, Math.min(imageNaturalSize.width - 1, Math.round(next.right ?? cropInsets.right)));
+        const bottom = Math.max(0, Math.min(imageNaturalSize.height - 1, Math.round(next.bottom ?? cropInsets.bottom)));
+
+        const frameWidth = Math.max(1, imageNaturalSize.width - left - right);
+        const frameHeight = Math.max(1, imageNaturalSize.height - top - bottom);
+
+        setGridOffsetX(left);
+        setGridOffsetY(top);
+        setGridFrameWidth(frameWidth);
+        setGridFrameHeight(frameHeight);
+    }, [cropInsets, imageNaturalSize, setGridFrameHeight, setGridFrameWidth, setGridOffsetX, setGridOffsetY]);
 
     const beginPaint = (r: number, c: number) => {
         if (isDragMode) return;
@@ -318,6 +350,69 @@ export const GridEditorPanel: React.FC = () => {
                                 }}
                             >
                                 Reset
+                            </Button>
+                        </div>
+                    )}
+                    {imageURL && overlayEnabled && imageNaturalSize && cropInsets && (
+                        <div className="flex items-center gap-1 rounded border border-border/60 bg-background/60 px-2 py-1 text-xs">
+                            <span className="font-medium text-foreground">Crop</span>
+                            <label className="flex items-center gap-1">
+                                <span>L</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={imageNaturalSize.width - 1}
+                                    value={cropInsets.left}
+                                    onChange={(e) => applyCropInsets({ left: Number(e.target.value) || 0 })}
+                                    className="h-7 w-14 rounded border bg-background px-1"
+                                />
+                            </label>
+                            <label className="flex items-center gap-1">
+                                <span>T</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={imageNaturalSize.height - 1}
+                                    value={cropInsets.top}
+                                    onChange={(e) => applyCropInsets({ top: Number(e.target.value) || 0 })}
+                                    className="h-7 w-14 rounded border bg-background px-1"
+                                />
+                            </label>
+                            <label className="flex items-center gap-1">
+                                <span>R</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={imageNaturalSize.width - 1}
+                                    value={cropInsets.right}
+                                    onChange={(e) => applyCropInsets({ right: Number(e.target.value) || 0 })}
+                                    className="h-7 w-14 rounded border bg-background px-1"
+                                />
+                            </label>
+                            <label className="flex items-center gap-1">
+                                <span>B</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={imageNaturalSize.height - 1}
+                                    value={cropInsets.bottom}
+                                    onChange={(e) => applyCropInsets({ bottom: Number(e.target.value) || 0 })}
+                                    className="h-7 w-14 rounded border bg-background px-1"
+                                />
+                            </label>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => {
+                                    setGridOffsetX(0);
+                                    setGridOffsetY(0);
+                                    setGridFrameWidth(imageNaturalSize.width);
+                                    setGridFrameHeight(imageNaturalSize.height);
+                                }}
+                                title="Reset manual image crop"
+                            >
+                                Reset Crop
                             </Button>
                         </div>
                     )}

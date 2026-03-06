@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { TILE_TYPES } from '@/lib/levelgrid';
-import { Crosshair, Save, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { extractCellImageData, findBestMatch } from '@/lib/spriteMatching';
+import {
+    appendCellReferences,
+    buildReferenceMatcher,
+    CELL_REFERENCES_UPDATED_EVENT,
+    extractCellImageData,
+} from '@/lib/spriteMatching';
 
 interface SpriteCaptureProps {
     imageURL: string | null;
@@ -17,9 +19,8 @@ interface SpriteCaptureProps {
     gridOffsetY: number;
     gridFrameWidth: number | null;
     gridFrameHeight: number | null;
-    zoom: number;
     grid?: number[][];
-    setGrid?: (grid: number[][]) => void;
+    setGrid?: React.Dispatch<React.SetStateAction<number[][]>>;
     onCapture: (cellData: {
         imageData: string;
         tileType: number;
@@ -28,7 +29,9 @@ interface SpriteCaptureProps {
     }) => void;
 }
 
-const STORAGE_KEY = 'stone-age-cell-references';
+const CELL_INSET_RATIO = 0.08;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
     imageURL,
@@ -38,34 +41,133 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
     gridOffsetY,
     gridFrameWidth,
     gridFrameHeight,
-    zoom,
     grid,
     setGrid,
     onCapture,
 }) => {
     const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
-    const [selectedType, setSelectedType] = useState<number>(10); // Default to Arrow Left (10) for the user's current task
-    const [filterType, setFilterType] = useState<number | 'all'>('all'); // Filter to show specific types
-    const [lastSaved, setLastSaved] = useState<string>(''); // Track last saved to avoid duplicates
+    const [selectedType, setSelectedType] = useState<number>(10);
+    const [filterType, setFilterType] = useState<number | 'all'>('all');
+    const [lastSaved, setLastSaved] = useState<string>('');
     const [detectedType, setDetectedType] = useState<number | null>(null);
     const [isDetecting, setIsDetecting] = useState(false);
     const [tempCanvas, setTempCanvas] = useState<HTMLCanvasElement | null>(null);
-    const [detectedGrid, setDetectedGrid] = useState<Map<string, number>>(new Map()); // Store all detected cells
+    const [detectedGrid, setDetectedGrid] = useState<Map<string, number>>(new Map());
     const [isScanning, setIsScanning] = useState(false);
+    const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+    const [matcher, setMatcher] = useState<((cellImageData: ImageData) => Promise<number | null>) | null>(null);
+    const [referenceRevision, setReferenceRevision] = useState(0);
+    const latestGridRef = React.useRef<number[][] | undefined>(grid);
 
-    // Create a temporary canvas for cell extraction
+    useEffect(() => {
+        latestGridRef.current = grid;
+    }, [grid]);
+
     useEffect(() => {
         const canvas = document.createElement('canvas');
         setTempCanvas(canvas);
     }, []);
 
-    // Auto-detect all cells when image loads or grid changes
     useEffect(() => {
-        if (!imageURL || !tempCanvas || !setGrid || !grid) return;
+        if (typeof window === 'undefined') return;
+
+        const handleReferenceUpdate = () => {
+            setReferenceRevision((value) => value + 1);
+        };
+
+        window.addEventListener(CELL_REFERENCES_UPDATED_EVENT, handleReferenceUpdate as EventListener);
+        window.addEventListener('storage', handleReferenceUpdate);
+        return () => {
+            window.removeEventListener(CELL_REFERENCES_UPDATED_EVENT, handleReferenceUpdate as EventListener);
+            window.removeEventListener('storage', handleReferenceUpdate);
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const prepareMatcher = async () => {
+            const nextMatcher = await buildReferenceMatcher(0.7);
+            if (!cancelled) {
+                setMatcher(() => nextMatcher);
+            }
+        };
+
+        void prepareMatcher();
+        return () => {
+            cancelled = true;
+        };
+    }, [referenceRevision]);
+
+    useEffect(() => {
+        if (!imageURL || !tempCanvas) {
+            setImageSize(null);
+            return;
+        }
+
+        let cancelled = false;
+        const image = new Image();
+
+        image.onload = () => {
+            if (cancelled) return;
+            const context = tempCanvas.getContext('2d', { willReadFrequently: true });
+            if (!context) return;
+
+            tempCanvas.width = image.width;
+            tempCanvas.height = image.height;
+            context.clearRect(0, 0, image.width, image.height);
+            context.drawImage(image, 0, 0);
+            setImageSize({ width: image.width, height: image.height });
+        };
+
+        image.onerror = () => {
+            if (!cancelled) {
+                setImageSize(null);
+            }
+        };
+
+        image.src = imageURL;
+
+        return () => {
+            cancelled = true;
+        };
+    }, [imageURL, tempCanvas]);
+
+    const getCellDimensions = () => {
+        if (!imageSize) return null;
+
+        const frameWidth = gridFrameWidth ?? imageSize.width;
+        const frameHeight = gridFrameHeight ?? imageSize.height;
+        return {
+            cellWidth: frameWidth / cols,
+            cellHeight: frameHeight / rows,
+        };
+    };
+
+    const getCellBounds = (row: number, col: number, cellWidth: number, cellHeight: number) => {
+        if (!imageSize) return null;
+
+        const insetX = Math.min(cellWidth * CELL_INSET_RATIO, Math.max(1, cellWidth / 4));
+        const insetY = Math.min(cellHeight * CELL_INSET_RATIO, Math.max(1, cellHeight / 4));
+        const rawX0 = gridOffsetX + col * cellWidth + insetX;
+        const rawY0 = gridOffsetY + row * cellHeight + insetY;
+        const rawX1 = gridOffsetX + (col + 1) * cellWidth - insetX;
+        const rawY1 = gridOffsetY + (row + 1) * cellHeight - insetY;
+
+        const x0 = clamp(Math.floor(rawX0), 0, Math.max(0, imageSize.width - 1));
+        const y0 = clamp(Math.floor(rawY0), 0, Math.max(0, imageSize.height - 1));
+        const x1 = clamp(Math.ceil(rawX1), x0 + 1, imageSize.width);
+        const y1 = clamp(Math.ceil(rawY1), y0 + 1, imageSize.height);
+
+        return { x0, y0, x1, y1 };
+    };
+
+    useEffect(() => {
+        if (!imageURL || !tempCanvas || !setGrid || !grid || !matcher || !imageSize) return;
+        let cancelled = false;
 
         const detectAllCells = async () => {
             setIsScanning(true);
-            console.log('Auto-detecting all cells...');
 
             const dims = getCellDimensions();
             if (!dims) {
@@ -74,38 +176,24 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
             }
 
             const { cellWidth, cellHeight } = dims;
-            const ctx = tempCanvas.getContext('2d');
-            if (!ctx) {
+            const currentGrid = latestGridRef.current;
+            if (!currentGrid) {
                 setIsScanning(false);
                 return;
             }
 
-            const img = new Image();
-            img.src = imageURL;
-
-            await new Promise((resolve) => {
-                img.onload = resolve;
-            });
-
-            tempCanvas.width = img.width;
-            tempCanvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-
-            const newGrid = grid.map(row => [...row]);
+            const newGrid = currentGrid.map(row => [...row]);
             const detectedMap = new Map<string, number>();
             let matchCount = 0;
 
-            // Scan all cells
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
-                    const x0 = Math.floor(c * cellWidth + gridOffsetX);
-                    const y0 = Math.floor(r * cellHeight + gridOffsetY);
-                    const x1 = Math.floor((c + 1) * cellWidth + gridOffsetX);
-                    const y1 = Math.floor((r + 1) * cellHeight + gridOffsetY);
+                    const bounds = getCellBounds(r, c, cellWidth, cellHeight);
+                    if (!bounds) continue;
 
-                    const cellImageData = extractCellImageData(tempCanvas, x0, y0, x1, y1);
+                    const cellImageData = extractCellImageData(tempCanvas, bounds.x0, bounds.y0, bounds.x1, bounds.y1);
                     if (cellImageData) {
-                        const matchedType = await findBestMatch(cellImageData, 0.70);
+                        const matchedType = await matcher(cellImageData);
                         if (matchedType !== null) {
                             newGrid[r][c] = matchedType;
                             detectedMap.set(`${r},${c}`, matchedType);
@@ -115,33 +203,27 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
                 }
             }
 
+            if (cancelled) return;
             setDetectedGrid(detectedMap);
-            setGrid(newGrid);
+            const hasGridChanges = newGrid.some((row, rowIndex) =>
+                row.some((cell, colIndex) => cell !== currentGrid[rowIndex]?.[colIndex])
+            );
+            if (hasGridChanges) {
+                setGrid(newGrid);
+            }
             setIsScanning(false);
+
             console.log(`✓ Auto-detected and mapped ${matchCount}/${rows * cols} cells`);
         };
 
-        detectAllCells();
-    }, [imageURL, rows, cols, gridOffsetX, gridOffsetY, gridFrameWidth, gridFrameHeight]); // Run when image or grid params change
+        void detectAllCells();
+        return () => {
+            cancelled = true;
+        };
+    }, [imageURL, rows, cols, gridOffsetX, gridOffsetY, gridFrameWidth, gridFrameHeight, matcher, imageSize, referenceRevision, setGrid]);
 
-    // Calculate cell dimensions
-    const getCellDimensions = () => {
-        if (!imageURL) return null;
-
-        const img = new Image();
-        img.src = imageURL;
-
-        const frameWidth = gridFrameWidth ?? img.width;
-        const frameHeight = gridFrameHeight ?? img.height;
-        const cellWidth = frameWidth / cols;
-        const cellHeight = frameHeight / rows;
-
-        return { cellWidth, cellHeight, imgWidth: img.width, imgHeight: img.height };
-    };
-
-    // Detect cell type on hover (for status display only)
     const handleCellHover = async (row: number, col: number) => {
-        if (!imageURL || !tempCanvas) return;
+        if (!imageURL || !tempCanvas || !matcher) return;
 
         const hoverKey = `${row},${col}`;
         setHoveredCell({ row, col });
@@ -164,52 +246,21 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
             }
 
             const { cellWidth, cellHeight } = dims;
-
-            // Create canvas for the full image
-            const ctx = tempCanvas.getContext('2d');
-            if (!ctx) {
-                setIsDetecting(false);
+            const bounds = getCellBounds(row, col, cellWidth, cellHeight);
+            if (!bounds) {
                 setDetectedType(null);
+                setIsDetecting(false);
                 return;
             }
 
-            const img = new Image();
-            img.src = imageURL;
-
-            await new Promise((resolve) => {
-                img.onload = resolve;
-            });
-
-            // Set canvas to full image size
-            tempCanvas.width = img.width;
-            tempCanvas.height = img.height;
-
-            // Draw full image
-            ctx.drawImage(img, 0, 0);
-
-            // Calculate cell bounds
-            const x0 = Math.floor(col * cellWidth + gridOffsetX);
-            const y0 = Math.floor(row * cellHeight + gridOffsetY);
-            const x1 = Math.floor((col + 1) * cellWidth + gridOffsetX);
-            const y1 = Math.floor((row + 1) * cellHeight + gridOffsetY);
-
-            // Extract cell image data
-            const cellImageData = extractCellImageData(tempCanvas, x0, y0, x1, y1);
+            const cellImageData = extractCellImageData(tempCanvas, bounds.x0, bounds.y0, bounds.x1, bounds.y1);
             if (!cellImageData) {
-                console.log('No cell image data extracted');
                 setDetectedType(null);
                 setIsDetecting(false);
                 return;
             }
 
-            console.log(`Detecting cell [${row},${col}]...`);
-
-            // Find best match from references
-            const matchedType = await findBestMatch(cellImageData, 0.70);
-
-            console.log(`Cell [${row},${col}] hover detection result:`, matchedType);
-
-            // Update result for display
+            const matchedType = await matcher(cellImageData);
             setDetectedType(matchedType);
         } catch (e) {
             console.error('Detection error:', e);
@@ -217,76 +268,80 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         } finally {
             setIsDetecting(false);
         }
-    };    // Save cell on click
+    };
+
     const handleCellClick = async (row: number, col: number) => {
-        if (!imageURL) return;
+        if (!imageURL || !tempCanvas) return;
 
         const key = `${row},${col}`;
-        if (lastSaved === key) return; // Already saved this one
-
-        // Get the detected type from the grid (or use detected type from hover)
-        const cellType = grid?.[row]?.[col] ?? detectedType ?? selectedType;
+        if (lastSaved === key) return;
 
         const dims = getCellDimensions();
         if (!dims) return;
 
         const { cellWidth, cellHeight } = dims;
+        const bounds = getCellBounds(row, col, cellWidth, cellHeight);
+        if (!bounds) return;
 
-        // Create canvas for cropping
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const img = new Image();
-        img.src = imageURL;
+        const captureWidth = Math.max(1, bounds.x1 - bounds.x0);
+        const captureHeight = Math.max(1, bounds.y1 - bounds.y0);
+        canvas.width = captureWidth;
+        canvas.height = captureHeight;
 
-        await new Promise((resolve) => {
-            img.onload = resolve;
-        });
-
-        // Set canvas size to cell size
-        canvas.width = cellWidth;
-        canvas.height = cellHeight;
-
-        // Calculate source coordinates
-        const sx = col * cellWidth + gridOffsetX;
-        const sy = row * cellHeight + gridOffsetY;
-
-        // Draw the cropped cell
         ctx.drawImage(
-            img,
-            sx, sy, cellWidth, cellHeight,  // Source
-            0, 0, cellWidth, cellHeight      // Destination
+            tempCanvas,
+            bounds.x0,
+            bounds.y0,
+            captureWidth,
+            captureHeight,
+            0,
+            0,
+            captureWidth,
+            captureHeight
         );
 
-        // Get base64 image data
         const imageData = canvas.toDataURL('image/png');
+        const tileType = selectedType;
 
-        // Save
         onCapture({
-            imageData: imageData,
-            tileType: cellType,
-            row: row,
-            col: col,
+            imageData,
+            tileType,
+            row,
+            col,
         });
 
-        // Save to localStorage
-        const stored = localStorage.getItem(STORAGE_KEY);
-        const existing = stored ? JSON.parse(stored) : [];
-
-        const newRef = {
+        appendCellReferences([{
             id: `ref-${Date.now()}-${row}-${col}`,
-            tileType: cellType,
-            imageData: imageData,
+            tileType,
+            imageData,
             timestamp: Date.now(),
             gridPosition: { row, col },
-        };
+        }]);
 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, newRef]));
+        if (setGrid) {
+            setGrid((currentGrid) => {
+                const nextGrid = currentGrid.map((gridRow) => [...gridRow]);
+                if (nextGrid[row]?.[col] !== undefined) {
+                    nextGrid[row][col] = tileType;
+                }
+                return nextGrid;
+            });
+        }
+
+        setDetectedGrid((current) => {
+            const next = new Map(current);
+            next.set(key, tileType);
+            return next;
+        });
+        setDetectedType(tileType);
 
         setLastSaved(key);
 
-        console.log(`✓ Saved cell [${row},${col}] as type ${cellType} (${TILE_TYPES.find(t => t.id === cellType)?.name})`);
+        console.log(`✓ Saved cell [${row},${col}] as type ${tileType} (${TILE_TYPES.find(t => t.id === tileType)?.name})`);
     };
 
     if (!imageURL) {
@@ -374,7 +429,7 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
 
             <Alert>
                 <AlertDescription>
-                    All cells are <strong>automatically detected and mapped</strong> when the image loads. <strong>Hover</strong> over cells to view detection results. <strong>Click</strong> to save a cell as a reference sprite.
+                    Cells are automatically detected when the image and references are ready. Hover to inspect a match. Click to save the hovered cell as the tile type currently selected above, even if autodetection guessed it wrong.
                 </AlertDescription>
             </Alert>
 
@@ -401,34 +456,29 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
                                 const wasSaved = lastSaved === `${r},${c}`;
 
                                 // Check if cell matches filter type
-                                const matchesFilter = filterType === 'all' || detectedType === filterType ||
-                                    (isHovered && detectedType === filterType);
-
-                                // Determine background color based on detection and filter
-                                // Don't show intermediate "detecting" state - only show final results
+                                const cellDetectedType = detectedGrid.get(`${r},${c}`);
+                                const highlightType = isHovered ? detectedType : cellDetectedType;
                                 let bgColor = 'bg-transparent border-blue-500/30';
                                 let shouldHighlight = false;
 
                                 if (wasSaved) {
                                     bgColor = 'bg-green-500/50 border-green-500';
                                 } else if (isHovered && !isDetecting) {
-                                    // Only show visual feedback when detection is complete
                                     if (detectedType !== null) {
-                                        // Check if detected type matches filter
                                         if (filterType === 'all' || detectedType === filterType) {
                                             shouldHighlight = true;
                                             bgColor = `border-blue-500 border-2`;
                                         } else {
-                                            // Detected but doesn't match filter - show dimmed
                                             bgColor = `border-gray-400 border-opacity-50`;
                                         }
                                     } else {
-                                        // No match - white
-                                        bgColor = 'bg-white/50 border-red-500';
+                                        bgColor = 'bg-rose-500/20 border-rose-500';
                                     }
-                                } else if (filterType !== 'all') {
-                                    // When filter is active, dim non-matching cells slightly
+                                } else if (filterType !== 'all' && cellDetectedType !== filterType) {
                                     bgColor = 'bg-transparent border-gray-400/20';
+                                } else if (filterType !== 'all' && cellDetectedType === filterType) {
+                                    shouldHighlight = true;
+                                    bgColor = 'border-blue-500/70';
                                 }
 
                                 return (
@@ -442,8 +492,8 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
                                         onClick={() => handleCellClick(r, c)}
                                         className={`border transition-colors hover:opacity-80 ${bgColor}`}
                                         style={{
-                                            backgroundColor: shouldHighlight && detectedType !== null && !wasSaved
-                                                ? TILE_TYPES.find(t => t.id === detectedType)?.color + '80' // Add transparency
+                                            backgroundColor: shouldHighlight && highlightType !== null && !wasSaved
+                                                ? `${TILE_TYPES.find(t => t.id === highlightType)?.color ?? '#000000'}80`
                                                 : undefined
                                         }}
                                         title={`Cell [${r}, ${c}]${wasSaved ? ' - Saved!' : ''}`}

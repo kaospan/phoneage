@@ -43,6 +43,14 @@ const worldForwardByFacing: Record<PlayerFacing, { x: number; z: number }> = {
   left: { x: -1, z: 0 },
 };
 
+const FPS_CHASE_DISTANCE = 2.6;
+const FPS_LOOK_DISTANCE = 1.4;
+const FPS_LOOK_HEIGHT = 0.42;
+const FPS_CHASE_ANGLE_DEG = 45;
+const FPS_CHASE_HEIGHT =
+  FPS_LOOK_HEIGHT +
+  Math.tan((FPS_CHASE_ANGLE_DEG * Math.PI) / 180) * (FPS_CHASE_DISTANCE + FPS_LOOK_DISTANCE);
+
 const smoothstep = (edge0: number, edge1: number, value: number) => {
   const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
   return t * t * (3 - 2 * t);
@@ -60,6 +68,69 @@ const darkenHexColor = (hex: string, amount = 0.35) => {
 
   return `#${mix(normalized.slice(0, 2))}${mix(normalized.slice(2, 4))}${mix(normalized.slice(4, 6))}`;
 };
+
+const KeyTile = ({
+  position,
+  color,
+  glowColor,
+}: {
+  position: [number, number, number];
+  color: string;
+  glowColor: string;
+}) => (
+  <group position={position}>
+    <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+      <cylinderGeometry args={[0.15, 0.15, 0.06, 24]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={glowColor}
+        emissiveIntensity={0.25}
+        roughness={0.3}
+        metalness={0.6}
+      />
+    </mesh>
+    <mesh position={[0, 0.42, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+      <torusGeometry args={[0.14, 0.04, 12, 24]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={glowColor}
+        emissiveIntensity={0.35}
+        roughness={0.25}
+        metalness={0.65}
+      />
+    </mesh>
+    <mesh position={[0.12, 0.3, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+      <boxGeometry args={[0.28, 0.06, 0.06]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={glowColor}
+        emissiveIntensity={0.22}
+        roughness={0.25}
+        metalness={0.7}
+      />
+    </mesh>
+    <mesh position={[0.23, 0.24, 0]} castShadow>
+      <boxGeometry args={[0.05, 0.12, 0.05]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={glowColor}
+        emissiveIntensity={0.22}
+        roughness={0.25}
+        metalness={0.7}
+      />
+    </mesh>
+    <mesh position={[0.28, 0.34, 0]} castShadow>
+      <boxGeometry args={[0.05, 0.08, 0.05]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={glowColor}
+        emissiveIntensity={0.22}
+        roughness={0.25}
+        metalness={0.7}
+      />
+    </mesh>
+  </group>
+);
 
 
 // Directional Arrow Block - raft platform
@@ -1215,14 +1286,14 @@ const CameraController = ({
     const forward = worldForwardByFacing[playerFacing];
 
     fpsCameraTargetRef.current.set(
-      playerX - forward.x * 2.6,
-      1.5,
-      playerZ - forward.z * 2.6
+      playerX - forward.x * FPS_CHASE_DISTANCE,
+      FPS_CHASE_HEIGHT,
+      playerZ - forward.z * FPS_CHASE_DISTANCE
     );
     fpsLookTargetRef.current.set(
-      playerX + forward.x * 1.4,
-      0.42,
-      playerZ + forward.z * 1.4
+      playerX + forward.x * FPS_LOOK_DISTANCE,
+      FPS_LOOK_HEIGHT,
+      playerZ + forward.z * FPS_LOOK_DISTANCE
     );
     fpsLookCurrentRef.current.copy(fpsLookTargetRef.current);
   }, [playerFacing, playerPos, offsetX, offsetZ, viewMode]);
@@ -1251,18 +1322,15 @@ const CameraController = ({
 
     if (isFps) {
       const forward = worldForwardByFacing[playerFacing];
-      const chaseDistance = 2.6;
-      const chaseHeight = 1.5;
-      const lookDistance = 1.4;
       const targetPosition = new THREE.Vector3(
-        playerX - forward.x * chaseDistance,
-        chaseHeight,
-        playerZ - forward.z * chaseDistance
+        playerX - forward.x * FPS_CHASE_DISTANCE,
+        FPS_CHASE_HEIGHT,
+        playerZ - forward.z * FPS_CHASE_DISTANCE
       );
       const lookTarget = new THREE.Vector3(
-        playerX + forward.x * lookDistance,
-        0.42,
-        playerZ + forward.z * lookDistance
+        playerX + forward.x * FPS_LOOK_DISTANCE,
+        FPS_LOOK_HEIGHT,
+        playerZ + forward.z * FPS_LOOK_DISTANCE
       );
 
       const positionAlpha = 1 - Math.exp(-delta * 6);
@@ -1356,8 +1424,8 @@ export const Game3D = ({
   const is2D = viewMode === '2d';
   const isFps = viewMode === 'fps';
   // Make 3D view more top-down and clearer
-  const initialCameraY = isFps ? 1.5 : (is2D ? 24 : 18) * zoomFactor;
-  const initialCameraZ = isFps ? 2.6 : (is2D ? 0.5 : 6) * zoomFactor;
+  const initialCameraY = isFps ? FPS_CHASE_HEIGHT : (is2D ? 24 : 18) * zoomFactor;
+  const initialCameraZ = isFps ? FPS_CHASE_DISTANCE : (is2D ? 0.5 : 6) * zoomFactor;
   const fov = isFps ? 72 : is2D ? 42 : 50;
 
   const noiseTexture = useMemo(() => {
@@ -1422,6 +1490,8 @@ export const Game3D = ({
     const wallBars: Array<[number, number, number]> = [];
     const stone: Array<[number, number, number]> = [];
     const breakable: Array<[number, number, number]> = [];
+    const redKeys: Array<[number, number, number]> = [];
+    const greenKeys: Array<[number, number, number]> = [];
     const arrows: Array<{ x: number; y: number; cell: number }> = [];
 
     for (let y = 0; y < grid.length; y += 1) {
@@ -1440,13 +1510,15 @@ export const Game3D = ({
         }
         if (cell === 2) stone.push([pos[0], 0.25, pos[2]]);
         if (cell === 6) breakable.push([pos[0], 0.28, pos[2]]);
+        if (cell === 14) redKeys.push([pos[0], 0, pos[2]]);
+        if (cell === 15) greenKeys.push([pos[0], 0, pos[2]]);
         if (isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13) {
           arrows.push({ x, y, cell });
         }
       }
     }
 
-    return { floor, water, wallBase, wallBars, stone, breakable, arrows };
+    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, arrows };
   }, [grid, offsetX, offsetZ]);
 
   const contentBounds = useMemo(() => {
@@ -1682,6 +1754,23 @@ export const Game3D = ({
           castShadow
           receiveShadow
         />
+
+        {tileData.redKeys.map((position, index) => (
+          <KeyTile
+            key={`red-key-${index}-${position[0]}-${position[2]}`}
+            position={position}
+            color="#e53935"
+            glowColor="#ff8a80"
+          />
+        ))}
+        {tileData.greenKeys.map((position, index) => (
+          <KeyTile
+            key={`green-key-${index}-${position[0]}-${position[2]}`}
+            position={position}
+            color="#43a047"
+            glowColor="#b9f6ca"
+          />
+        ))}
 
         {/* Arrows (interactive) */}
         {tileData.arrows.map((arrow) => {
