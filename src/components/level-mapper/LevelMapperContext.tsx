@@ -29,10 +29,6 @@ import {
 } from './mapperHooks';
 import { buildReferenceMatcher } from '@/lib/spriteMatching';
 import { normalizeMapperImage } from './imageNormalization';
-import { buildLevelFromSources } from '@/lib/levelImageDetection';
-import { seedDefaultReferences } from '@/lib/referenceSeeder';
-import { saveLevelOverride } from '@/lib/levelOverrides';
-
 console.log('📦 LevelMapperContext.tsx loading...');
 
 const CELL_SAMPLE_INSET_RATIO = 0.08;
@@ -191,7 +187,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         useSaveCompareLevel(compareLevelIndex, saveCompareLevelIndex);
         useSaveImportLevel(importLevelIndex, saveImportLevelIndex);
 
-        // Auto-load level on startup if one was previously imported
+        // Auto-load level on startup if one was previously imported.
+        // For placeholder auto-build levels, load the image and keep the editor responsive
+        // instead of running a heavy full image-to-grid build during mount.
         useEffect(() => {
             if (importLevelIndex !== null) {
                 const lvl = allLevels[importLevelIndex];
@@ -199,31 +197,15 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     const loadLevelIntoMapper = async () => {
                         let resolved = lvl;
 
-                        if (resolved.autoBuild && isPlaceholderGrid(resolved.grid) && (resolved.sources?.length || resolved.image)) {
-                            try {
-                                await seedDefaultReferences();
-                                const built = await buildLevelFromSources(resolved.sources ?? [resolved.image!], {
-                                    minSimilarity: 0.72,
-                                    timeoutMs: 12000,
-                                    yieldEveryRows: 1,
-                                });
-                                resolved = {
-                                    ...resolved,
-                                    grid: built.grid,
-                                    playerStart: built.playerStart,
-                                    cavePos: built.cavePos,
-                                };
-                                saveLevelOverride(resolved.id, built.grid, built.playerStart, resolved.theme);
-                                setAllLevels((current) =>
-                                    current.map((entry) => (entry.id === resolved.id ? resolved : entry))
-                                );
-                            } catch (error) {
-                                console.error(`Failed to lazy-build Level ${resolved.id} in mapper:`, error);
-                            }
+                        if (resolved.autoBuild && isPlaceholderGrid(resolved.grid)) {
+                            resolved = {
+                                ...resolved,
+                                grid: emptyGrid(11, 20),
+                            };
                         }
 
                         const hasNonVoidCells = resolved.grid.some(row => row.some(cell => cell !== 5));
-                        if (!hasNonVoidCells) {
+                        if (!hasNonVoidCells && !resolved.image) {
                             console.log(`Skipped auto-loading Level ${resolved.id} (empty/void grid)`);
                             clearImportLevel();
                             setImportLevelIndex(null);
