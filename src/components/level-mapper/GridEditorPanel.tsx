@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { TILE_TYPES } from '@/lib/levelgrid';
-import { useLevelMapper } from './LevelMapperContext';
+import { useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
 
 export const GridEditorPanel: React.FC = () => {
