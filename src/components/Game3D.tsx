@@ -43,6 +43,11 @@ const worldForwardByFacing: Record<PlayerFacing, { x: number; z: number }> = {
   left: { x: -1, z: 0 },
 };
 
+const smoothstep = (edge0: number, edge1: number, value: number) => {
+  const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+
 const darkenHexColor = (hex: string, amount = 0.35) => {
   const normalized = hex.replace('#', '');
   if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
@@ -1165,6 +1170,7 @@ const CameraController = ({
   offsetZ,
   gridWidth,
   gridHeight,
+  contentBounds,
   playerFacing,
   cameraOffset,
   zoomFactor = 0.93,
@@ -1175,6 +1181,16 @@ const CameraController = ({
   offsetZ: number;
   gridWidth: number;
   gridHeight: number;
+  contentBounds: {
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+    centerX: number;
+    centerZ: number;
+    width: number;
+    height: number;
+  };
   playerFacing: PlayerFacing;
   cameraOffset?: { x: number; z: number };
   zoomFactor?: number;
@@ -1265,55 +1281,41 @@ const CameraController = ({
     const viewHeight = 2 * Math.tan(fovRad / 2) * cameraHeight;
     const viewWidth = viewHeight * perspectiveCamera.aspect;
 
-    // Only follow if map is larger than view (with margin for edge detection)
-    // Use 0.8 threshold so camera starts following when player nears edge
-    const shouldFollowX = gridWidth > viewWidth * 0.76;
-    const shouldFollowZ = gridHeight > viewHeight * 0.76;
-
     // Apply camera offset for manual panning
     const panOffsetX = cameraOffset?.x || 0;
     const panOffsetZ = cameraOffset?.z || 0;
+    const edgeMarginX = viewWidth * 0.3;
+    const edgeMarginZ = viewHeight * 0.3;
+    const followStrengthX = smoothstep(0.68, 0.9, contentBounds.width / viewWidth);
+    const followStrengthZ = smoothstep(0.68, 0.9, contentBounds.height / viewHeight);
 
-    if (shouldFollowX || shouldFollowZ) {
-      // Define edge margins (distance from player where camera starts following)
-      const edgeMarginX = viewWidth * 0.3; // Start following at 30% from edge
-      const edgeMarginZ = viewHeight * 0.3;
+    const followTargetX =
+      contentBounds.width <= viewWidth
+        ? contentBounds.centerX
+        : THREE.MathUtils.clamp(
+            playerX,
+            contentBounds.minX + viewWidth / 2 - edgeMarginX,
+            contentBounds.maxX - viewWidth / 2 + edgeMarginX
+          );
+    const followTargetZ =
+      contentBounds.height <= viewHeight
+        ? contentBounds.centerZ
+        : THREE.MathUtils.clamp(
+            playerZ,
+            contentBounds.minZ + viewHeight / 2 - edgeMarginZ,
+            contentBounds.maxZ - viewHeight / 2 + edgeMarginZ
+          );
 
-      // Calculate map bounds
-      const minX = -gridWidth / 2;
-      const maxX = gridWidth / 2;
-      const minZ = -gridHeight / 2;
-      const maxZ = gridHeight / 2;
+    const targetX =
+      THREE.MathUtils.lerp(contentBounds.centerX, followTargetX, followStrengthX) + panOffsetX;
+    const targetZ =
+      THREE.MathUtils.lerp(contentBounds.centerZ, followTargetZ, followStrengthZ) + panOffsetZ;
 
-      // Camera target with edge clamping
-      let targetX = shouldFollowX ? playerX : 0;
-      let targetZ = shouldFollowZ ? playerZ : 0;
-
-      // Clamp camera to keep edges in view
-      if (shouldFollowX) {
-        targetX = Math.max(minX + viewWidth / 2 - edgeMarginX, Math.min(maxX - viewWidth / 2 + edgeMarginX, targetX));
-      }
-      if (shouldFollowZ) {
-        targetZ = Math.max(minZ + viewHeight / 2 - edgeMarginZ, Math.min(maxZ - viewHeight / 2 + edgeMarginZ, targetZ));
-      }
-
-      // Apply manual pan offset
-      targetX += panOffsetX;
-      targetZ += panOffsetZ;
-
-      camera.position.lerp(
-        new THREE.Vector3(targetX, cameraHeight, targetZ + cameraDistance),
-        0.08
-      );
-      camera.lookAt(new THREE.Vector3(targetX, 0, targetZ));
-    } else {
-      // Center on entire map + manual offset
-      camera.position.lerp(
-        new THREE.Vector3(panOffsetX, cameraHeight, cameraDistance + panOffsetZ),
-        0.08
-      );
-      camera.lookAt(new THREE.Vector3(panOffsetX, 0, panOffsetZ));
-    }
+    camera.position.lerp(
+      new THREE.Vector3(targetX, cameraHeight, targetZ + cameraDistance),
+      0.08
+    );
+    camera.lookAt(new THREE.Vector3(targetX, 0, targetZ));
   });
 
   return null;
@@ -1447,6 +1449,52 @@ export const Game3D = ({
     return { floor, water, wallBase, wallBars, stone, breakable, arrows };
   }, [grid, offsetX, offsetZ]);
 
+  const contentBounds = useMemo(() => {
+    let minGridX = Number.POSITIVE_INFINITY;
+    let maxGridX = Number.NEGATIVE_INFINITY;
+    let minGridY = Number.POSITIVE_INFINITY;
+    let maxGridY = Number.NEGATIVE_INFINITY;
+
+    for (let y = 0; y < grid.length; y += 1) {
+      for (let x = 0; x < grid[y].length; x += 1) {
+        if (grid[y][x] === 5) continue;
+        minGridX = Math.min(minGridX, x);
+        maxGridX = Math.max(maxGridX, x);
+        minGridY = Math.min(minGridY, y);
+        maxGridY = Math.max(maxGridY, y);
+      }
+    }
+
+    if (!Number.isFinite(minGridX) || !Number.isFinite(minGridY)) {
+      return {
+        minX: -gridWidth / 2,
+        maxX: gridWidth / 2,
+        minZ: -gridHeight / 2,
+        maxZ: gridHeight / 2,
+        centerX: 0,
+        centerZ: 0,
+        width: gridWidth,
+        height: gridHeight,
+      };
+    }
+
+    const minX = minGridX + offsetX - 0.5;
+    const maxX = maxGridX + offsetX + 0.5;
+    const minZ = minGridY + offsetZ - 0.5;
+    const maxZ = maxGridY + offsetZ + 0.5;
+
+    return {
+      minX,
+      maxX,
+      minZ,
+      maxZ,
+      centerX: (minX + maxX) / 2,
+      centerZ: (minZ + maxZ) / 2,
+      width: maxX - minX,
+      height: maxZ - minZ,
+    };
+  }, [grid, gridHeight, gridWidth, offsetX, offsetZ]);
+
   const floorGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
   const waterGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
   const wallGeometry = useMemo(() => new THREE.BoxGeometry(0.98, 0.2, 0.98), []);
@@ -1553,6 +1601,7 @@ export const Game3D = ({
           offsetZ={offsetZ}
           gridWidth={gridWidth}
           gridHeight={gridHeight}
+          contentBounds={contentBounds}
           playerFacing={focusPlayerFacing}
           cameraOffset={cameraOffset}
           zoomFactor={zoomFactor}
