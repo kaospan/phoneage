@@ -6,7 +6,7 @@ import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { TouchControls } from "./TouchControls";
 import { Thumbstick } from "./Thumbstick";
-import { CellType, GameState, Position } from "@/game/types";
+import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
@@ -29,6 +29,7 @@ interface SimPlayer {
   facing: FacingDirection;
   isLocal: boolean;
   color: string;
+  keys: KeyInventory;
   selectedArrow: Position | null;
   isGliding: boolean;
   glidePath: Position[] | null;
@@ -64,6 +65,7 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   fps: "FPS",
   "2d": "2D",
 };
+const EMPTY_KEYS: KeyInventory = { red: false, green: false };
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
@@ -177,6 +179,7 @@ export const PuzzleGame = () => {
         facing: facingTowardTarget(level.playerStart, cave, "down"),
         isLocal: true,
         color: themes[level.theme ?? 'default']?.player ?? '#7dff9b',
+        keys: { ...EMPTY_KEYS },
         selectedArrow: null,
         isGliding: false,
         glidePath: null,
@@ -385,6 +388,7 @@ export const PuzzleGame = () => {
                 facing: facingTowardTarget(spawn, sim.cavePos, 'down'),
                 isLocal: false,
                 color: palette[sim.players.size % palette.length],
+                keys: { ...EMPTY_KEYS },
                 selectedArrow: null,
                 isGliding: false,
                 glidePath: null,
@@ -442,6 +446,7 @@ export const PuzzleGame = () => {
                 grid: sim.grid,
                 baseGrid: sim.baseGrid,
                 playerPos: owner.pos,
+                inventory: owner.keys,
                 selectedArrow: newArrowPos,
                 breakableRockStates: sim.breakableRockStates,
                 isGliding: false,
@@ -523,6 +528,7 @@ export const PuzzleGame = () => {
               grid: sim.grid,
               baseGrid: sim.baseGrid,
               playerPos: player.pos,
+              inventory: player.keys,
               selectedArrow: player.selectedArrow,
               breakableRockStates: sim.breakableRockStates,
               isGliding: false,
@@ -548,6 +554,7 @@ export const PuzzleGame = () => {
             grid: sim.grid,
             baseGrid: sim.baseGrid,
             playerPos: player.pos,
+            inventory: player.keys,
             selectedArrow: player.selectedArrow,
             breakableRockStates: sim.breakableRockStates,
             isGliding: false,
@@ -585,6 +592,12 @@ export const PuzzleGame = () => {
             );
             player.pos = { ...outcome.newPlayerPos };
             playersDirty = true;
+          }
+          if (outcome.collectedKey && player.isLocal) {
+            toast.success(`${outcome.collectedKey.toUpperCase()} KEY COLLECTED`);
+          }
+          if (outcome.unlockedLock && player.isLocal) {
+            toast.success(`${outcome.unlockedLock.toUpperCase()} LOCK OPENED`);
           }
           if (outcome.brokeRock && player.isLocal) {
             toast.info("ROCK CRUMBLED!");
@@ -929,6 +942,23 @@ export const PuzzleGame = () => {
               <span className="text-primary font-bold text-2xl">Level {currentLevel.id}</span>
               <span className="text-muted-foreground text-xl">•</span>
               <span className="text-foreground font-medium text-lg">Moves: {moves}</span>
+              {(localPlayer?.keys.red || localPlayer?.keys.green) && (
+                <>
+                  <span className="text-muted-foreground text-xl">•</span>
+                  <div className="flex items-center gap-2">
+                    {localPlayer?.keys.red && (
+                      <span className="rounded-md border border-red-300 bg-red-600 px-2 py-1 text-xs font-bold text-white">
+                        Red Key
+                      </span>
+                    )}
+                    {localPlayer?.keys.green && (
+                      <span className="rounded-md border border-green-300 bg-green-600 px-2 py-1 text-xs font-bold text-white">
+                        Green Key
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Restart Button */}

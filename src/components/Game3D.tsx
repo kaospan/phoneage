@@ -132,6 +132,43 @@ const KeyTile = ({
   </group>
 );
 
+const LockTile = ({
+  position,
+  color,
+  glowColor,
+}: {
+  position: [number, number, number];
+  color: string;
+  glowColor: string;
+}) => (
+  <group position={position}>
+    <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+      <boxGeometry args={[0.36, 0.3, 0.18]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={glowColor}
+        emissiveIntensity={0.16}
+        roughness={0.35}
+        metalness={0.62}
+      />
+    </mesh>
+    <mesh position={[0, 0.39, 0]} castShadow>
+      <torusGeometry args={[0.13, 0.035, 12, 24, Math.PI]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={glowColor}
+        emissiveIntensity={0.14}
+        roughness={0.3}
+        metalness={0.7}
+      />
+    </mesh>
+    <mesh position={[0, 0.18, 0.1]}>
+      <cylinderGeometry args={[0.035, 0.035, 0.06, 16]} />
+      <meshStandardMaterial color="#f5e6a8" emissive="#f5e6a8" emissiveIntensity={0.15} roughness={0.4} metalness={0.45} />
+    </mesh>
+  </group>
+);
+
 
 // Directional Arrow Block - raft platform
 const ArrowTile = ({
@@ -1492,6 +1529,8 @@ export const Game3D = ({
     const breakable: Array<[number, number, number]> = [];
     const redKeys: Array<[number, number, number]> = [];
     const greenKeys: Array<[number, number, number]> = [];
+    const redLocks: Array<[number, number, number]> = [];
+    const greenLocks: Array<[number, number, number]> = [];
     const arrows: Array<{ x: number; y: number; cell: number }> = [];
 
     for (let y = 0; y < grid.length; y += 1) {
@@ -1512,13 +1551,15 @@ export const Game3D = ({
         if (cell === 6) breakable.push([pos[0], 0.28, pos[2]]);
         if (cell === 14) redKeys.push([pos[0], 0, pos[2]]);
         if (cell === 15) greenKeys.push([pos[0], 0, pos[2]]);
+        if (cell === 16) redLocks.push([pos[0], 0, pos[2]]);
+        if (cell === 17) greenLocks.push([pos[0], 0, pos[2]]);
         if (isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13) {
           arrows.push({ x, y, cell });
         }
       }
     }
 
-    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, arrows };
+    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, arrows };
   }, [grid, offsetX, offsetZ]);
 
   const contentBounds = useMemo(() => {
@@ -1768,6 +1809,22 @@ export const Game3D = ({
             key={`green-key-${index}-${position[0]}-${position[2]}`}
             position={position}
             color="#43a047"
+            glowColor="#b9f6ca"
+          />
+        ))}
+        {tileData.redLocks.map((position, index) => (
+          <LockTile
+            key={`red-lock-${index}-${position[0]}-${position[2]}`}
+            position={position}
+            color="#b71c1c"
+            glowColor="#ff8a80"
+          />
+        ))}
+        {tileData.greenLocks.map((position, index) => (
+          <LockTile
+            key={`green-lock-${index}-${position[0]}-${position[2]}`}
+            position={position}
+            color="#1b5e20"
             glowColor="#b9f6ca"
           />
         ))}

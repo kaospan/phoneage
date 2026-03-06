@@ -17,6 +17,8 @@ interface Game2DProps {
         case 2: return "🪨"; // stone
         case 14: return "🗝️"; // red key
         case 15: return "🔑"; // green key
+        case 16: return "🔒"; // red lock
+        case 17: return "🔒"; // green lock
         case 7: return "⬆️"; // arrow up
         case 8: return "➡️"; // arrow right
         case 9: return "⬇️"; // arrow down
@@ -38,6 +40,8 @@ interface Game2DProps {
         case 2: return "bg-stone-500"; // stone
         case 14: return "bg-red-600"; // red key
         case 15: return "bg-green-600"; // green key
+        case 16: return "bg-red-900"; // red lock
+        case 17: return "bg-green-900"; // green lock
         case 7:
         case 8:
         case 9:

@@ -3,6 +3,9 @@ import { isArrowCell, getArrowDirections } from './arrows';
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from './glide';
 
 const isKeyCell = (cell: CellType) => cell === 14 || cell === 15;
+const isLockCell = (cell: CellType) => cell === 16 || cell === 17;
+const keyColorForCell = (cell: CellType) => (cell === 14 ? 'red' : cell === 15 ? 'green' : null);
+const lockColorForCell = (cell: CellType) => (cell === 16 ? 'red' : cell === 17 ? 'green' : null);
 
 export interface PlayerMoveOutcome {
   glidePath?: { path: Position[]; arrowType: CellType };
@@ -11,10 +14,12 @@ export interface PlayerMoveOutcome {
   brokeRock?: boolean;
   consumedMove?: boolean;
   startGlide?: boolean;
+  collectedKey?: 'red' | 'green';
+  unlockedLock?: 'red' | 'green';
 }
 
 export function attemptPlayerMove(state: GameState, dx: number, dy: number): PlayerMoveOutcome {
-  const { grid, playerPos, breakableRockStates, baseGrid } = state;
+  const { grid, playerPos, breakableRockStates, baseGrid, inventory } = state;
   const targetX = playerPos.x + dx;
   const targetY = playerPos.y + dy;
   // Bounds
@@ -22,19 +27,31 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
 
   const playerCell = grid[playerPos.y][playerPos.x];
   const targetCell = grid[targetY][targetX];
+  const targetKey = keyColorForCell(targetCell);
+  const targetLock = lockColorForCell(targetCell);
 
   // If on arrow
   if (isArrowCell(playerCell)) {
+    if (targetLock && !inventory[targetLock]) {
+      return {};
+    }
+
     // Step priority (floor, cave, arrow, fresh breakable rock)
-    if (targetCell === 0 || targetCell === 3 || isArrowCell(targetCell) || isKeyCell(targetCell)) {
+    if (targetCell === 0 || targetCell === 3 || isArrowCell(targetCell) || isKeyCell(targetCell) || isLockCell(targetCell)) {
       const outcome: PlayerMoveOutcome = {
         newPlayerPos: { x: targetX, y: targetY },
         consumedMove: true
       };
-      if (isKeyCell(baseGrid[playerPos.y][playerPos.x])) {
+      if (targetKey || targetLock) {
         const newGrid = grid.map(r => [...r]);
-        newGrid[playerPos.y][playerPos.x] = 0;
-        baseGrid[playerPos.y][playerPos.x] = 0;
+        if (targetKey) {
+          inventory[targetKey] = true;
+          outcome.collectedKey = targetKey;
+        } else if (targetLock) {
+          outcome.unlockedLock = targetLock;
+        }
+        newGrid[targetY][targetX] = 0;
+        baseGrid[targetY][targetX] = 0;
         outcome.newGrid = newGrid;
       }
       return outcome;
@@ -93,6 +110,8 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     }
     return {}; // second time blocked
   }
+
+  if (targetLock && !inventory[targetLock]) return {};
   
   // Fire, water, void impassable
   if (targetCell === 1 || targetCell === 4 || targetCell === 5) return {};
@@ -102,10 +121,16 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     newPlayerPos: { x: targetX, y: targetY },
     consumedMove: true
   };
-  if (isKeyCell(baseGrid[playerPos.y][playerPos.x])) {
+  if (targetKey || targetLock) {
     const newGrid = outcome.newGrid ?? grid.map(r => [...r]);
-    newGrid[playerPos.y][playerPos.x] = 0;
-    baseGrid[playerPos.y][playerPos.x] = 0;
+    if (targetKey) {
+      inventory[targetKey] = true;
+      outcome.collectedKey = targetKey;
+    } else if (targetLock) {
+      outcome.unlockedLock = targetLock;
+    }
+    newGrid[targetY][targetX] = 0;
+    baseGrid[targetY][targetX] = 0;
     outcome.newGrid = newGrid;
   }
   if (willBreakRock) {

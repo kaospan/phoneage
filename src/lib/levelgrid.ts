@@ -19,6 +19,8 @@ export const TILE_TYPES: TileType[] = [
   { id: 13, name: "Arrow Omni (13)", color: "#ff9800" },
   { id: 14, name: "Red Key (14)", color: "#e53935" },
   { id: 15, name: "Green Key (15)", color: "#43a047" },
+  { id: 16, name: "Red Lock (16)", color: "#b71c1c" },
+  { id: 17, name: "Green Lock (17)", color: "#1b5e20" },
 ];
 
 export const emptyGrid = (rows: number, cols: number): number[][] =>
