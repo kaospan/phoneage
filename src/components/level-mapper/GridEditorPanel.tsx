@@ -47,7 +47,7 @@ export const GridEditorPanel: React.FC = () => {
                     const naturalGridHeight = gridFrameHeight ?? img.height;
                     const fitScale = containerWidth / img.width;
                     const renderedWidth = Math.max(1, Math.floor(containerWidth * zoom));
-                    const renderedHeight = Math.max(1, Math.floor(img.height * fitScale * zoom));
+                    const renderedHeight = Math.max(1, Math.floor(renderedWidth * (img.height / img.width)));
                     setDisplaySize({ width: renderedWidth, height: renderedHeight });
                     const imageScaleX = renderedWidth / img.width;
                     const imageScaleY = renderedHeight / img.height;
@@ -504,7 +504,8 @@ export const GridEditorPanel: React.FC = () => {
                                     opacity: overlayOpacity,
                                     width: `${displaySize.width}px`,
                                     height: `${displaySize.height}px`,
-                                    objectFit: 'fill',
+                                    objectFit: 'contain',
+                                    imageRendering: 'pixelated',
                                     zIndex: 15
                                 }}
                             />

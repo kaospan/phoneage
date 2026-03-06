@@ -277,8 +277,6 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
     // Try to crop exactly to the grid bounds using detected rows/cols + cell size.
     const detected = detectGridLines(workingCanvas, false, 11, 20);
     let gridCanvas: HTMLCanvasElement | null = null;
-    let detectedGridSize: { rows: number; cols: number } | null = null;
-
     if (detected) {
         const gridLeft = clampInt(detected.offsetX, 0, workingCanvas.width - 1);
         const gridTop = clampInt(detected.offsetY, 0, workingCanvas.height - 1);
@@ -292,7 +290,6 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
             const gridCtx = gridCanvas.getContext('2d');
             if (gridCtx) {
                 gridCtx.drawImage(workingCanvas, gridLeft, gridTop, gridWidth, gridHeight, 0, 0, gridWidth, gridHeight);
-                detectedGridSize = { rows: detected.rows, cols: detected.cols };
             } else {
                 gridCanvas = null;
             }
@@ -315,43 +312,7 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
         finalContext.drawImage(workingCanvas, 0, 0, croppedWidth, finalHeight, 0, 0, croppedWidth, finalHeight);
     }
 
-    // Standardize to a consistent canvas so every level image is centered with a fixed cell size.
-    // This makes the overlay visually consistent and reduces row/col drift caused by screenshots.
-    const TARGET_COLS = 20;
-    const TARGET_ROWS = 12;
-    const TARGET_CELL = 64;
-
-    const standardized = document.createElement('canvas');
-    standardized.width = TARGET_COLS * TARGET_CELL;
-    standardized.height = TARGET_ROWS * TARGET_CELL;
-    const stdCtx = standardized.getContext('2d');
-    if (!stdCtx) {
-        return gridCanvas.toDataURL('image/png');
-    }
-
-    // Sky-ish background so padding areas are obvious.
-    stdCtx.fillStyle = '#5da7e6';
-    stdCtx.fillRect(0, 0, standardized.width, standardized.height);
-
-    // Scale the detected/cropped grid image to fit, then center it.
-    let drawW = 0;
-    let drawH = 0;
-
-    if (detectedGridSize && detectedGridSize.cols <= TARGET_COLS && detectedGridSize.rows <= TARGET_ROWS) {
-        drawW = detectedGridSize.cols * TARGET_CELL;
-        drawH = detectedGridSize.rows * TARGET_CELL;
-    } else {
-        const scaleX = standardized.width / gridCanvas.width;
-        const scaleY = standardized.height / gridCanvas.height;
-        const scale = Math.min(scaleX, scaleY);
-        drawW = Math.max(1, Math.round(gridCanvas.width * scale));
-        drawH = Math.max(1, Math.round(gridCanvas.height * scale));
-    }
-
-    const drawX = Math.round((standardized.width - drawW) / 2);
-    const drawY = Math.round((standardized.height - drawH) / 2);
-    stdCtx.imageSmoothingEnabled = false;
-    stdCtx.drawImage(gridCanvas, 0, 0, gridCanvas.width, gridCanvas.height, drawX, drawY, drawW, drawH);
-
-    return standardized.toDataURL('image/png');
+    // Keep the image pixel-perfect (no non-uniform stretching). This returns a board-only image
+    // cropped to the detected grid bounds (or HUD crop fallback), leaving scale decisions to the editor UI.
+    return gridCanvas.toDataURL('image/png');
 };

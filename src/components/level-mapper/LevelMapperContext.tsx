@@ -29,6 +29,7 @@ import {
 } from './mapperHooks';
 import { buildReferenceMatcher } from '@/lib/spriteMatching';
 import { normalizeMapperImage } from './imageNormalization';
+import { cropOuterVoidCells } from './learningOperations';
 console.log('📦 LevelMapperContext.tsx loading...');
 
 const CELL_SAMPLE_INSET_RATIO = 0.08;
@@ -558,7 +559,69 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setUndoStack(s => [...s, grid.map(row => [...row])]);
                 setRedoStack([]);
                 setIsSaved(false);
-                setGrid(newGrid);
+
+                const cropResult = cropOuterVoidCells({
+                    grid: newGrid,
+                    keepMargin: 1,
+                    playerStart,
+                    frame: {
+                        offsetX: gridOffsetX,
+                        offsetY: gridOffsetY,
+                        width: frameWidth,
+                        height: frameHeight,
+                    },
+                });
+
+                const didCrop =
+                    cropResult.removed.top !== 0 ||
+                    cropResult.removed.right !== 0 ||
+                    cropResult.removed.bottom !== 0 ||
+                    cropResult.removed.left !== 0;
+
+                if (didCrop) {
+                    const cropImageUrlToFrame = async (url: string, frame: { offsetX: number; offsetY: number; width: number; height: number }) => {
+                        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+                            const next = new Image();
+                            next.onload = () => resolve(next);
+                            next.onerror = () => reject(new Error('Failed to load image for crop'));
+                            next.src = url;
+                        });
+
+                        const sx = Math.max(0, Math.min(img.width - 1, Math.round(frame.offsetX)));
+                        const sy = Math.max(0, Math.min(img.height - 1, Math.round(frame.offsetY)));
+                        const sw = Math.max(1, Math.min(img.width - sx, Math.round(frame.width)));
+                        const sh = Math.max(1, Math.min(img.height - sy, Math.round(frame.height)));
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = sw;
+                        canvas.height = sh;
+                        const ctx2d = canvas.getContext('2d');
+                        if (!ctx2d) return url;
+                        ctx2d.imageSmoothingEnabled = false;
+                        ctx2d.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+                        return canvas.toDataURL('image/png');
+                    };
+
+                    try {
+                        const nextUrl = await cropImageUrlToFrame(imageURL, cropResult.frame);
+                        setImageURL(nextUrl);
+                        setGridOffsetX(0);
+                        setGridOffsetY(0);
+                        setGridFrameWidth(Math.round(cropResult.frame.width));
+                        setGridFrameHeight(Math.round(cropResult.frame.height));
+                    } catch (error) {
+                        console.warn('Failed to crop image to match auto-cropped grid:', error);
+                        setGridOffsetX(Math.round(cropResult.frame.offsetX));
+                        setGridOffsetY(Math.round(cropResult.frame.offsetY));
+                        setGridFrameWidth(Math.round(cropResult.frame.width));
+                        setGridFrameHeight(Math.round(cropResult.frame.height));
+                    }
+
+                    setPlayerStart(cropResult.playerStart);
+                    replaceGridShape(cropResult.grid);
+                } else {
+                    setGrid(newGrid);
+                }
 
             } catch (error) {
                 console.error('❌ Error in detectCells:', error);
