@@ -16,6 +16,7 @@ interface Game3DProps {
   selectedArrow?: { x: number; y: number } | null;
   selectorPos?: { x: number; y: number } | null;
   cameraOffset?: { x: number; z: number };
+  zoomFactor?: number;
   viewMode?: '2d' | '3d';
   theme?: ColorTheme;
   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
@@ -27,8 +28,6 @@ interface Game3DProps {
 }
 
 type PlayerFacing = 'up' | 'right' | 'down' | 'left';
-
-const CAMERA_ZOOM_FACTOR = 0.93;
 
 const playerRotationByFacing: Record<PlayerFacing, number> = {
   up: Math.PI,
@@ -1160,6 +1159,7 @@ const CameraController = ({
   gridWidth,
   gridHeight,
   cameraOffset,
+  zoomFactor = 0.93,
   viewMode = '3d'
 }: {
   playerPos: { x: number; y: number };
@@ -1168,6 +1168,7 @@ const CameraController = ({
   gridWidth: number;
   gridHeight: number;
   cameraOffset?: { x: number; z: number };
+  zoomFactor?: number;
   viewMode?: '2d' | '3d';
 }) => {
   const { camera } = useThree();
@@ -1184,8 +1185,8 @@ const CameraController = ({
     const is2D = viewMode === '2d';
     const baseCameraHeight = is2D ? 24 : 18;
     const baseCameraDistance = is2D ? 0.5 : 6;
-    const cameraHeight = baseCameraHeight * CAMERA_ZOOM_FACTOR;
-    const cameraDistance = baseCameraDistance * CAMERA_ZOOM_FACTOR;
+    const cameraHeight = baseCameraHeight * zoomFactor;
+    const cameraDistance = baseCameraDistance * zoomFactor;
     const fov = is2D ? 42 : 50;
 
     // Calculate if the entire map fits in view at current zoom
@@ -1264,6 +1265,7 @@ export const Game3D = ({
   selectedArrow,
   selectorPos,
   cameraOffset,
+  zoomFactor = 0.93,
   viewMode = '3d',
   theme = 'default',
   players,
@@ -1290,8 +1292,8 @@ export const Game3D = ({
   // Camera settings based on view mode
   const is2D = viewMode === '2d';
   // Make 3D view more top-down and clearer
-  const initialCameraY = (is2D ? 24 : 18) * CAMERA_ZOOM_FACTOR;
-  const initialCameraZ = (is2D ? 0.5 : 6) * CAMERA_ZOOM_FACTOR;
+  const initialCameraY = (is2D ? 24 : 18) * zoomFactor;
+  const initialCameraZ = (is2D ? 0.5 : 6) * zoomFactor;
   const fov = is2D ? 42 : 50;
 
   const noiseTexture = useMemo(() => {
@@ -1490,6 +1492,7 @@ export const Game3D = ({
           gridWidth={gridWidth}
           gridHeight={gridHeight}
           cameraOffset={cameraOffset}
+          zoomFactor={zoomFactor}
           viewMode={viewMode}
         />
 

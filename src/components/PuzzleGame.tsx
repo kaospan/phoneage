@@ -56,6 +56,9 @@ interface SimulationState {
   tick: number;
 }
 
+const CAMERA_ZOOM_LEVELS = [1.08, 1, 0.93, 0.86] as const;
+const DEFAULT_CAMERA_ZOOM_INDEX = 2;
+
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
   if (dx < 0) return "left";
@@ -79,6 +82,7 @@ export const PuzzleGame = () => {
   const [viewMode, setViewMode] = useState<"3d" | "2d">("3d");
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
+  const [cameraZoomIndex, setCameraZoomIndex] = useState(DEFAULT_CAMERA_ZOOM_INDEX);
   // Selector navigation state for keyboard-based arrow selection
   const [selectorPos, setSelectorPos] = useState<{ x: number; y: number } | null>(null);
   const [isSelectorActive, setIsSelectorActive] = useState(false);
@@ -774,6 +778,9 @@ export const PuzzleGame = () => {
     };
 
     const prevLevel = () => { if (currentLevelIndex > 0) setCurrentLevelIndex(i => i - 1); };
+    const canZoomIn = cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
+    const canZoomOut = cameraZoomIndex > 0;
+    const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex];
 
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -927,6 +934,32 @@ export const PuzzleGame = () => {
             {/* View Mode Toggle & Reset View (right side) */}
             <div className="ml-2 pl-2 border-l border-border/50 flex items-center gap-2">
               <Button
+                onClick={() => setCameraZoomIndex((i) => Math.max(0, i - 1))}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-base hover:bg-primary/20"
+                title="Zoom out"
+                disabled={!canZoomOut}
+              >
+                -
+              </Button>
+
+              <div className="min-w-12 text-center text-xs font-semibold text-muted-foreground">
+                {Math.round((1 / cameraZoomFactor) * 100)}%
+              </div>
+
+              <Button
+                onClick={() => setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1))}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-base hover:bg-primary/20"
+                title="Zoom in"
+                disabled={!canZoomIn}
+              >
+                +
+              </Button>
+
+              <Button
                 onClick={() => {
                   const newMode = viewMode === "3d" ? "2d" : "3d";
                   setViewMode(newMode);
@@ -976,6 +1009,7 @@ export const PuzzleGame = () => {
             selectedArrow={selectedArrow}
             selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
             cameraOffset={cameraOffset}
+            zoomFactor={cameraZoomFactor}
             viewMode={viewMode}
             theme={currentLevel.theme}
             players={renderPlayers}
