@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useLevelMapper } from './LevelMapperContext';
-import { formatGridRowsOneLine } from '@/lib/levelgrid';
 
 // Format grid with row number comments
 const formatGridWithRowNumbers = (grid: number[][]): string => {
@@ -19,7 +19,7 @@ const formatGridWithRowNumbers = (grid: number[][]): string => {
 };
 
 export const JsonPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
-    const { grid, setGrid, setRows, setCols, isSaved, allLevels, importLevelIndex, saveChanges, compareLevelIndex } = useLevelMapper();
+    const { grid, isSaved, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput } = useLevelMapper();
     const [savedGrid, setSavedGrid] = useState<number[][] | null>(null);
 
     // Load saved grid from localStorage
@@ -55,6 +55,35 @@ export const JsonPanel: React.FC<{ width: number; onStartResize: () => void; min
                     <pre className="text-[8px] leading-[1.4] font-mono bg-muted p-2 rounded border overflow-auto max-h-[40vh] whitespace-pre">{formatGridWithRowNumbers(savedGrid)}</pre>
                 </div>
             )}
+
+            <div className="mb-2">
+                <div className="mb-1 text-xs font-semibold text-amber-700">Manual JSON (Paste / Edit)</div>
+                <Textarea
+                    value={jsonInput}
+                    onChange={(e) => setJsonInput(e.target.value)}
+                    spellCheck={false}
+                    className="min-h-[220px] font-mono text-[11px] leading-5"
+                    placeholder="Paste a grid JSON array here"
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                            await navigator.clipboard.writeText(jsonInput);
+                            alert('JSON copied to clipboard');
+                        }}
+                    >
+                        Copy JSON
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={syncJsonInputToGrid}>
+                        Load Current
+                    </Button>
+                    <Button size="sm" onClick={applyJsonInput}>
+                        Apply JSON
+                    </Button>
+                </div>
+            </div>
 
             {/* Resize handle */}
             <div

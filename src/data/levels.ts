@@ -113,6 +113,15 @@ export interface Level {
   autoBuild?: boolean;
 }
 
+export const isPlaceholderGrid = (grid?: number[][]) => {
+  if (!grid || grid.length === 0) return true;
+  if (grid.length === 1 && grid[0]?.length === 1 && grid[0][0] === 5) return true;
+  return grid.every((row) => row.every((cell) => cell === 5));
+};
+
+export const shouldAllowLevelOverride = (level: Level) =>
+  level.autoBuild !== false && isPlaceholderGrid(level.grid);
+
 export const manualLevels: Level[] = [
   // Level 1 - User custom grid
   {
@@ -318,7 +327,7 @@ export const getAllLevels = (): Level[] => {
     
     console.log('🔍 Checking localStorage for overrides...');
     const withOverrides = base.map(l => {
-      if (l.autoBuild === false) return l;
+      if (!shouldAllowLevelOverride(l)) return l;
       const key = `level_override_${l.id}`;
       const raw = localStorage.getItem(key);
       if (!raw) return l;

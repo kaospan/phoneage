@@ -31,6 +31,16 @@ export interface BuiltLevel {
   };
 }
 
+const getSourceLabel = (source: string) => {
+  const normalized = source.split('?')[0].split('#')[0];
+  const lastSegment = normalized.split('/').pop() || normalized;
+  try {
+    return decodeURIComponent(lastSegment);
+  } catch {
+    return lastSegment;
+  }
+};
+
 const loadImage = (url: string, timeoutMs = 8000): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -129,7 +139,8 @@ export const buildLevelFromImage = async (
   imageUrl: string,
   options: BuildLevelOptions = {}
 ): Promise<BuiltLevel> => {
-  options.onProgress?.(`Loading image ${imageUrl.split('/').pop()}`);
+  const sourceLabel = getSourceLabel(imageUrl);
+  options.onProgress?.(`Loading ${sourceLabel}...`);
   const image = await loadImage(imageUrl, options.timeoutMs ?? 8000);
   const { rows, cols } = options.rows && options.cols
     ? { rows: options.rows, cols: options.cols }
@@ -142,7 +153,7 @@ export const buildLevelFromImage = async (
   if (!ctx) throw new Error('Canvas context unavailable');
   ctx.drawImage(image, 0, 0);
 
-  options.onProgress?.('Preparing sprite references');
+  options.onProgress?.(`Preparing references for ${sourceLabel}...`);
   const matcher = await buildReferenceMatcher(options.minSimilarity ?? 0.72);
 
   const grid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(5));
@@ -155,7 +166,7 @@ export const buildLevelFromImage = async (
 
   for (let r = 0; r < rows; r += 1) {
     if (r % 2 === 0) {
-      options.onProgress?.(`Scanning row ${r + 1}/${rows}`);
+      options.onProgress?.(`Scanning ${sourceLabel}: row ${r + 1}/${rows}`);
     }
     for (let c = 0; c < cols; c += 1) {
       const x0 = Math.floor(c * cellWidth + cellWidth * 0.1);
@@ -253,7 +264,7 @@ export const buildLevelFromSources = async (
 
   for (const source of usableSources) {
     try {
-      options.onProgress?.(`Analyzing source ${source.split('/').pop()}`);
+      options.onProgress?.(`Building from ${getSourceLabel(source)}...`);
       const built = await buildLevelFromImage(source, options);
       const nonVoid = built.grid.flat().filter((cell) => cell !== 5).length;
 

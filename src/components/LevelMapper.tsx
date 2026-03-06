@@ -84,7 +84,7 @@ const LayoutInner: React.FC = () => {
 
         // Collapse/expand state
         const [leftCollapsed, setLeftCollapsed] = useState(false);
-        const [rightCollapsed, setRightCollapsed] = useState(false);
+        const [rightCollapsed, setRightCollapsed] = useState(true);
 
         useEffect(() => {
             const onMove = (e: MouseEvent) => {

@@ -1,4 +1,4 @@
-import { useEffect, RefObject } from 'react';
+import { useEffect, useRef, RefObject } from 'react';
 import { formatGridRowsOneLine } from '@/lib/levelgrid';
 import { drawCanvasWithImage } from './canvasOperations';
 
@@ -15,11 +15,17 @@ import { drawCanvasWithImage } from './canvasOperations';
  */
 export const useJsonSync = (
     grid: number[][],
+    jsonInput: string,
     setJsonInput: (json: string) => void
 ): void => {
+    const previousSyncedJsonRef = useRef('');
     useEffect(() => {
-        setJsonInput(formatGridRowsOneLine(grid));
-    }, [grid, setJsonInput]);
+        const nextJson = formatGridRowsOneLine(grid);
+        if (!jsonInput.trim() || jsonInput === previousSyncedJsonRef.current) {
+            setJsonInput(nextJson);
+        }
+        previousSyncedJsonRef.current = nextJson;
+    }, [grid, jsonInput, setJsonInput]);
 };
 
 /**

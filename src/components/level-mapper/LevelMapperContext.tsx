@@ -29,6 +29,9 @@ import {
 } from './mapperHooks';
 import { buildReferenceMatcher } from '@/lib/spriteMatching';
 import { normalizeMapperImage } from './imageNormalization';
+import { buildLevelFromSources } from '@/lib/levelImageDetection';
+import { seedDefaultReferences } from '@/lib/referenceSeeder';
+import { saveLevelOverride } from '@/lib/levelOverrides';
 
 console.log('📦 LevelMapperContext.tsx loading...');
 
@@ -61,7 +64,7 @@ interface LevelMapperContextValue {
     overlayOpacity: number; setOverlayOpacity: (n: number) => void;
     overlayStretch: boolean; setOverlayStretch: (b: boolean) => void;
     // Levels compare/import
-    allLevels: ReturnType<typeof getAllLevels>; setAllLevels: (lv: ReturnType<typeof getAllLevels>) => void;
+    allLevels: ReturnType<typeof getAllLevels>; setAllLevels: React.Dispatch<React.SetStateAction<ReturnType<typeof getAllLevels>>>;
     compareLevelIndex: number; setCompareLevelIndex: (i: number) => void; compareLevel: any;
     importLevelIndex: number | null; setImportLevelIndex: (i: number | null) => void;
     // Undo/redo
@@ -79,12 +82,57 @@ interface LevelMapperContextValue {
     addColumnLeft: () => void; addColumnRight: () => void; addRowTop: () => void; addRowBottom: () => void;
     // Export
     exportTS: () => void;
+    jsonInput: string;
+    setJsonInput: (json: string) => void;
+    syncJsonInputToGrid: () => void;
+    applyJsonInput: () => void;
     // Editing helpers
     pushUndo: () => void;
     replaceGridShape: (nextGrid: number[][]) => void;
 }
 
 const LevelMapperContext = createContext<LevelMapperContextValue | undefined>(undefined);
+
+const isPlaceholderGrid = (levelGrid?: number[][]) => {
+    if (!levelGrid || levelGrid.length === 0) return true;
+    if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
+    return levelGrid.every((row) => row.every((cell) => cell === 5));
+};
+
+const stripJsonComments = (value: string) => value.replace(/\/\/.*$/gm, '').trim();
+
+const parseGridJson = (value: string): number[][] => {
+    const parsed = JSON.parse(stripJsonComments(value));
+
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+        throw new Error('Grid JSON must be a non-empty array of rows.');
+    }
+
+    if (!parsed.every((row) => Array.isArray(row))) {
+        throw new Error('Every row in the grid JSON must be an array.');
+    }
+
+    const cols = parsed[0].length;
+    if (cols === 0) {
+        throw new Error('Grid JSON rows cannot be empty.');
+    }
+
+    const normalized = parsed.map((row, rowIndex) => {
+        if (row.length !== cols) {
+            throw new Error(`Row ${rowIndex + 1} has ${row.length} cells; expected ${cols}.`);
+        }
+
+        return row.map((cell, cellIndex) => {
+            const valueAsNumber = Number(cell);
+            if (!Number.isInteger(valueAsNumber) || valueAsNumber < 0) {
+                throw new Error(`Cell at row ${rowIndex + 1}, col ${cellIndex + 1} is not a valid tile id.`);
+            }
+            return valueAsNumber;
+        });
+    });
+
+    return normalized;
+};
 
 export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     console.log('⚛️ LevelMapperProvider initializing...');
@@ -136,7 +184,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(false);
 
         // Use custom hooks for side effects
-        useJsonSync(grid, setJsonInput);
+        useJsonSync(grid, jsonInput, setJsonInput);
         useBeforeUnload(isSaved);
         useUnsavedBanner(isSaved, setShowUnsavedBanner);
         useCanvasDraw(canvasRef, imageURL, showGrid, rows, cols, gridOffsetX, gridOffsetY);
@@ -148,40 +196,65 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (importLevelIndex !== null) {
                 const lvl = allLevels[importLevelIndex];
                 if (lvl?.grid) {
-                    // Check if grid is not all void (avoid loading empty/void grids)
-                    const hasNonVoidCells = lvl.grid.some(row => row.some(cell => cell !== 5));
+                    const loadLevelIntoMapper = async () => {
+                        let resolved = lvl;
 
-                    if (hasNonVoidCells) {
-                        setRows(lvl.grid.length);
-                        setCols(lvl.grid[0]?.length || 0);
-                        setGrid(lvl.grid.map(row => [...row]));
-                        if (lvl.image) {
-                            void normalizeMapperImage(lvl.image).then((normalizedURL) => {
+                        if (resolved.autoBuild && isPlaceholderGrid(resolved.grid) && (resolved.sources?.length || resolved.image)) {
+                            try {
+                                await seedDefaultReferences();
+                                const built = await buildLevelFromSources(resolved.sources ?? [resolved.image!], {
+                                    minSimilarity: 0.72,
+                                    timeoutMs: 12000,
+                                    yieldEveryRows: 1,
+                                });
+                                resolved = {
+                                    ...resolved,
+                                    grid: built.grid,
+                                    playerStart: built.playerStart,
+                                    cavePos: built.cavePos,
+                                };
+                                saveLevelOverride(resolved.id, built.grid, built.playerStart, resolved.theme);
+                                setAllLevels((current) =>
+                                    current.map((entry) => (entry.id === resolved.id ? resolved : entry))
+                                );
+                            } catch (error) {
+                                console.error(`Failed to lazy-build Level ${resolved.id} in mapper:`, error);
+                            }
+                        }
+
+                        const hasNonVoidCells = resolved.grid.some(row => row.some(cell => cell !== 5));
+                        if (!hasNonVoidCells) {
+                            console.log(`Skipped auto-loading Level ${resolved.id} (empty/void grid)`);
+                            clearImportLevel();
+                            setImportLevelIndex(null);
+                            return;
+                        }
+
+                        setRows(resolved.grid.length);
+                        setCols(resolved.grid[0]?.length || 0);
+                        setGrid(resolved.grid.map(row => [...row]));
+                        if (resolved.image) {
+                            void normalizeMapperImage(resolved.image).then((normalizedURL) => {
                                 setImageURL(normalizedURL);
                             });
                         } else {
                             setImageURL(null);
                         }
-                        setOverlayEnabled(Boolean(lvl.image));
+                        setOverlayEnabled(Boolean(resolved.image));
                         setGridOffsetX(0);
                         setGridOffsetY(0);
                         setGridFrameWidth(null);
                         setGridFrameHeight(null);
-                        // Load player start position if it exists
-                        if (lvl.playerStart) {
-                            setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
+                        if (resolved.playerStart) {
+                            setPlayerStart({ x: resolved.playerStart.x, y: resolved.playerStart.y });
                         }
-                        // Load theme if it exists
-                        if (lvl.theme) {
-                            setTheme(lvl.theme);
+                        if (resolved.theme) {
+                            setTheme(resolved.theme);
                         }
-                        console.log(`Auto-loaded Level ${lvl.id} from previous session`);
-                    } else {
-                        console.log(`Skipped auto-loading Level ${lvl.id} (empty/void grid)`);
-                        // Clear the saved import level if it's all void
-                        clearImportLevel();
-                        setImportLevelIndex(null);
-                    }
+                        console.log(`Auto-loaded Level ${resolved.id} from previous session`);
+                    };
+
+                    void loadLevelIntoMapper();
                 }
             }
         }, []); // Only run on mount
@@ -411,6 +484,24 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
         };
 
+        const syncJsonInputToGrid = () => {
+            setJsonInput(formatGridRowsOneLine(grid));
+        };
+
+        const applyJsonInput = () => {
+            try {
+                const nextGrid = parseGridJson(jsonInput);
+                setUndoStack((stack) => [...stack, grid.map((row) => [...row])]);
+                setRedoStack([]);
+                replaceGridShape(nextGrid);
+                setJsonInput(formatGridRowsOneLine(nextGrid));
+                alert(`Applied JSON grid: ${nextGrid.length} rows × ${nextGrid[0].length} cols`);
+            } catch (error) {
+                console.error('Failed to apply JSON grid:', error);
+                alert(`Invalid JSON grid: ${(error as Error).message}`);
+            }
+        };
+
         const saveChanges = () => {
             const updatedLevels = saveGridChanges(grid, playerStart, theme, importLevelIndex, allLevels);
             setAllLevels(updatedLevels);
@@ -437,7 +528,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         console.log('✓ Creating context value...');
-        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, exportTS, pushUndo, replaceGridShape };
+        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, pushUndo, replaceGridShape };
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;

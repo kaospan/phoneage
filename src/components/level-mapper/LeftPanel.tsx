@@ -8,6 +8,15 @@ import { SpriteCapture } from './SpriteCapture';
 import { CellReferenceManager } from './CellReferenceManager';
 import { themes, type ColorTheme } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
+import { buildLevelFromSources } from '@/lib/levelImageDetection';
+import { seedDefaultReferences } from '@/lib/referenceSeeder';
+import { saveLevelOverride } from '@/lib/levelOverrides';
+
+const isPlaceholderGrid = (levelGrid?: number[][]) => {
+    if (!levelGrid || levelGrid.length === 0) return true;
+    if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
+    return levelGrid.every((row) => row.every((cell) => cell === 5));
+};
 
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
     const {
@@ -63,6 +72,41 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         } catch (error) {
             console.error('❌ Error running image cell detection:', error);
             alert(`Cell detection failed: ${(error as Error).message}`);
+        } finally {
+            setIsDetecting(false);
+            setDetectionProgress('');
+        }
+    };
+
+    const resolveLevelForMapper = async (levelIndex: number) => {
+        const lvl = allLevels[levelIndex];
+        if (!lvl) return null;
+        if (!lvl.autoBuild || !isPlaceholderGrid(lvl.grid) || (!lvl.sources?.length && !lvl.image)) {
+            return lvl;
+        }
+
+        setIsDetecting(true);
+        setDetectionProgress(`Building level ${lvl.id} from image...`);
+
+        try {
+            await seedDefaultReferences();
+            const built = await buildLevelFromSources(lvl.sources ?? [lvl.image!], {
+                minSimilarity: 0.72,
+                timeoutMs: 12000,
+                yieldEveryRows: 1,
+                onProgress: (status) => setDetectionProgress(status),
+            });
+            saveLevelOverride(lvl.id, built.grid, built.playerStart, lvl.theme);
+            return {
+                ...lvl,
+                grid: built.grid,
+                playerStart: built.playerStart,
+                cavePos: built.cavePos,
+            };
+        } catch (error) {
+            console.error(`Failed to build level ${lvl.id} in mapper:`, error);
+            alert(`Failed to build level ${lvl.id} from image.`);
+            return lvl;
         } finally {
             setIsDetecting(false);
             setDetectionProgress('');
@@ -251,32 +295,31 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 const idx = parseInt(val, 10);
                                 setImportLevelIndex(idx);
                                 setCompareLevelIndex(idx);
-                                // Load player start position when importing level
-                                const lvl = allLevels[idx];
-                                if (lvl?.grid) {
+                                void (async () => {
+                                    const lvl = await resolveLevelForMapper(idx);
+                                    if (!lvl?.grid) return;
                                     setRows(lvl.grid.length);
                                     setCols(lvl.grid[0]?.length || 0);
                                     setGrid(lvl.grid.map(row => [...row]));
-                                }
-                                if (lvl?.image) {
-                                    void normalizeMapperImage(lvl.image).then((normalizedURL) => {
+                                    if (lvl.image) {
+                                        const normalizedURL = await normalizeMapperImage(lvl.image);
                                         setImageURL(normalizedURL);
-                                    });
-                                } else {
-                                    setImageURL(null);
-                                }
-                                setOverlayEnabled(Boolean(lvl?.image));
-                                setGridOffsetX(0);
-                                setGridOffsetY(0);
-                                setGridFrameWidth(null);
-                                setGridFrameHeight(null);
-                                setZoom(1);
-                                if (lvl?.playerStart) {
-                                    setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
-                                }
-                                if (lvl?.theme) {
-                                    setTheme(lvl.theme);
-                                }
+                                    } else {
+                                        setImageURL(null);
+                                    }
+                                    setOverlayEnabled(Boolean(lvl?.image));
+                                    setGridOffsetX(0);
+                                    setGridOffsetY(0);
+                                    setGridFrameWidth(null);
+                                    setGridFrameHeight(null);
+                                    setZoom(1);
+                                    if (lvl.playerStart) {
+                                        setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
+                                    }
+                                    if (lvl.theme) {
+                                        setTheme(lvl.theme);
+                                    }
+                                })();
                             }}
                         >
                             <option value="">Load level...</option>
