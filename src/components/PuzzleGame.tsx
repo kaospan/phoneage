@@ -17,6 +17,7 @@ import { seedDefaultReferences } from "@/lib/referenceSeeder";
 console.log('📦 PuzzleGame.tsx loading...');
 
 type PlayerId = string;
+type FacingDirection = "up" | "right" | "down" | "left";
 
 type InputCommand =
   | { type: "move"; dx: number; dy: number; seq: number }
@@ -26,6 +27,7 @@ type InputCommand =
 interface SimPlayer {
   id: PlayerId;
   pos: Position;
+  facing: FacingDirection;
   isLocal: boolean;
   color: string;
   selectedArrow: Position | null;
@@ -53,6 +55,14 @@ interface SimulationState {
   cavePos: Position;
   tick: number;
 }
+
+const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
+  if (dx > 0) return "right";
+  if (dx < 0) return "left";
+  if (dy > 0) return "down";
+  if (dy < 0) return "up";
+  return fallback;
+};
 
 type LevelData = ReturnType<typeof getAllLevels>[number];
 
@@ -139,6 +149,7 @@ export const PuzzleGame = () => {
       const localPlayer: SimPlayer = {
         id: localId,
         pos: { ...level.playerStart },
+        facing: "down",
         isLocal: true,
         color: themes[level.theme ?? 'default']?.player ?? '#7dff9b',
         selectedArrow: null,
@@ -346,6 +357,7 @@ export const PuzzleGame = () => {
               sim.players.set(msg.id, {
                 id: msg.id,
                 pos: { ...spawn },
+                facing: 'down',
                 isLocal: false,
                 color: palette[sim.players.size % palette.length],
                 selectedArrow: null,
@@ -440,6 +452,7 @@ export const PuzzleGame = () => {
           }
           sim.grid[stepPos.y][stepPos.x] = player.glideArrowType ?? sim.grid[stepPos.y][stepPos.x];
           player.pos = { ...stepPos };
+          player.facing = facingFromDelta(stepPos.x - prevPos.x, stepPos.y - prevPos.y, player.facing);
           player.glideIndex += 1;
           gridDirty = true;
           playersDirty = true;
@@ -518,6 +531,16 @@ export const PuzzleGame = () => {
           const outcome = attemptPlayerMove(state, input.dx, input.dy);
 
           if (outcome.glidePath && outcome.startGlide) {
+            const firstGlideStep = outcome.glidePath.path[0];
+            if (firstGlideStep) {
+              player.facing = facingFromDelta(
+                firstGlideStep.x - player.pos.x,
+                firstGlideStep.y - player.pos.y,
+                player.facing
+              );
+            } else {
+              player.facing = facingFromDelta(input.dx, input.dy, player.facing);
+            }
             player.isGliding = true;
             player.glidePath = outcome.glidePath.path;
             player.glideArrowType = outcome.glidePath.arrowType;
@@ -530,6 +553,11 @@ export const PuzzleGame = () => {
             gridDirty = true;
           }
           if (outcome.newPlayerPos) {
+            player.facing = facingFromDelta(
+              outcome.newPlayerPos.x - player.pos.x,
+              outcome.newPlayerPos.y - player.pos.y,
+              player.facing
+            );
             player.pos = { ...outcome.newPlayerPos };
             playersDirty = true;
           }

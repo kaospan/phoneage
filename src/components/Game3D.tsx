@@ -18,13 +18,22 @@ interface Game3DProps {
   cameraOffset?: { x: number; z: number };
   viewMode?: '2d' | '3d';
   theme?: ColorTheme;
-  players: Array<{ id: string; pos: { x: number; y: number }; color: string; isLocal?: boolean }>;
+  players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
   localPlayerId?: string;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
   onPlayerClick?: () => void;
   playerFlashCount?: number;
 }
+
+type PlayerFacing = 'up' | 'right' | 'down' | 'left';
+
+const playerRotationByFacing: Record<PlayerFacing, number> = {
+  up: Math.PI,
+  right: -Math.PI / 2,
+  down: 0,
+  left: Math.PI / 2,
+};
 
 const darkenHexColor = (hex: string, amount = 0.35) => {
   const normalized = hex.replace('#', '');
@@ -706,11 +715,13 @@ const Cave = ({
 // Player (Detailed Green Dinosaur) with smooth movement
 const Player = ({
   position,
+  facing,
   color,
   onClick,
   showFlash
 }: {
   position: [number, number, number];
+  facing: PlayerFacing;
   color: string;
   onClick?: () => void;
   showFlash?: boolean;
@@ -722,6 +733,7 @@ const Player = ({
   const leftEyeRef = useRef<THREE.Mesh>(null);
   const rightEyeRef = useRef<THREE.Mesh>(null);
   const targetPos = useRef(new THREE.Vector3(...position));
+  const targetRotation = useRef(playerRotationByFacing[facing]);
   const lastTapTimeRef = useRef<number>(0);
   const blinkTimerRef = useRef(0);
 
@@ -741,10 +753,21 @@ const Player = ({
     targetPos.current.set(...position);
   }, [position]);
 
+  useEffect(() => {
+    targetRotation.current = playerRotationByFacing[facing];
+  }, [facing]);
+
   useFrame(({ clock }) => {
     if (groupRef.current) {
       // Smooth interpolation to target position
       groupRef.current.position.lerp(targetPos.current, 0.3);
+
+      const delta =
+        THREE.MathUtils.euclideanModulo(
+          targetRotation.current - groupRef.current.rotation.y + Math.PI,
+          Math.PI * 2
+        ) - Math.PI;
+      groupRef.current.rotation.y += delta * 0.22;
     }
 
     const t = clock.getElapsedTime();
@@ -1613,6 +1636,7 @@ export const Game3D = ({
             <Player
               key={player.id}
               position={[player.pos.x + offsetX, height, player.pos.y + offsetZ]}
+              facing={player.facing}
               color={player.color}
               onClick={player.isLocal ? onPlayerClick : undefined}
               showFlash={player.isLocal && playerFlashCount > 0 && (playerFlashCount % 2 === 0)}
