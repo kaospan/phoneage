@@ -28,6 +28,8 @@ interface Game3DProps {
 
 type PlayerFacing = 'up' | 'right' | 'down' | 'left';
 
+const CAMERA_ZOOM_FACTOR = 0.93;
+
 const playerRotationByFacing: Record<PlayerFacing, number> = {
   up: Math.PI,
   right: Math.PI / 2,
@@ -1180,8 +1182,10 @@ const CameraController = ({
   useFrame(() => {
     // Camera settings based on view mode
     const is2D = viewMode === '2d';
-    const cameraHeight = is2D ? 24 : 18;
-    const cameraDistance = is2D ? 0.5 : 6;
+    const baseCameraHeight = is2D ? 24 : 18;
+    const baseCameraDistance = is2D ? 0.5 : 6;
+    const cameraHeight = baseCameraHeight * CAMERA_ZOOM_FACTOR;
+    const cameraDistance = baseCameraDistance * CAMERA_ZOOM_FACTOR;
     const fov = is2D ? 42 : 50;
 
     // Calculate if the entire map fits in view at current zoom
@@ -1199,8 +1203,8 @@ const CameraController = ({
 
     // Only follow if map is larger than view (with margin for edge detection)
     // Use 0.8 threshold so camera starts following when player nears edge
-    const shouldFollowX = gridWidth > viewWidth * 0.8;
-    const shouldFollowZ = gridHeight > viewHeight * 0.8;
+    const shouldFollowX = gridWidth > viewWidth * 0.76;
+    const shouldFollowZ = gridHeight > viewHeight * 0.76;
 
     // Apply camera offset for manual panning
     const panOffsetX = cameraOffset?.x || 0;
@@ -1286,8 +1290,8 @@ export const Game3D = ({
   // Camera settings based on view mode
   const is2D = viewMode === '2d';
   // Make 3D view more top-down and clearer
-  const initialCameraY = is2D ? 24 : 18;
-  const initialCameraZ = is2D ? 0.5 : 6;
+  const initialCameraY = (is2D ? 24 : 18) * CAMERA_ZOOM_FACTOR;
+  const initialCameraZ = (is2D ? 0.5 : 6) * CAMERA_ZOOM_FACTOR;
   const fov = is2D ? 42 : 50;
 
   const noiseTexture = useMemo(() => {
