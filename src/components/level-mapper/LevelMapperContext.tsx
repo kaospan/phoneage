@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { getAllLevels, type ColorTheme } from '@/data/levels';
-import { emptyGrid } from '@/lib/levelgrid';
+import { emptyGrid, formatGridRowsOneLine } from '@/lib/levelgrid';
 import { detectGridLines } from './gridDetection';
 import {
     addColumnLeft as addColLeft,

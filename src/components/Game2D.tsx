@@ -50,7 +50,7 @@ interface Game2DProps {
         case 12:
         case 13: return "bg-amber-800"; // arrows
         case 4: return "bg-blue-400"; // water
-        case 5: return "bg-sky-300"; // void
+        case 5: return "bg-sky-400"; // void
         case 6: return "bg-cyan-400"; // breakable rock
         default: return "bg-stone-300";
       }
@@ -58,7 +58,7 @@ interface Game2DProps {
   
     return (
       <div 
-        className="w-full h-[600px] flex flex-col justify-center items-center p-4 bg-sky-100 rounded-lg"
+        className="w-full h-[600px] flex flex-col justify-center items-center p-4 bg-sky-200 rounded-lg"
         onClick={() => onCancelSelection?.()}
       >
         <div className="text-2xl font-bold text-purple-800 mb-4">2D TOP VIEW</div>

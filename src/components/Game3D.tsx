@@ -1220,8 +1220,8 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]}>
         <planeGeometry args={[gridWidth + 40, gridHeight + 40]} />
         <meshStandardMaterial
-          color="#6fb6ff"
-          emissive="#3a7ecb"
+          color="#5da7e6"
+          emissive="#2e6fb2"
           emissiveIntensity={0.35}
           roughness={0.9}
         />
@@ -1688,7 +1688,7 @@ export const Game3D = ({
   }, [themeColors, noiseTexture, floorMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
 
   return (
-    <div className="w-full h-full bg-sky-300 overflow-hidden touch-none relative z-30">
+    <div className="w-full h-full bg-sky-400 overflow-hidden touch-none relative z-30">
       <Canvas
         shadows
         dpr={[1, 2]}
@@ -1912,7 +1912,7 @@ export const Game3D = ({
         {/* Ground plane - lighter for better visibility */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
           <planeGeometry args={[gridWidth + 10, gridHeight + 10]} />
-          <meshStandardMaterial color="#87ceeb" emissive="#4fa3d9" />
+          <meshStandardMaterial color="#5da7e6" emissive="#2e6fb2" />
         </mesh>
 
         {/* Selector highlight (white ring) when active and not currently selecting an arrow */}
