@@ -6,7 +6,6 @@ import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { TouchControls } from "./TouchControls";
 import { Thumbstick } from "./Thumbstick";
-import { Box, Grid3x3 } from "lucide-react";
 import { CellType, GameState, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
@@ -58,6 +57,13 @@ interface SimulationState {
 
 const CAMERA_ZOOM_LEVELS = [1.08, 1, 0.93, 0.86] as const;
 const DEFAULT_CAMERA_ZOOM_INDEX = 2;
+const VIEW_MODES = ["3d", "fps", "2d"] as const;
+type ViewMode = (typeof VIEW_MODES)[number];
+const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+  "3d": "3D",
+  fps: "FPS",
+  "2d": "2D",
+};
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
@@ -65,6 +71,21 @@ const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): Fac
   if (dy > 0) return "down";
   if (dy < 0) return "up";
   return fallback;
+};
+
+const facingTowardTarget = (
+  from: Position,
+  target: Position,
+  fallback: FacingDirection
+): FacingDirection => {
+  const dx = target.x - from.x;
+  const dy = target.y - from.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return facingFromDelta(dx, 0, fallback);
+  }
+
+  return facingFromDelta(0, dy, fallback);
 };
 
 type LevelData = ReturnType<typeof getAllLevels>[number];
@@ -79,7 +100,7 @@ export const PuzzleGame = () => {
   const [activeLevel, setActiveLevel] = useState<LevelData | null>(null);
   const [moves, setMoves] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
-  const [viewMode, setViewMode] = useState<"3d" | "2d">("3d");
+  const [viewMode, setViewMode] = useState<ViewMode>("3d");
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
   const [cameraZoomIndex, setCameraZoomIndex] = useState(DEFAULT_CAMERA_ZOOM_INDEX);
@@ -153,7 +174,7 @@ export const PuzzleGame = () => {
       const localPlayer: SimPlayer = {
         id: localId,
         pos: { ...level.playerStart },
-        facing: "down",
+        facing: facingTowardTarget(level.playerStart, cave, "down"),
         isLocal: true,
         color: themes[level.theme ?? 'default']?.player ?? '#7dff9b',
         selectedArrow: null,
@@ -361,7 +382,7 @@ export const PuzzleGame = () => {
               sim.players.set(msg.id, {
                 id: msg.id,
                 pos: { ...spawn },
-                facing: 'down',
+                facing: facingTowardTarget(spawn, sim.cavePos, 'down'),
                 isLocal: false,
                 color: palette[sim.players.size % palette.length],
                 selectedArrow: null,
@@ -778,12 +799,14 @@ export const PuzzleGame = () => {
     };
 
     const prevLevel = () => { if (currentLevelIndex > 0) setCurrentLevelIndex(i => i - 1); };
-    const canZoomIn = cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
-    const canZoomOut = cameraZoomIndex > 0;
+    const canZoomIn = viewMode !== 'fps' && cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
+    const canZoomOut = viewMode !== 'fps' && cameraZoomIndex > 0;
     const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex];
+    const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
 
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
+      if (viewMode === 'fps') return;
       // Only start dragging with left mouse button and not on UI elements
       if (e.button === 0 && e.target === e.currentTarget) {
         setIsDragging(true);
@@ -793,6 +816,7 @@ export const PuzzleGame = () => {
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
+      if (viewMode === 'fps') return;
       if (isDragging) {
         const deltaX = e.clientX - dragStart.x;
         const deltaY = e.clientY - dragStart.y;
@@ -816,6 +840,7 @@ export const PuzzleGame = () => {
 
     // Touch handlers for mobile dragging
     const handleTouchStart = (e: React.TouchEvent) => {
+      if (viewMode === 'fps') return;
       if (e.touches.length === 1 && e.target === e.currentTarget) {
         const touch = e.touches[0];
         setIsDragging(true);
@@ -825,6 +850,7 @@ export const PuzzleGame = () => {
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
+      if (viewMode === 'fps') return;
       if (isDragging && e.touches.length === 1) {
         const touch = e.touches[0];
         const deltaX = touch.clientX - dragStart.x;
@@ -844,9 +870,16 @@ export const PuzzleGame = () => {
 
     // Double-click or double-tap to reset camera
     const handleDoubleClick = () => {
+      if (viewMode === 'fps') return;
       setCameraOffset({ x: 0, z: 0 });
       toast.info("View reset");
     };
+
+    useEffect(() => {
+      if (viewMode === 'fps') {
+        setIsDragging(false);
+      }
+    }, [viewMode]);
 
     const levelBackground = currentLevel?.image;
 
@@ -961,16 +994,15 @@ export const PuzzleGame = () => {
 
               <Button
                 onClick={() => {
-                  const newMode = viewMode === "3d" ? "2d" : "3d";
-                  setViewMode(newMode);
+                  setViewMode(nextViewMode);
                   setCameraOffset({ x: 0, z: 0 });
                 }}
                 variant="ghost"
-                size="default"
-                className="h-10 w-10 p-0 hover:bg-primary/20"
-                title={`Switch to ${viewMode === "3d" ? "2D" : "3D"} view`}
+                size="sm"
+                className="h-8 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
+                title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
               >
-                {viewMode === "3d" ? <Grid3x3 className="h-5 w-5" /> : <Box className="h-5 w-5" />}
+                {VIEW_MODE_LABELS[viewMode]}
               </Button>
 
               {/* Reset View Button - shows when camera is offset */}
@@ -1001,7 +1033,7 @@ export const PuzzleGame = () => {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           onDoubleClick={handleDoubleClick}
-          style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+          style={{ cursor: viewMode === 'fps' ? 'default' : isDragging ? 'grabbing' : 'grab' }}
         >
           <Game3D
             grid={renderGrid}
