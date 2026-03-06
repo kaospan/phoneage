@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Copy, Eye, EyeOff, Image as ImageIcon, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
@@ -27,30 +28,53 @@ export const GridEditorPanel: React.FC = () => {
     const [isDragMode, setIsDragMode] = React.useState(false);
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
+    const [imageScale, setImageScale] = React.useState(1);
     const containerRef = useRef<HTMLDivElement>(null);
     const [cellWidth, setCellWidth] = React.useState(32);
     const [cellHeight, setCellHeight] = React.useState(32);
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
     const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
-    // Calculate cell size based on container width and image
+    // Load overlay image size once per URL (prevents resize jitter).
+    React.useEffect(() => {
+        if (!imageURL) {
+            setImageNaturalSize(null);
+            return;
+        }
+        let cancelled = false;
+        const img = new Image();
+        img.onload = () => {
+            if (cancelled) return;
+            setImageNaturalSize({ width: img.width, height: img.height });
+        };
+        img.src = imageURL;
+        return () => {
+            cancelled = true;
+        };
+    }, [imageURL]);
+
+    // Calculate cell size based on available viewport space (avoid scroll by default).
     React.useEffect(() => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
             const containerWidth = Math.max(320, containerRef.current.clientWidth - 32);
+            const fallbackHeight = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.65) : 600;
+            const containerHeight = Math.max(240, ((containerRef.current.clientHeight || fallbackHeight) - 32));
 
             if (imageURL) {
-                const img = new Image();
-                img.onload = () => {
-                    setImageNaturalSize({ width: img.width, height: img.height });
-                    const naturalGridWidth = gridFrameWidth ?? img.width;
-                    const naturalGridHeight = gridFrameHeight ?? img.height;
-                    const fitScale = containerWidth / img.width;
-                    const renderedWidth = Math.max(1, Math.floor(containerWidth * zoom));
-                    const renderedHeight = Math.max(1, Math.floor(renderedWidth * (img.height / img.width)));
-                    setDisplaySize({ width: renderedWidth, height: renderedHeight });
-                    const imageScaleX = renderedWidth / img.width;
-                    const imageScaleY = renderedHeight / img.height;
+                if (!imageNaturalSize) return;
+                const imgW = imageNaturalSize.width;
+                const imgH = imageNaturalSize.height;
+                const naturalGridWidth = gridFrameWidth ?? imgW;
+                const naturalGridHeight = gridFrameHeight ?? imgH;
+                // Fit within both width and height, then apply user zoom.
+                const fitWidthByHeight = Math.floor(containerHeight * (imgW / imgH));
+                const baseWidth = Math.max(1, Math.min(containerWidth, fitWidthByHeight));
+                const renderedWidth = Math.max(1, Math.floor(baseWidth * zoom));
+                const renderedHeight = Math.max(1, Math.floor(renderedWidth * (imgH / imgW)));
+                setDisplaySize({ width: renderedWidth, height: renderedHeight });
+                const imageScaleX = renderedWidth / imgW;
+                const imageScaleY = renderedHeight / imgH;
                     const imageCellWidth = (naturalGridWidth * imageScaleX) / cols;
                     const imageCellHeight = (naturalGridHeight * imageScaleY) / rows;
 
@@ -63,11 +87,9 @@ export const GridEditorPanel: React.FC = () => {
                         setCellWidth(clamped);
                         setCellHeight(clamped);
                     }
-                };
-                img.src = imageURL;
             } else {
-                // Without overlay, fit to container width
-                const calculatedCellSize = Math.floor(containerWidth / cols);
+                // Without overlay, fit to container size
+                const calculatedCellSize = Math.floor(Math.min(containerWidth / cols, containerHeight / rows));
                 const clamped = Math.max(24, Math.min(calculatedCellSize, 80));
                 setCellWidth(clamped);
                 setCellHeight(clamped);
@@ -77,10 +99,17 @@ export const GridEditorPanel: React.FC = () => {
         };
 
         updateCellSize();
-        const resizeObserver = new ResizeObserver(() => updateCellSize());
+        let rafId: number | null = null;
+        const resizeObserver = new ResizeObserver(() => {
+            if (rafId !== null) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => updateCellSize());
+        });
         resizeObserver.observe(containerRef.current);
-        return () => resizeObserver.disconnect();
-    }, [imageURL, cols, rows, overlayStretch, zoom, gridFrameHeight, gridFrameWidth]);
+        return () => {
+            if (rafId !== null) cancelAnimationFrame(rafId);
+            resizeObserver.disconnect();
+        };
+    }, [imageURL, imageNaturalSize, cols, rows, overlayStretch, zoom, gridFrameHeight, gridFrameWidth]);
 
     const differences = React.useMemo(() => {
         const ref = compareLevel?.grid || [];
@@ -97,8 +126,10 @@ export const GridEditorPanel: React.FC = () => {
     const didPushUndoRef = React.useRef(false);
     const dragStartRef = React.useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 
-    const overlayScaleX = imageNaturalSize ? displaySize.width / imageNaturalSize.width : 1;
-    const overlayScaleY = imageNaturalSize ? displaySize.height / imageNaturalSize.height : 1;
+    const scaledDisplayWidth = displaySize.width * imageScale;
+    const scaledDisplayHeight = displaySize.height * imageScale;
+    const overlayScaleX = imageNaturalSize ? scaledDisplayWidth / imageNaturalSize.width : 1;
+    const overlayScaleY = imageNaturalSize ? scaledDisplayHeight / imageNaturalSize.height : 1;
     const displayOffsetX = gridOffsetX * overlayScaleX;
     const displayOffsetY = gridOffsetY * overlayScaleY;
     const naturalFrameWidth = gridFrameWidth ?? imageNaturalSize?.width ?? 0;
@@ -196,6 +227,14 @@ export const GridEditorPanel: React.FC = () => {
         if (!isDragMode && !e.altKey && !e.ctrlKey && !e.metaKey) return;
         if (!e.deltaY) return;
         e.preventDefault();
+
+        // Fine-tune overlay image scale without changing the grid.
+        if (e.altKey) {
+            const step = e.shiftKey ? 0.01 : 0.002;
+            const delta = e.deltaY > 0 ? -step : step;
+            setImageScale((prev) => Math.max(0.85, Math.min(1.15, Number((prev + delta).toFixed(3)))));
+            return;
+        }
 
         const sensitivity = e.shiftKey ? 0.003 : 0.0015;
         const factor = Math.exp(-e.deltaY * sensitivity);
@@ -298,26 +337,48 @@ export const GridEditorPanel: React.FC = () => {
                         </div>
                     )}
                 </div>
+                <div className="flex items-center gap-1">
+                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={!canUndo} title="Undo" aria-label="Undo">
+                        <Undo2 />
+                    </Button>
+                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={!canRedo} title="Redo" aria-label="Redo">
+                        <Redo2 />
+                    </Button>
+                </div>
             </div>
             <div className="flex items-center justify-between gap-2">
                 <div className="text-xs text-muted-foreground">
                     Diff cells: {differences.length}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                    <label className="flex items-center gap-1 text-xs">
-                        <input type="checkbox" checked={overlayEnabled} onChange={(e) => setOverlayEnabled(e.target.checked)} /> Overlay image
-                    </label>
+                    <Button
+                        size="icon"
+                        variant={overlayEnabled ? "secondary" : "outline"}
+                        className="h-8 w-8"
+                        onClick={() => setOverlayEnabled(!overlayEnabled)}
+                        title={overlayEnabled ? "Overlay: on" : "Overlay: off"}
+                        aria-pressed={overlayEnabled}
+                    >
+                        {overlayEnabled ? <Eye /> : <EyeOff />}
+                    </Button>
                     {overlayEnabled && (
-                        <div className="flex items-center gap-1 text-xs">
-                            <span>Opacity</span>
+                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-xs">
+                            <span className="text-muted-foreground" title="Overlay opacity">α</span>
                             <input type="range" min={0} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
-                            <span>{Math.round(overlayOpacity * 100)}%</span>
+                            <span className="tabular-nums">{Math.round(overlayOpacity * 100)}%</span>
                         </div>
                     )}
                     {overlayEnabled && (
-                        <label className="flex items-center gap-1 text-xs">
-                            <input type="checkbox" checked={overlayStretch} onChange={(e) => setOverlayStretch(e.target.checked)} /> Stretch to image
-                        </label>
+                        <Button
+                            size="icon"
+                            variant={overlayStretch ? "secondary" : "outline"}
+                            className="h-8 w-8"
+                            onClick={() => setOverlayStretch(!overlayStretch)}
+                            title={overlayStretch ? "Cell sizing: stretched" : "Cell sizing: uniform"}
+                            aria-pressed={overlayStretch}
+                        >
+                            <Maximize2 />
+                        </Button>
                     )}
                     {overlayEnabled && imageNaturalSize && (
                         <span className="text-xs text-muted-foreground">
@@ -326,8 +387,10 @@ export const GridEditorPanel: React.FC = () => {
                     )}
                     {imageURL && (
                         <div className="flex items-center gap-1 text-xs">
-                            <span>Zoom</span>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setZoom(Math.max(0.5, Number((zoom - 0.1).toFixed(2))))}>-</Button>
+                            <span className="text-muted-foreground" title="View zoom">🔎</span>
+                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setZoom(Math.max(0.5, Number((zoom - 0.1).toFixed(2))))} aria-label="Zoom out">
+                                <ZoomOut />
+                            </Button>
                             <input
                                 type="range"
                                 min={0.5}
@@ -336,36 +399,84 @@ export const GridEditorPanel: React.FC = () => {
                                 value={zoom}
                                 onChange={(e) => setZoom(Number(e.target.value))}
                             />
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}>+</Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setZoom(1)}>Fit</Button>
-                            <span>{Math.round(zoom * 100)}%</span>
+                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))} aria-label="Zoom in">
+                                <ZoomIn />
+                            </Button>
+                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setZoom(1)} aria-label="Fit zoom">
+                                <Maximize2 />
+                            </Button>
+                            <span className="tabular-nums">{Math.round(zoom * 100)}%</span>
+                        </div>
+                    )}
+                    {imageURL && overlayEnabled && (
+                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-xs" title="Scale only the overlay image. Hold Alt + mouse wheel for tiny steps.">
+                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8"
+                                onClick={() => setImageScale((s) => Math.max(0.85, Number((s - 0.005).toFixed(3))))}
+                                aria-label="Decrease image scale"
+                            >
+                                <ZoomOut />
+                            </Button>
+                            <input
+                                type="range"
+                                min={0.85}
+                                max={1.15}
+                                step={0.001}
+                                value={imageScale}
+                                onChange={(e) => setImageScale(Number(e.target.value))}
+                                aria-label="Image scale"
+                            />
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8"
+                                onClick={() => setImageScale((s) => Math.min(1.15, Number((s + 0.005).toFixed(3))))}
+                                aria-label="Increase image scale"
+                            >
+                                <ZoomIn />
+                            </Button>
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8"
+                                onClick={() => setImageScale(1)}
+                                aria-label="Reset image scale"
+                            >
+                                1x
+                            </Button>
+                            <span className="tabular-nums">{Math.round(imageScale * 1000) / 10}%</span>
                         </div>
                     )}
                     {imageURL && overlayEnabled && (
                         <div className="flex items-center gap-1 text-xs">
                             <Button
-                                size="sm"
-                                variant={isDragMode ? "default" : "outline"}
-                                className="h-7 px-2"
+                                size="icon"
+                                variant={isDragMode ? "secondary" : "outline"}
+                                className="h-8 w-8"
                                 onClick={() => {
                                     setIsDragMode((prev) => !prev);
                                     setIsDraggingGrid(false);
                                 }}
                                 title="Drag the grid layer over the image overlay"
+                                aria-pressed={isDragMode}
                             >
-                                {isDragMode ? "Dragging Map" : "Drag Map"}
+                                <Move />
                             </Button>
-                            <span>Offset {gridOffsetX}, {gridOffsetY}</span>
+                            <span className="tabular-nums text-muted-foreground" title="Overlay frame offset (px)">({gridOffsetX}, {gridOffsetY})</span>
                             <Button
-                                size="sm"
+                                size="icon"
                                 variant="outline"
-                                className="h-7 px-2"
+                                className="h-8 w-8"
                                 onClick={() => {
                                     setGridOffsetX(0);
                                     setGridOffsetY(0);
                                 }}
+                                aria-label="Reset offset"
                             >
-                                Reset
+                                <Maximize2 />
                             </Button>
                         </div>
                     )}
@@ -434,8 +545,8 @@ export const GridEditorPanel: React.FC = () => {
                     )}
                     {imageURL && overlayEnabled && (
                         <>
-                            <Button size="sm" variant="outline" onClick={learnCurrentMap} title="Learn tile references from the corrected current map">
-                                Learn From Map
+                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={learnCurrentMap} title="Learn references from the corrected map" aria-label="Learn from map">
+                                <Scan />
                             </Button>
                             <div className="flex items-center gap-2">
                                 <label className="flex items-center gap-1 text-xs text-muted-foreground" title="How many void cells to keep around the outside when cropping">
@@ -449,68 +560,76 @@ export const GridEditorPanel: React.FC = () => {
                                         className="h-7 w-14 rounded border bg-background px-1 text-foreground"
                                     />
                                 </label>
-                                <Button size="sm" variant="outline" onClick={cropCurrentMap} title="Crop excess outer void cells while keeping the selected void margin">
-                                Crop Outer Void
-                            </Button>
+                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={cropCurrentMap} title="Crop excess outer void cells (keep margin)" aria-label="Crop outer void">
+                                    <Scissors />
+                                </Button>
                             </div>
                         </>
                     )}
-                    <Button size="sm" onClick={exportTS}>Copy JSON</Button>
-                    <Button size="sm" variant="outline" onClick={() => { pushUndo(); setGrid(g => { const width = g[0]?.length || cols; return g.map(r => r.map(() => 5)); }); }}>All Void</Button>
+                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={exportTS} title="Copy JSON" aria-label="Copy JSON">
+                        <Copy />
+                    </Button>
+                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { pushUndo(); setGrid(g => { const width = g[0]?.length || cols; return g.map(r => r.map(() => 5)); }); }} title="Fill all cells with Void" aria-label="All void">
+                        <Trash2 />
+                    </Button>
                     <Button
-                        size="sm"
-                        variant={isSettingPlayerStart ? "default" : "outline"}
+                        size="icon"
+                        variant={isSettingPlayerStart ? "secondary" : "outline"}
+                        className="h-8 w-8"
                         onClick={() => setIsSettingPlayerStart(!isSettingPlayerStart)}
-                        className={isSettingPlayerStart ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}
                         title="Click a cell to set player start position"
+                        aria-pressed={isSettingPlayerStart}
+                        aria-label={isSettingPlayerStart ? "Setting player start: on" : "Setting player start: off"}
                     >
-                        {isSettingPlayerStart ? "Click Cell..." : "Set Player Start"}
+                        <UserRound />
                     </Button>
                     {playerStart && (
                         <>
-                            <span className="text-xs text-muted-foreground">
-                                Player: ({playerStart.x}, {playerStart.y})
+                            <span className="text-xs text-muted-foreground tabular-nums" title="Player start (col,row)">
+                                ({playerStart.x}, {playerStart.y})
                             </span>
                             <Button
-                                size="sm"
+                                size="icon"
                                 variant="ghost"
                                 onClick={() => setPlayerStart(null)}
-                                className="h-7 px-2"
+                                className="h-8 w-8"
                                 title="Clear player start position"
+                                aria-label="Clear player start"
                             >
                                 ✕
                             </Button>
                         </>
                     )}
                     <Button
-                        size="sm"
-                        variant="default"
+                        size="icon"
+                        variant="outline"
+                        className="h-8 w-8"
                         onClick={() => { void saveCurrentMap(); }}
                         disabled={isSaved}
-                        className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={isSaved ? "Saved" : "Save + Learn"}
+                        aria-label="Save + Learn"
                     >
-                        Save + Learn
+                        <Save />
                     </Button>
-                    <Button size="sm" variant="outline" onClick={undo} disabled={!canUndo}>Undo</Button>
-                    <Button size="sm" variant="outline" onClick={redo} disabled={!canRedo}>Redo</Button>
                 </div>
             </div>
             <div className="text-xs text-muted-foreground mt-1">Diff cells: {differences.length}</div>
             {isDragMode && (
                 <div className="mt-1 text-xs text-amber-600">
-                    Drag anywhere on the grid to fine-tune alignment. Use mouse wheel to zoom while dragging. Turn drag mode off to paint or click cells.
+                    Drag anywhere on the grid to fine-tune alignment. Mouse wheel zooms the view; hold Alt to scale only the overlay image. Turn drag mode off to paint or click cells.
                 </div>
             )}
             <div className="mt-2">
                 <div
                     ref={containerRef}
-                    className="overflow-auto max-h-[70vh] border rounded p-3"
+                    className="overflow-auto border rounded p-3 h-[calc(100vh-260px)] min-h-[320px]"
                     onWheel={onWheelZoom}
                 >
                     <div
                         className="relative mx-auto"
                         style={{
-                            width: `${Math.max(displaySize.width, cols * cellWidth)}px`,
+                            width: `${Math.max(scaledDisplayWidth, cols * cellWidth)}px`,
+                            height: `${Math.max(scaledDisplayHeight, rows * cellHeight)}px`,
                             minWidth: '100%',
                         }}
                     >
@@ -521,8 +640,8 @@ export const GridEditorPanel: React.FC = () => {
                                 className="absolute top-0 left-0 pointer-events-none"
                                 style={{
                                     opacity: overlayOpacity,
-                                    width: `${displaySize.width}px`,
-                                    height: `${displaySize.height}px`,
+                                    width: `${scaledDisplayWidth}px`,
+                                    height: `${scaledDisplayHeight}px`,
                                     objectFit: 'contain',
                                     imageRendering: 'pixelated',
                                     zIndex: 15
