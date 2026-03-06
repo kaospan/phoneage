@@ -30,9 +30,9 @@ type PlayerFacing = 'up' | 'right' | 'down' | 'left';
 
 const playerRotationByFacing: Record<PlayerFacing, number> = {
   up: Math.PI,
-  right: -Math.PI / 2,
+  right: Math.PI / 2,
   down: 0,
-  left: Math.PI / 2,
+  left: -Math.PI / 2,
 };
 
 const darkenHexColor = (hex: string, amount = 0.35) => {
