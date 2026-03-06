@@ -1,3 +1,5 @@
+import { detectGridLines } from './gridDetection';
+
 const loadImage = async (imageURL: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
         const image = new Image();
@@ -248,37 +250,108 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
     const borderCrop = cropBlackEdges(viewportPixels, viewportWidth, viewportHeight);
     const croppedWidth = borderCrop.width;
     const croppedHeight = borderCrop.height;
-    const hudSourceTop = viewportTop + borderCrop.top;
-    const hudSourceLeft = viewportLeft + borderCrop.left;
+    const croppedSourceTop = viewportTop + borderCrop.top;
+    const croppedSourceLeft = viewportLeft + borderCrop.left;
 
-    const hudPixels = rotatedContext.getImageData(
-        hudSourceLeft,
-        hudSourceTop,
-        croppedWidth,
-        croppedHeight
-    ).data;
-    const hudCutRow = findHudCutRow(hudPixels, croppedWidth, croppedHeight);
-    const finalHeight = Math.max(1, Math.min(croppedHeight, hudCutRow));
-
-    const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = croppedWidth;
-    finalCanvas.height = finalHeight;
-    const finalContext = finalCanvas.getContext('2d');
-    if (!finalContext) {
+    // Build a working canvas for grid-bound detection/cropping.
+    const workingCanvas = document.createElement('canvas');
+    workingCanvas.width = croppedWidth;
+    workingCanvas.height = croppedHeight;
+    const workingContext = workingCanvas.getContext('2d');
+    if (!workingContext) {
         return imageURL;
     }
 
-    finalContext.drawImage(
+    workingContext.drawImage(
         rotatedCanvas,
-        hudSourceLeft,
-        hudSourceTop,
+        croppedSourceLeft,
+        croppedSourceTop,
         croppedWidth,
-        finalHeight,
+        croppedHeight,
         0,
         0,
         croppedWidth,
-        finalHeight
+        croppedHeight
     );
 
-    return finalCanvas.toDataURL('image/png');
+    // Try to crop exactly to the grid bounds using detected rows/cols + cell size.
+    const detected = detectGridLines(workingCanvas, false, 11, 20);
+    let gridCanvas: HTMLCanvasElement | null = null;
+    let detectedGridSize: { rows: number; cols: number } | null = null;
+
+    if (detected) {
+        const gridLeft = clampInt(detected.offsetX, 0, workingCanvas.width - 1);
+        const gridTop = clampInt(detected.offsetY, 0, workingCanvas.height - 1);
+        const gridWidth = clampInt(detected.cellWidth * detected.cols, 1, workingCanvas.width - gridLeft);
+        const gridHeight = clampInt(detected.cellHeight * detected.rows, 1, workingCanvas.height - gridTop);
+
+        if (gridWidth > 10 && gridHeight > 10) {
+            gridCanvas = document.createElement('canvas');
+            gridCanvas.width = gridWidth;
+            gridCanvas.height = gridHeight;
+            const gridCtx = gridCanvas.getContext('2d');
+            if (gridCtx) {
+                gridCtx.drawImage(workingCanvas, gridLeft, gridTop, gridWidth, gridHeight, 0, 0, gridWidth, gridHeight);
+                detectedGridSize = { rows: detected.rows, cols: detected.cols };
+            } else {
+                gridCanvas = null;
+            }
+        }
+    }
+
+    // Fallback: HUD crop for older clean screenshots (DOS status bar).
+    if (!gridCanvas) {
+        const hudPixels = workingContext.getImageData(0, 0, croppedWidth, croppedHeight).data;
+        const hudCutRow = findHudCutRow(hudPixels, croppedWidth, croppedHeight);
+        const finalHeight = Math.max(1, Math.min(croppedHeight, hudCutRow));
+
+        gridCanvas = document.createElement('canvas');
+        gridCanvas.width = croppedWidth;
+        gridCanvas.height = finalHeight;
+        const finalContext = gridCanvas.getContext('2d');
+        if (!finalContext) {
+            return imageURL;
+        }
+        finalContext.drawImage(workingCanvas, 0, 0, croppedWidth, finalHeight, 0, 0, croppedWidth, finalHeight);
+    }
+
+    // Standardize to a consistent canvas so every level image is centered with a fixed cell size.
+    // This makes the overlay visually consistent and reduces row/col drift caused by screenshots.
+    const TARGET_COLS = 20;
+    const TARGET_ROWS = 12;
+    const TARGET_CELL = 64;
+
+    const standardized = document.createElement('canvas');
+    standardized.width = TARGET_COLS * TARGET_CELL;
+    standardized.height = TARGET_ROWS * TARGET_CELL;
+    const stdCtx = standardized.getContext('2d');
+    if (!stdCtx) {
+        return gridCanvas.toDataURL('image/png');
+    }
+
+    // Sky-ish background so padding areas are obvious.
+    stdCtx.fillStyle = '#5da7e6';
+    stdCtx.fillRect(0, 0, standardized.width, standardized.height);
+
+    // Scale the detected/cropped grid image to fit, then center it.
+    let drawW = 0;
+    let drawH = 0;
+
+    if (detectedGridSize && detectedGridSize.cols <= TARGET_COLS && detectedGridSize.rows <= TARGET_ROWS) {
+        drawW = detectedGridSize.cols * TARGET_CELL;
+        drawH = detectedGridSize.rows * TARGET_CELL;
+    } else {
+        const scaleX = standardized.width / gridCanvas.width;
+        const scaleY = standardized.height / gridCanvas.height;
+        const scale = Math.min(scaleX, scaleY);
+        drawW = Math.max(1, Math.round(gridCanvas.width * scale));
+        drawH = Math.max(1, Math.round(gridCanvas.height * scale));
+    }
+
+    const drawX = Math.round((standardized.width - drawW) / 2);
+    const drawY = Math.round((standardized.height - drawH) / 2);
+    stdCtx.imageSmoothingEnabled = false;
+    stdCtx.drawImage(gridCanvas, 0, 0, gridCanvas.width, gridCanvas.height, drawX, drawY, drawW, drawH);
+
+    return standardized.toDataURL('image/png');
 };
