@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SpriteCapture } from './SpriteCapture';
 import { CellReferenceManager } from './CellReferenceManager';
 import { themes, type ColorTheme } from '@/data/levels';
+import { normalizeMapperImage } from './imageNormalization';
 
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
     const {
@@ -18,6 +19,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         allLevels, imageURL, setImageURL,
         detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
+        gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
         theme, setTheme, setIsSaved
     } = useLevelMapper();
@@ -45,6 +47,26 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     }) => {
         console.log('Captured sprite:', cellData);
         // Don't switch tabs - stay on capture tab
+    };
+
+    const runCellDetection = async () => {
+        if (!imageURL) {
+            alert('Load an image first');
+            return;
+        }
+
+        try {
+            setIsDetecting(true);
+            setDetectionProgress('Analyzing cell types...');
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            await detectCells();
+        } catch (error) {
+            console.error('❌ Error running image cell detection:', error);
+            alert(`Cell detection failed: ${(error as Error).message}`);
+        } finally {
+            setIsDetecting(false);
+            setDetectionProgress('');
+        }
     };
 
     return (
@@ -83,6 +105,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                         setRows(lvl.grid.length);
                                         setCols(lvl.grid[0]?.length || 0);
                                         setGrid(lvl.grid.map(row => [...row]));
+                                        setGridOffsetX(0);
+                                        setGridOffsetY(0);
+                                        setGridFrameWidth(null);
+                                        setGridFrameHeight(null);
 
                                         if (lvl.playerStart) {
                                             setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
@@ -99,7 +125,12 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 const url = URL.createObjectURL(f);
                                 console.log('✓ Object URL created:', url);
 
-                                setImageURL(url);
+                                setGridOffsetX(0);
+                                setGridOffsetY(0);
+                                setGridFrameWidth(null);
+                                setGridFrameHeight(null);
+                                const normalizedURL = await normalizeMapperImage(url);
+                                setImageURL(normalizedURL);
                                 setIsDetecting(true);
                                 setDetectionProgress('Loading image...');
                                 console.log('⏳ Waiting 400ms for canvas to render...');
@@ -162,6 +193,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             setGrid(voidGrid(rows, cols));
                             setImageURL(null);
                             setPlayerStart(null);
+                            setGridOffsetX(0);
+                            setGridOffsetY(0);
+                            setGridFrameWidth(null);
+                            setGridFrameHeight(null);
                             localStorage.removeItem('levelmapper-import-level');
                             localStorage.removeItem('levelmapper_playerStart');
                             setImportLevelIndex(null);
@@ -207,8 +242,27 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 if (val === '') return;
                                 const idx = parseInt(val, 10);
                                 setImportLevelIndex(idx);
+                                setCompareLevelIndex(idx);
                                 // Load player start position when importing level
                                 const lvl = allLevels[idx];
+                                if (lvl?.grid) {
+                                    setRows(lvl.grid.length);
+                                    setCols(lvl.grid[0]?.length || 0);
+                                    setGrid(lvl.grid.map(row => [...row]));
+                                }
+                                if (lvl?.image) {
+                                    void normalizeMapperImage(lvl.image).then((normalizedURL) => {
+                                        setImageURL(normalizedURL);
+                                    });
+                                } else {
+                                    setImageURL(null);
+                                }
+                                setOverlayEnabled(Boolean(lvl?.image));
+                                setGridOffsetX(0);
+                                setGridOffsetY(0);
+                                setGridFrameWidth(null);
+                                setGridFrameHeight(null);
+                                setZoom(1);
                                 if (lvl?.playerStart) {
                                     setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
                                 }
@@ -220,6 +274,15 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             <option value="">Load level...</option>
                             {allLevels.map((lvl, idx) => (<option key={lvl.id} value={idx}>Level {lvl.id}</option>))}
                         </select>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={runCellDetection}
+                            disabled={!imageURL || isDetecting}
+                            title="Analyze the loaded image and fill the grid cells automatically"
+                        >
+                            Auto-detect Cells
+                        </Button>
                     </div>
 
                     {/* Theme Selector */}
@@ -269,6 +332,8 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         cols={cols}
                         gridOffsetX={gridOffsetX}
                         gridOffsetY={gridOffsetY}
+                        gridFrameWidth={gridFrameWidth}
+                        gridFrameHeight={gridFrameHeight}
                         zoom={zoom}
                         grid={grid}
                         setGrid={setGrid}

@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from './LevelMapperContext';
+import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -16,26 +17,42 @@ export const GridEditorPanel: React.FC = () => {
         showUnsavedBanner, isSaved: savedFlag, imageURL,
         canvasRef,
         playerStart, setPlayerStart,
+        zoom, setZoom,
+        gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
+        gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
+        replaceGridShape,
     } = useLevelMapper();
 
     const [isSettingPlayerStart, setIsSettingPlayerStart] = React.useState(false);
+    const [isDragMode, setIsDragMode] = React.useState(false);
+    const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const [cellWidth, setCellWidth] = React.useState(32);
     const [cellHeight, setCellHeight] = React.useState(32);
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
+    const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
     // Calculate cell size based on container width and image
     React.useEffect(() => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
+            const containerWidth = Math.max(320, containerRef.current.clientWidth - 32);
 
-            if (imageURL && overlayEnabled) {
-                // When overlay is enabled, load image and calculate from its dimensions
+            if (imageURL) {
                 const img = new Image();
                 img.onload = () => {
                     setImageNaturalSize({ width: img.width, height: img.height });
-                    const imageCellWidth = img.width / cols;
-                    const imageCellHeight = img.height / rows;
+                    const naturalGridWidth = gridFrameWidth ?? img.width;
+                    const naturalGridHeight = gridFrameHeight ?? img.height;
+                    const fitScale = containerWidth / img.width;
+                    const renderedWidth = Math.max(1, Math.floor(containerWidth * zoom));
+                    const renderedHeight = Math.max(1, Math.floor(img.height * fitScale * zoom));
+                    setDisplaySize({ width: renderedWidth, height: renderedHeight });
+                    const imageScaleX = renderedWidth / img.width;
+                    const imageScaleY = renderedHeight / img.height;
+                    const imageCellWidth = (naturalGridWidth * imageScaleX) / cols;
+                    const imageCellHeight = (naturalGridHeight * imageScaleY) / rows;
+
                     if (overlayStretch) {
                         setCellWidth(imageCellWidth);
                         setCellHeight(imageCellHeight);
@@ -49,34 +66,20 @@ export const GridEditorPanel: React.FC = () => {
                 img.src = imageURL;
             } else {
                 // Without overlay, fit to container width
-                const containerWidth = containerRef.current.offsetWidth - 40;
                 const calculatedCellSize = Math.floor(containerWidth / cols);
                 const clamped = Math.max(24, Math.min(calculatedCellSize, 80));
                 setCellWidth(clamped);
                 setCellHeight(clamped);
+                setDisplaySize({ width: clamped * cols, height: clamped * rows });
+                setImageNaturalSize(null);
             }
         };
 
         updateCellSize();
-    }, [imageURL, cols, rows, overlayEnabled, overlayStretch]);
-
-    // Resize observer to update cell size on container resize
-    React.useEffect(() => {
-        if (!containerRef.current) return;
-
-        const resizeObserver = new ResizeObserver(() => {
-            if (containerRef.current && !overlayEnabled) {
-                const containerWidth = containerRef.current.offsetWidth - 40;
-                const calculatedCellSize = Math.floor(containerWidth / cols);
-                const clamped = Math.max(24, Math.min(calculatedCellSize, 80));
-                setCellWidth(clamped);
-                setCellHeight(clamped);
-            }
-        });
-
+        const resizeObserver = new ResizeObserver(() => updateCellSize());
         resizeObserver.observe(containerRef.current);
         return () => resizeObserver.disconnect();
-    }, [cols, overlayEnabled]);
+    }, [imageURL, cols, rows, overlayStretch, zoom, gridFrameHeight, gridFrameWidth]);
 
     const differences = React.useMemo(() => {
         const ref = compareLevel?.grid || [];
@@ -91,8 +94,17 @@ export const GridEditorPanel: React.FC = () => {
 
     const isPaintingRef = React.useRef(false);
     const didPushUndoRef = React.useRef(false);
+    const dragStartRef = React.useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+
+    const overlayScaleX = imageNaturalSize ? displaySize.width / imageNaturalSize.width : 1;
+    const overlayScaleY = imageNaturalSize ? displaySize.height / imageNaturalSize.height : 1;
+    const displayOffsetX = gridOffsetX * overlayScaleX;
+    const displayOffsetY = gridOffsetY * overlayScaleY;
+    const naturalFrameWidth = gridFrameWidth ?? imageNaturalSize?.width ?? 0;
+    const naturalFrameHeight = gridFrameHeight ?? imageNaturalSize?.height ?? 0;
 
     const beginPaint = (r: number, c: number) => {
+        if (isDragMode) return;
         if (isSettingPlayerStart) {
             setPlayerStart({ x: c, y: r });
             setIsSettingPlayerStart(false);
@@ -107,6 +119,7 @@ export const GridEditorPanel: React.FC = () => {
         });
     };
     const continuePaint = (r: number, c: number) => {
+        if (isDragMode) return;
         if (isSettingPlayerStart) return;
         if (!isPaintingRef.current) return;
         setGrid(g => {
@@ -116,6 +129,105 @@ export const GridEditorPanel: React.FC = () => {
         });
     };
     const endPaint = () => { isPaintingRef.current = false; didPushUndoRef.current = false; };
+
+    const startGridDrag = (clientX: number, clientY: number) => {
+        if (!isDragMode || !imageURL) return;
+        setIsDraggingGrid(true);
+        dragStartRef.current = {
+            x: clientX,
+            y: clientY,
+            offsetX: gridOffsetX,
+            offsetY: gridOffsetY,
+        };
+    };
+
+    const moveGridDrag = (clientX: number, clientY: number) => {
+        if (!isDraggingGrid || !imageNaturalSize) return;
+
+        const deltaX = clientX - dragStartRef.current.x;
+        const deltaY = clientY - dragStartRef.current.y;
+        const nextOffsetX = dragStartRef.current.offsetX + deltaX / overlayScaleX;
+        const nextOffsetY = dragStartRef.current.offsetY + deltaY / overlayScaleY;
+
+        setGridOffsetX(Math.round(nextOffsetX));
+        setGridOffsetY(Math.round(nextOffsetY));
+    };
+
+    const endGridDrag = () => {
+        setIsDraggingGrid(false);
+    };
+
+    const learnCurrentMap = async (options?: { silent?: boolean }) => {
+        if (!imageURL || !imageNaturalSize) {
+            alert('Load an aligned image first');
+            return;
+        }
+
+        const learnedCount = await learnReferencesFromAlignedMap({
+            imageURL,
+            grid,
+            frame: {
+                offsetX: gridOffsetX,
+                offsetY: gridOffsetY,
+                width: naturalFrameWidth,
+                height: naturalFrameHeight,
+            },
+            levelLabel: importLevel ? `level-${importLevel.id}` : 'mapper-current',
+        });
+
+        if (!options?.silent) {
+            alert(`Learned ${learnedCount} reference cells from the current map`);
+        }
+    };
+
+    const cropCurrentMap = () => {
+        if (!imageNaturalSize) {
+            alert('Load an aligned image first');
+            return;
+        }
+
+        const result = cropOuterVoidCells({
+            grid,
+            keepMargin: 3,
+            playerStart,
+            frame: {
+                offsetX: gridOffsetX,
+                offsetY: gridOffsetY,
+                width: naturalFrameWidth,
+                height: naturalFrameHeight,
+            },
+        });
+
+        if (
+            result.removed.top === 0 &&
+            result.removed.right === 0 &&
+            result.removed.bottom === 0 &&
+            result.removed.left === 0
+        ) {
+            alert('No extra outer void cells to crop');
+            return;
+        }
+
+        pushUndo();
+        replaceGridShape(result.grid);
+        setPlayerStart(result.playerStart);
+        setGridOffsetX(Math.round(result.frame.offsetX));
+        setGridOffsetY(Math.round(result.frame.offsetY));
+        setGridFrameWidth(result.frame.width);
+        setGridFrameHeight(result.frame.height);
+        alert(`Cropped void border: top ${result.removed.top}, right ${result.removed.right}, bottom ${result.removed.bottom}, left ${result.removed.left}`);
+    };
+
+    const saveCurrentMap = async () => {
+        if (imageURL && imageNaturalSize) {
+            try {
+                await learnCurrentMap({ silent: true });
+            } catch (error) {
+                console.error('Failed to learn from current map before saving:', error);
+            }
+        }
+        saveChanges();
+    };
 
     // Get the import level info for display
     const importLevel = importLevelIndex !== null && importLevelIndex !== undefined ? allLevels[importLevelIndex] : null;
@@ -161,8 +273,63 @@ export const GridEditorPanel: React.FC = () => {
                     )}
                     {overlayEnabled && imageNaturalSize && (
                         <span className="text-xs text-muted-foreground">
-                            Image: {imageNaturalSize.width}×{imageNaturalSize.height}px | Cell: {cellWidth.toFixed(1)}×{cellHeight.toFixed(1)}px
+                            Image: {imageNaturalSize.width}×{imageNaturalSize.height}px | Frame: {Math.round(naturalFrameWidth)}×{Math.round(naturalFrameHeight)}px | View: {Math.round(displaySize.width)}×{Math.round(displaySize.height)}px | Cell: {cellWidth.toFixed(1)}×{cellHeight.toFixed(1)}px
                         </span>
+                    )}
+                    {imageURL && (
+                        <div className="flex items-center gap-1 text-xs">
+                            <span>Zoom</span>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setZoom(Math.max(0.5, Number((zoom - 0.1).toFixed(2))))}>-</Button>
+                            <input
+                                type="range"
+                                min={0.5}
+                                max={2}
+                                step={0.05}
+                                value={zoom}
+                                onChange={(e) => setZoom(Number(e.target.value))}
+                            />
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}>+</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setZoom(1)}>Fit</Button>
+                            <span>{Math.round(zoom * 100)}%</span>
+                        </div>
+                    )}
+                    {imageURL && overlayEnabled && (
+                        <div className="flex items-center gap-1 text-xs">
+                            <Button
+                                size="sm"
+                                variant={isDragMode ? "default" : "outline"}
+                                className="h-7 px-2"
+                                onClick={() => {
+                                    setIsDragMode((prev) => !prev);
+                                    setIsDraggingGrid(false);
+                                }}
+                                title="Drag the grid layer over the image overlay"
+                            >
+                                {isDragMode ? "Dragging Map" : "Drag Map"}
+                            </Button>
+                            <span>Offset {gridOffsetX}, {gridOffsetY}</span>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => {
+                                    setGridOffsetX(0);
+                                    setGridOffsetY(0);
+                                }}
+                            >
+                                Reset
+                            </Button>
+                        </div>
+                    )}
+                    {imageURL && overlayEnabled && (
+                        <>
+                            <Button size="sm" variant="outline" onClick={learnCurrentMap} title="Learn tile references from the corrected current map">
+                                Learn From Map
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={cropCurrentMap} title="Crop excess outer void cells while keeping a 3-cell margin">
+                                Crop Outer Void
+                            </Button>
+                        </>
                     )}
                     <Button size="sm" onClick={exportTS}>Copy JSON</Button>
                     <Button size="sm" variant="outline" onClick={() => { pushUndo(); setGrid(g => { const width = g[0]?.length || cols; return g.map(r => r.map(() => 5)); }); }}>All Void</Button>
@@ -194,20 +361,31 @@ export const GridEditorPanel: React.FC = () => {
                     <Button
                         size="sm"
                         variant="default"
-                        onClick={saveChanges}
+                        onClick={() => { void saveCurrentMap(); }}
                         disabled={isSaved}
                         className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Save Changes
+                        Save + Learn
                     </Button>
                     <Button size="sm" variant="outline" onClick={undo} disabled={!canUndo}>Undo</Button>
                     <Button size="sm" variant="outline" onClick={redo} disabled={!canRedo}>Redo</Button>
                 </div>
             </div>
             <div className="text-xs text-muted-foreground mt-1">Diff cells: {differences.length}</div>
+            {isDragMode && (
+                <div className="mt-1 text-xs text-amber-600">
+                    Drag anywhere on the grid to fine-tune alignment. Turn drag mode off to paint or click cells.
+                </div>
+            )}
             <div className="mt-2">
-                <div ref={containerRef} className="overflow-auto max-h-[70vh] border rounded flex items-center justify-center p-4">
-                    <div className="relative inline-block">
+                <div ref={containerRef} className="overflow-auto max-h-[70vh] border rounded p-3">
+                    <div
+                        className="relative mx-auto"
+                        style={{
+                            width: `${Math.max(displaySize.width, cols * cellWidth)}px`,
+                            minWidth: '100%',
+                        }}
+                    >
                         {overlayEnabled && imageURL && (
                             <img
                                 src={imageURL}
@@ -215,49 +393,91 @@ export const GridEditorPanel: React.FC = () => {
                                 className="absolute top-0 left-0 pointer-events-none"
                                 style={{
                                     opacity: overlayOpacity,
-                                    width: `${cols * cellWidth}px`,
-                                    height: `${rows * cellHeight}px`,
-                                    objectFit: overlayStretch ? 'fill' : 'contain',
+                                    width: `${displaySize.width}px`,
+                                    height: `${displaySize.height}px`,
+                                    objectFit: 'fill',
                                     zIndex: 15
                                 }}
                             />
                         )}
-                        <table className="text-xs relative z-10 border-collapse" style={{ tableLayout: 'fixed', borderSpacing: 0 }}
-                            onMouseUp={endPaint}
-                            onMouseLeave={endPaint}
+                        <div
+                            className="relative z-10"
+                            style={{
+                                width: `${cols * cellWidth}px`,
+                                transform: `translate(${displayOffsetX}px, ${displayOffsetY}px)`,
+                                transformOrigin: 'top left',
+                            }}
                         >
-                            <tbody>
-                                {grid.map((row, r) => (
-                                    <tr key={r}>
-                                        {row.map((cell, c) => {
-                                            const diff = compareLevel?.grid?.[r]?.[c] !== undefined && compareLevel.grid[r][c] !== cell;
-                                            const isPlayerStart = playerStart?.x === c && playerStart?.y === r;
-                                            return (
-                                                <td key={`${r}-${c}`} className="relative p-0" style={{ width: `${cellWidth}px`, height: `${cellHeight}px` }}>
-                                                    <button
-                                                        className="w-full h-full border relative"
-                                                        style={{
-                                                            background: TILE_TYPES.find(t => t.id === cell)?.color || '#000',
-                                                            width: `${cellWidth}px`,
-                                                            height: `${cellHeight}px`,
-                                                        }}
-                                                        onMouseDown={(e) => { e.preventDefault(); beginPaint(r, c); }}
-                                                        onMouseEnter={() => continuePaint(r, c)}
-                                                        title={isPlayerStart ? `Player Start (${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}` : `(${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}`}
-                                                    >
-                                                        {isPlayerStart && (
-                                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                                <div className="text-white font-bold text-lg drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">👤</div>
-                                                            </div>
-                                                        )}
-                                                    </button>
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                            <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', borderSpacing: 0 }}
+                                onMouseUp={endPaint}
+                                onMouseLeave={endPaint}
+                            >
+                                <tbody>
+                                    {grid.map((row, r) => (
+                                        <tr key={r}>
+                                            {row.map((cell, c) => {
+                                                const diff = compareLevel?.grid?.[r]?.[c] !== undefined && compareLevel.grid[r][c] !== cell;
+                                                const isPlayerStart = playerStart?.x === c && playerStart?.y === r;
+                                                return (
+                                                    <td key={`${r}-${c}`} className="relative p-0" style={{ width: `${cellWidth}px`, height: `${cellHeight}px` }}>
+                                                        <button
+                                                            className="w-full h-full border relative"
+                                                            style={{
+                                                                background: TILE_TYPES.find(t => t.id === cell)?.color || '#000',
+                                                                width: `${cellWidth}px`,
+                                                                height: `${cellHeight}px`,
+                                                            }}
+                                                            onMouseDown={(e) => { e.preventDefault(); beginPaint(r, c); }}
+                                                            onMouseEnter={() => continuePaint(r, c)}
+                                                            title={isPlayerStart ? `Player Start (${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}` : `(${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}`}
+                                                            disabled={isDragMode}
+                                                        >
+                                                            {isPlayerStart && (
+                                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                    <div className="text-white font-bold text-lg drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">👤</div>
+                                                                </div>
+                                                            )}
+                                                        </button>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {isDragMode && (
+                                <div
+                                    className="absolute inset-0 z-20"
+                                    style={{
+                                        cursor: isDraggingGrid ? 'grabbing' : 'grab',
+                                        touchAction: 'none',
+                                    }}
+                                    onPointerDown={(e) => {
+                                        e.preventDefault();
+                                        e.currentTarget.setPointerCapture(e.pointerId);
+                                        startGridDrag(e.clientX, e.clientY);
+                                    }}
+                                    onPointerMove={(e) => {
+                                        if (!isDraggingGrid) return;
+                                        e.preventDefault();
+                                        moveGridDrag(e.clientX, e.clientY);
+                                    }}
+                                    onPointerUp={(e) => {
+                                        e.preventDefault();
+                                        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                            e.currentTarget.releasePointerCapture(e.pointerId);
+                                        }
+                                        endGridDrag();
+                                    }}
+                                    onPointerCancel={(e) => {
+                                        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                            e.currentTarget.releasePointerCapture(e.pointerId);
+                                        }
+                                        endGridDrag();
+                                    }}
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

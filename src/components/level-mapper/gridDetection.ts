@@ -4,10 +4,10 @@ export const detectGridLines = (
     useDetectCurrentCounts: boolean,
     currentRows: number,
     currentCols: number
-): { rows: number; cols: number } | null => {
+): { rows: number; cols: number; offsetX: number; offsetY: number } | null => {
     console.log('🔍 detectGridLines() started');
-    
-    const ctx = canvas.getContext('2d');
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) {
         console.error('❌ No context in detectGrid');
         return null;
@@ -19,68 +19,99 @@ export const detectGridLines = (
     const imgData = ctx.getImageData(0, 0, width, height).data;
     console.log(`✓ ImageData retrieved: ${imgData.length} bytes`);
 
-    const horizontalScores: number[] = [];
-    const verticalScores: number[] = [];
-    const threshold = 180;
+    const step = 2;
+    const verticalEdge: number[] = Array(width).fill(0);
+    const horizontalEdge: number[] = Array(height).fill(0);
 
-    // Scan horizontal lines
-    console.log('🔍 Scanning horizontal lines...');
-    for (let y = 0; y < height; y++) {
-        let score = 0;
-        for (let x = 0; x < width; x += 2) {
-            const i = (y * width + x) * 4;
-            const r = imgData[i], g = imgData[i + 1], b = imgData[i + 2];
-            if (r > threshold && g > threshold && b > threshold) score++;
-        }
-        horizontalScores[y] = score;
-    }
-
-    // Scan vertical lines
-    console.log('🔍 Scanning vertical lines...');
-    for (let x = 0; x < width; x++) {
-        let score = 0;
-        for (let y = 0; y < height; y += 2) {
-            const i = (y * width + x) * 4;
-            const r = imgData[i], g = imgData[i + 1], b = imgData[i + 2];
-            if (r > threshold && g > threshold && b > threshold) score++;
-        }
-        verticalScores[x] = score;
-    }
-
-    // Find peaks in scores
-    const findPeaks = (scores: number[], minSpacing: number) => {
-        const peaks: { pos: number; score: number }[] = [];
-        for (let i = 1; i < scores.length - 1; i++) {
-            if (scores[i] > scores[i - 1] && scores[i] > scores[i + 1]) {
-                peaks.push({ pos: i, score: scores[i] });
-            }
-        }
-        peaks.sort((a, b) => b.score - a.score);
-        
-        const filtered: number[] = [];
-        for (const peak of peaks) {
-            const tooClose = filtered.some(pos => Math.abs(pos - peak.pos) < minSpacing);
-            if (!tooClose) filtered.push(peak.pos);
-        }
-        filtered.sort((a, b) => a - b);
-        return filtered;
+    const luma = (idx: number) => {
+        const r = imgData[idx];
+        const g = imgData[idx + 1];
+        const b = imgData[idx + 2];
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     };
 
-    const minSpacing = 15;
-    const hLines = findPeaks(horizontalScores, minSpacing);
-    const vLines = findPeaks(verticalScores, minSpacing);
-
-    console.log(`📊 Detected lines: ${hLines.length} horizontal, ${vLines.length} vertical`);
-
-    if (hLines.length >= 2 && vLines.length >= 2) {
-        const detectedRows = hLines.length - 1;
-        const detectedCols = vLines.length - 1;
-        const finalRows = useDetectCurrentCounts ? currentRows : detectedRows;
-        const finalCols = useDetectCurrentCounts ? currentCols : detectedCols;
-        console.log(`✓ Grid detected: ${finalRows}x${finalCols}`);
-        return { rows: finalRows, cols: finalCols };
+    console.log('🔍 Scanning edge strengths...');
+    for (let y = 0; y < height; y += step) {
+        for (let x = 1; x < width; x += step) {
+            const i = (y * width + x) * 4;
+            const j = (y * width + (x - 1)) * 4;
+            verticalEdge[x] += Math.abs(luma(i) - luma(j));
+        }
     }
 
-    console.error('❌ Grid detection failed:', { hLines: hLines.length, vLines: vLines.length });
-    return null;
+    for (let x = 0; x < width; x += step) {
+        for (let y = 1; y < height; y += step) {
+            const i = (y * width + x) * 4;
+            const j = ((y - 1) * width + x) * 4;
+            horizontalEdge[y] += Math.abs(luma(i) - luma(j));
+        }
+    }
+
+    const smooth = (arr: number[], windowSize = 5) => {
+        const half = Math.floor(windowSize / 2);
+        return arr.map((_, i) => {
+            let sum = 0;
+            let count = 0;
+            for (let k = -half; k <= half; k++) {
+                const idx = i + k;
+                if (idx >= 0 && idx < arr.length) {
+                    sum += arr[idx];
+                    count++;
+                }
+            }
+            return count ? sum / count : 0;
+        });
+    };
+
+    const vSmooth = smooth(verticalEdge, 7);
+    const hSmooth = smooth(horizontalEdge, 7);
+
+    const findBestSpacing = (arr: number[], sizeHint?: number) => {
+        const minSize = Math.max(8, Math.floor(Math.min(width, height) / 80));
+        const maxSize = Math.min(180, Math.floor(Math.min(width, height) / 2));
+        const sizes = sizeHint ? [Math.max(minSize, Math.min(maxSize, Math.round(sizeHint)))] : Array.from({ length: maxSize - minSize + 1 }, (_, i) => i + minSize);
+
+        let bestSize = 0;
+        let bestOffset = 0;
+        let bestScore = -Infinity;
+
+        for (const size of sizes) {
+            for (let offset = 0; offset < size; offset += 1) {
+                let score = 0;
+                let count = 0;
+                for (let pos = offset; pos < arr.length; pos += size) {
+                    score += arr[pos];
+                    count++;
+                }
+                if (count > 0) {
+                    const normalized = score / count;
+                    if (normalized > bestScore) {
+                        bestScore = normalized;
+                        bestSize = size;
+                        bestOffset = offset;
+                    }
+                }
+            }
+        }
+        return { size: bestSize, offset: bestOffset, score: bestScore };
+    };
+
+    const hintCols = currentCols > 0 ? width / currentCols : undefined;
+    const hintRows = currentRows > 0 ? height / currentRows : undefined;
+
+    const xSpacing = findBestSpacing(vSmooth, useDetectCurrentCounts ? hintCols : undefined);
+    const ySpacing = findBestSpacing(hSmooth, useDetectCurrentCounts ? hintRows : undefined);
+
+    if (xSpacing.size <= 0 || ySpacing.size <= 0) {
+        console.error('❌ Grid detection failed: no spacing candidates');
+        return null;
+    }
+
+    const detectedCols = Math.max(2, Math.round(width / xSpacing.size));
+    const detectedRows = Math.max(2, Math.round(height / ySpacing.size));
+    const finalCols = useDetectCurrentCounts ? currentCols : detectedCols;
+    const finalRows = useDetectCurrentCounts ? currentRows : detectedRows;
+
+    console.log(`✓ Grid detected: ${finalRows}x${finalCols} (cell ~ ${xSpacing.size}px × ${ySpacing.size}px)`);
+    return { rows: finalRows, cols: finalCols, offsetX: xSpacing.offset, offsetY: ySpacing.offset };
 };

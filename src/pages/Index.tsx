@@ -17,7 +17,7 @@ const Index = () => {
 
         return (
             <div
-                className="min-h-screen p-2 md:p-4 relative overflow-hidden"
+                className="relative h-dvh w-screen overflow-hidden"
                 style={{
                     backgroundImage: `url(${bgImage})`,
                     backgroundSize: 'cover',
@@ -38,7 +38,7 @@ const Index = () => {
                 <div className="absolute inset-0 bg-blue-900/40 scanline" />
 
                 {/* Game content - prioritize playable area */}
-                <div className="relative z-10 min-h-screen">
+                <div className="relative z-10 h-full w-full">
                     {showMapper ? <LevelMapper /> : <PuzzleGame />}
                 </div>
 

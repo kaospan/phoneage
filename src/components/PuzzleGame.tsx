@@ -51,6 +51,7 @@ interface SimulationState {
   players: Map<PlayerId, SimPlayer>;
   arrowGlides: ArrowGlide[];
   cavePos: Position;
+  tick: number;
 }
 
 type LevelData = ReturnType<typeof getAllLevels>[number];
@@ -157,7 +158,8 @@ export const PuzzleGame = () => {
         breakableRockStates: new Map(),
         players,
         arrowGlides: [],
-        cavePos: cave
+        cavePos: cave,
+        tick: 0
       };
 
       setRenderGrid(gridCopy.map(row => [...row]));
@@ -166,6 +168,8 @@ export const PuzzleGame = () => {
       setMoves(0);
       setIsComplete(false);
       setSelectedArrow(null);
+      setSelectorPos({ ...level.playerStart });
+      setIsSelectorActive(false);
       setCameraOffset({ x: 0, z: 0 });
       setActiveLevel(level);
     }, [buildBaseGrid]);
@@ -200,7 +204,8 @@ export const PuzzleGame = () => {
           });
 
           await seedDefaultReferences();
-          const sources = currentLevel.sources?.length ? currentLevel.sources : (currentLevel.image ? [currentLevel.image] : []);
+          const primarySource = currentLevel.image ?? currentLevel.sources?.[0];
+          const sources = primarySource ? [primarySource] : [];
           if (sources.length === 0) {
             throw new Error('No image sources available for this level');
           }
@@ -366,9 +371,11 @@ export const PuzzleGame = () => {
       };
     }, []);
 
+    const PLAYER_GLIDE_DIV = 3;
     const stepSimulation = useCallback(() => {
       const sim = simRef.current;
       if (!sim) return;
+      sim.tick += 1;
 
       let gridDirty = false;
       let playersDirty = false;
@@ -421,6 +428,9 @@ export const PuzzleGame = () => {
       // Advance player glides and inputs
       sim.players.forEach((player, id) => {
         if (player.isGliding && player.glidePath && player.glideIndex < player.glidePath.length) {
+          if (sim.tick % PLAYER_GLIDE_DIV !== 0) {
+            return;
+          }
           const stepPos = player.glidePath[player.glideIndex];
           const prevPos = player.glideIndex === 0 ? player.pos : player.glidePath[player.glideIndex - 1];
           if (player.glideIndex === 0) {
@@ -588,21 +598,115 @@ export const PuzzleGame = () => {
     );
     const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
 
-    // Keyboard controls (player movement)
+    const resetSelectorToPlayer = useCallback(() => {
+      setIsSelectorActive(false);
+      setSelectorPos({ x: localPlayerPos.x, y: localPlayerPos.y });
+    }, [localPlayerPos.x, localPlayerPos.y]);
+
+    const moveKeyboardSelector = useCallback((dx: number, dy: number) => {
+      if (renderGrid.length === 0 || renderGrid[0]?.length === 0) return;
+
+      setIsSelectorActive(true);
+      setSelectorPos((prev) => {
+        const origin = prev ?? { x: localPlayerPos.x, y: localPlayerPos.y };
+        const nextX = Math.max(0, Math.min(renderGrid[0].length - 1, origin.x + dx));
+        const nextY = Math.max(0, Math.min(renderGrid.length - 1, origin.y + dy));
+        return { x: nextX, y: nextY };
+      });
+    }, [localPlayerPos.x, localPlayerPos.y, renderGrid]);
+
+    const toggleKeyboardSelection = useCallback(() => {
+      if (isBuilding || isComplete || localPlayer?.isGliding) return;
+
+      if (selectedArrow) {
+        enqueueInput({ type: "deselect" });
+        resetSelectorToPlayer();
+        flashPlayerHighlight();
+        toast.info("Arrow deselected - control returned to player");
+        return;
+      }
+
+      const currentSelector = selectorPos ?? { x: localPlayerPos.x, y: localPlayerPos.y };
+      const isOnPlayer =
+        currentSelector.x === localPlayerPos.x && currentSelector.y === localPlayerPos.y;
+
+      if (!isSelectorActive) {
+        setIsSelectorActive(true);
+        setSelectorPos({ x: localPlayerPos.x, y: localPlayerPos.y });
+        return;
+      }
+
+      const cell = renderGrid[currentSelector.y]?.[currentSelector.x];
+      if (cell !== undefined && isArrowCell(cell) && !isOnPlayer) {
+        enqueueInput({ type: "select", x: currentSelector.x, y: currentSelector.y });
+        setIsSelectorActive(false);
+        setSelectorPos({ x: currentSelector.x, y: currentSelector.y });
+        toast.info("Arrow selected! Use arrow keys to move it.");
+        return;
+      }
+
+      if (isOnPlayer) {
+        resetSelectorToPlayer();
+        return;
+      }
+
+      toast.info("Move the selector onto an arrow block, then press Space or Enter.");
+    }, [
+      enqueueInput,
+      flashPlayerHighlight,
+      isBuilding,
+      isComplete,
+      isSelectorActive,
+      localPlayer?.isGliding,
+      localPlayerPos.x,
+      localPlayerPos.y,
+      renderGrid,
+      resetSelectorToPlayer,
+      selectedArrow,
+      selectorPos
+    ]);
+
+    useEffect(() => {
+      if (selectedArrow) {
+        setIsSelectorActive(false);
+        setSelectorPos({ x: selectedArrow.x, y: selectedArrow.y });
+        return;
+      }
+
+      if (!isSelectorActive) {
+        setSelectorPos({ x: localPlayerPos.x, y: localPlayerPos.y });
+      }
+    }, [isSelectorActive, localPlayerPos.x, localPlayerPos.y, selectedArrow]);
+
+    // Keyboard controls (player movement + keyboard arrow selection)
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
         if (isBuilding) return;
         const key = e.key;
-        // Space/Enter: deselect arrow (manual)
-        if (key === ' ' || key === 'Enter') {
+
+        if (e.repeat && (key === ' ' || key === 'Enter')) {
           e.preventDefault();
-          if (selectedArrow) {
-            enqueueInput({ type: "deselect" });
-            flashPlayerHighlight();
-            toast.info("Arrow deselected - control returned to player");
-          }
           return;
         }
+
+        const isUp = key === 'ArrowUp' || key === 'w' || key === 'W';
+        const isDown = key === 'ArrowDown' || key === 's' || key === 'S';
+        const isLeft = key === 'ArrowLeft' || key === 'a' || key === 'A';
+        const isRight = key === 'ArrowRight' || key === 'd' || key === 'D';
+
+        if (key === ' ' || key === 'Enter') {
+          e.preventDefault();
+          toggleKeyboardSelection();
+          return;
+        }
+
+        if (isSelectorActive && !selectedArrow) {
+          if (isUp) { e.preventDefault(); moveKeyboardSelector(0, -1); return; }
+          if (isDown) { e.preventDefault(); moveKeyboardSelector(0, 1); return; }
+          if (isLeft) { e.preventDefault(); moveKeyboardSelector(-1, 0); return; }
+          if (isRight) { e.preventDefault(); moveKeyboardSelector(1, 0); return; }
+        }
+
         // Normal gameplay controls
         switch (key) {
           case 'ArrowUp': case 'w': case 'W': e.preventDefault(); queueMove(0, -1); break;
@@ -616,7 +720,15 @@ export const PuzzleGame = () => {
       };
       window.addEventListener('keydown', handleKeyPress);
       return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [enqueueInput, currentLevelIndex, isBuilding, queueMove, flashPlayerHighlight, selectedArrow]);
+    }, [
+      currentLevelIndex,
+      isBuilding,
+      isSelectorActive,
+      moveKeyboardSelector,
+      queueMove,
+      selectedArrow,
+      toggleKeyboardSelection
+    ]);
 
     const resetLevel = () => {
       const levelToReset = activeLevel ?? currentLevel;
@@ -704,7 +816,7 @@ export const PuzzleGame = () => {
     const levelBackground = currentLevel?.image;
 
     return (
-      <div className={`w-full h-screen flex flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'} relative`}>
+      <div className={`relative flex h-full w-full flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'}`}>
         {levelBackground && (
           <div
             className="absolute inset-0 opacity-30 bg-cover bg-center blur-[2px]"
@@ -712,9 +824,6 @@ export const PuzzleGame = () => {
           />
         )}
         <div className="absolute inset-0 bg-black/30" />
-        {isSelectorActive && (
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] pointer-events-none z-10 transition-opacity" />
-        )}
         {isBuilding && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 text-white">
             <div className="bg-black/70 border border-white/20 rounded-lg px-6 py-4 text-center">
@@ -822,7 +931,7 @@ export const PuzzleGame = () => {
           </div>
         </div>
         <div
-          className="w-full flex-1 relative my-2 z-20"
+          className="relative z-20 w-full min-h-0 flex-1"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -837,7 +946,7 @@ export const PuzzleGame = () => {
             grid={renderGrid}
             cavePos={renderCavePos}
             selectedArrow={selectedArrow}
-            selectorPos={isSelectorActive ? selectorPos : null}
+            selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
             cameraOffset={cameraOffset}
             viewMode={viewMode}
             theme={currentLevel.theme}
@@ -853,10 +962,13 @@ export const PuzzleGame = () => {
                 const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
                 if (isSameArrow) {
                   enqueueInput({ type: "deselect" });
+                  resetSelectorToPlayer();
                   flashPlayerHighlight();
                   toast.info("Arrow deselected - control returned to player");
                 } else {
                   enqueueInput({ type: "select", x, y });
+                  setIsSelectorActive(false);
+                  setSelectorPos({ x, y });
                   toast.info("Arrow selected! Use controls to move it remotely.");
                 }
               }
@@ -864,6 +976,7 @@ export const PuzzleGame = () => {
             onCancelSelection={() => {
               if (selectedArrow) {
                 enqueueInput({ type: "deselect" });
+                resetSelectorToPlayer();
                 toast.info("Arrow deselected");
               }
             }}
@@ -881,6 +994,13 @@ export const PuzzleGame = () => {
         </div>
         {selectedArrow && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
+        )}
+        {isComplete && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
+            <div className="rounded-2xl border border-white/20 bg-black/75 px-10 py-6 text-center shadow-2xl backdrop-blur-sm">
+              <div className="text-4xl font-black tracking-[0.18em] text-white sm:text-5xl">LEVEL COMPLETE!</div>
+            </div>
+          </div>
         )}
         {isComplete && (
           <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 z-50 flex gap-1 md:bottom-auto md:right-1 md:left-auto md:top-8">

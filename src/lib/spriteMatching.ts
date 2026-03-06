@@ -6,9 +6,10 @@ export interface CellReference {
     imageData: string; // base64
     timestamp: number;
     gridPosition?: { row: number; col: number };
+    sourceName?: string;
 }
 
-const STORAGE_KEY = 'stone-age-cell-references';
+export const STORAGE_KEY = 'stone-age-cell-references';
 
 export const getCellReferences = (): CellReference[] => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -22,6 +23,32 @@ export const getCellReferences = (): CellReference[] => {
 
 export const getReferencesForType = (tileType: number): CellReference[] => {
     return getCellReferences().filter(ref => ref.tileType === tileType);
+};
+
+export const saveCellReferences = (references: CellReference[]): void => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(references));
+};
+
+export const appendCellReferences = (
+    references: CellReference[],
+    maxPerType: number = 24
+): CellReference[] => {
+    const existing = getCellReferences();
+    const merged = [...existing, ...references].sort((a, b) => a.timestamp - b.timestamp);
+    const byType = new Map<number, CellReference[]>();
+
+    merged.forEach((reference) => {
+        const list = byType.get(reference.tileType) ?? [];
+        list.push(reference);
+        byType.set(reference.tileType, list);
+    });
+
+    const trimmed = Array.from(byType.values()).flatMap((list) =>
+        list.slice(Math.max(0, list.length - maxPerType))
+    );
+
+    saveCellReferences(trimmed);
+    return trimmed;
 };
 
 /**
@@ -137,6 +164,49 @@ export const extractCellImageData = (
     }
 };
 
+const transformImageData = (
+    source: ImageData,
+    targetWidth: number,
+    targetHeight: number,
+    rotation: 0 | 90 | 180 | 270
+): ImageData | null => {
+    const sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = source.width;
+    sourceCanvas.height = source.height;
+    const sourceContext = sourceCanvas.getContext('2d');
+    if (!sourceContext) return null;
+    sourceContext.putImageData(source, 0, 0);
+
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = rotation === 90 || rotation === 270 ? source.height : source.width;
+    tempCanvas.height = rotation === 90 || rotation === 270 ? source.width : source.height;
+    const tempContext = tempCanvas.getContext('2d');
+    if (!tempContext) return null;
+
+    tempContext.save();
+    if (rotation === 90) {
+        tempContext.translate(tempCanvas.width, 0);
+        tempContext.rotate(Math.PI / 2);
+    } else if (rotation === 180) {
+        tempContext.translate(tempCanvas.width, tempCanvas.height);
+        tempContext.rotate(Math.PI);
+    } else if (rotation === 270) {
+        tempContext.translate(0, tempCanvas.height);
+        tempContext.rotate(-Math.PI / 2);
+    }
+    tempContext.drawImage(sourceCanvas, 0, 0);
+    tempContext.restore();
+
+    const outputCanvas = document.createElement('canvas');
+    outputCanvas.width = targetWidth;
+    outputCanvas.height = targetHeight;
+    const outputContext = outputCanvas.getContext('2d');
+    if (!outputContext) return null;
+
+    outputContext.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
+    return outputContext.getImageData(0, 0, targetWidth, targetHeight);
+};
+
 /**
  * Find best matching reference sprite for a cell
  * Returns the tile type of the best match, or null if no good match found
@@ -173,30 +243,19 @@ export const findBestMatch = async (
     for (const ref of references) {
         const refImageData = await loadImageData(ref.imageData);
         if (!refImageData) continue;
-
-        // Resize cellImageData to match reference if needed
-        let comparisonImageData = cellImageData;
-        if (cellImageData.width !== refImageData.width || cellImageData.height !== refImageData.height) {
-            // Create a temporary canvas to resize
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = refImageData.width;
-            tempCanvas.height = refImageData.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (!tempCtx) continue;
-
-            // Draw original to temp canvas (scaled)
-            const sourceCanvas = document.createElement('canvas');
-            sourceCanvas.width = cellImageData.width;
-            sourceCanvas.height = cellImageData.height;
-            const sourceCtx = sourceCanvas.getContext('2d');
-            if (!sourceCtx) continue;
-            sourceCtx.putImageData(cellImageData, 0, 0);
-
-            tempCtx.drawImage(sourceCanvas, 0, 0, refImageData.width, refImageData.height);
-            comparisonImageData = tempCtx.getImageData(0, 0, refImageData.width, refImageData.height);
+        const rotationVariants: Array<0 | 90 | 180 | 270> = [0, 90, 180, 270];
+        let similarity = 0;
+        for (const rotation of rotationVariants) {
+            const comparisonImageData = transformImageData(
+                cellImageData,
+                refImageData.width,
+                refImageData.height,
+                rotation
+            );
+            if (!comparisonImageData) continue;
+            const rotatedSimilarity = await compareImages(comparisonImageData, refImageData);
+            similarity = Math.max(similarity, rotatedSimilarity);
         }
-
-        const similarity = await compareImages(comparisonImageData, refImageData);
 
         console.log(`  Comparing with type ${ref.tileType}: similarity ${(similarity * 100).toFixed(1)}%`);
 
@@ -240,26 +299,19 @@ export const findBestMatchFromReferences = async (
     let bestMatch: { tileType: number; similarity: number } | null = null;
 
     for (const ref of references) {
-        let comparisonImageData = cellImageData;
-        if (cellImageData.width !== ref.imageData.width || cellImageData.height !== ref.imageData.height) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = ref.imageData.width;
-            tempCanvas.height = ref.imageData.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (!tempCtx) continue;
-
-            const sourceCanvas = document.createElement('canvas');
-            sourceCanvas.width = cellImageData.width;
-            sourceCanvas.height = cellImageData.height;
-            const sourceCtx = sourceCanvas.getContext('2d');
-            if (!sourceCtx) continue;
-            sourceCtx.putImageData(cellImageData, 0, 0);
-
-            tempCtx.drawImage(sourceCanvas, 0, 0, ref.imageData.width, ref.imageData.height);
-            comparisonImageData = tempCtx.getImageData(0, 0, ref.imageData.width, ref.imageData.height);
+        const rotationVariants: Array<0 | 90 | 180 | 270> = [0, 90, 180, 270];
+        let similarity = 0;
+        for (const rotation of rotationVariants) {
+            const comparisonImageData = transformImageData(
+                cellImageData,
+                ref.imageData.width,
+                ref.imageData.height,
+                rotation
+            );
+            if (!comparisonImageData) continue;
+            const rotatedSimilarity = await compareImages(comparisonImageData, ref.imageData);
+            similarity = Math.max(similarity, rotatedSimilarity);
         }
-
-        const similarity = await compareImages(comparisonImageData, ref.imageData);
         const threshold = Math.max(minSimilarity, adaptiveThreshold);
 
         if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {

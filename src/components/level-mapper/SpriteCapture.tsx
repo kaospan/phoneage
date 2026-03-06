@@ -15,6 +15,8 @@ interface SpriteCaptureProps {
     cols: number;
     gridOffsetX: number;
     gridOffsetY: number;
+    gridFrameWidth: number | null;
+    gridFrameHeight: number | null;
     zoom: number;
     grid?: number[][];
     setGrid?: (grid: number[][]) => void;
@@ -34,6 +36,8 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
     cols,
     gridOffsetX,
     gridOffsetY,
+    gridFrameWidth,
+    gridFrameHeight,
     zoom,
     grid,
     setGrid,
@@ -118,7 +122,7 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         };
 
         detectAllCells();
-    }, [imageURL, rows, cols, gridOffsetX, gridOffsetY]); // Run when image or grid params change
+    }, [imageURL, rows, cols, gridOffsetX, gridOffsetY, gridFrameWidth, gridFrameHeight]); // Run when image or grid params change
 
     // Calculate cell dimensions
     const getCellDimensions = () => {
@@ -127,8 +131,10 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         const img = new Image();
         img.src = imageURL;
 
-        const cellWidth = img.width / cols;
-        const cellHeight = img.height / rows;
+        const frameWidth = gridFrameWidth ?? img.width;
+        const frameHeight = gridFrameHeight ?? img.height;
+        const cellWidth = frameWidth / cols;
+        const cellHeight = frameHeight / rows;
 
         return { cellWidth, cellHeight, imgWidth: img.width, imgHeight: img.height };
     };

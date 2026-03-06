@@ -28,6 +28,7 @@ import {
     useSaveImportLevel
 } from './mapperHooks';
 import { buildReferenceMatcher } from '@/lib/spriteMatching';
+import { normalizeMapperImage } from './imageNormalization';
 
 console.log('📦 LevelMapperContext.tsx loading...');
 
@@ -49,6 +50,8 @@ interface LevelMapperContextValue {
     zoom: number; setZoom: (z: number) => void;
     gridOffsetX: number; setGridOffsetX: (n: number) => void;
     gridOffsetY: number; setGridOffsetY: (n: number) => void;
+    gridFrameWidth: number | null; setGridFrameWidth: (n: number | null) => void;
+    gridFrameHeight: number | null; setGridFrameHeight: (n: number | null) => void;
     showGrid: boolean; setShowGrid: (b: boolean) => void;
     // Overlay
     overlayEnabled: boolean; setOverlayEnabled: (b: boolean) => void;
@@ -75,6 +78,7 @@ interface LevelMapperContextValue {
     exportTS: () => void;
     // Editing helpers
     pushUndo: () => void;
+    replaceGridShape: (nextGrid: number[][]) => void;
 }
 
 const LevelMapperContext = createContext<LevelMapperContextValue | undefined>(undefined);
@@ -85,6 +89,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
         const [gridOffsetX, setGridOffsetX] = useState(0);
         const [gridOffsetY, setGridOffsetY] = useState(0);
+        const [gridFrameWidth, setGridFrameWidth] = useState<number | null>(null);
+        const [gridFrameHeight, setGridFrameHeight] = useState<number | null>(null);
         const [zoom, setZoom] = useState(1);
         console.log('✓ Basic state initialized');
 
@@ -136,7 +142,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         // Auto-load level on startup if one was previously imported
         useEffect(() => {
-            if (importLevelIndex !== null && !imageURL) {
+            if (importLevelIndex !== null) {
                 const lvl = allLevels[importLevelIndex];
                 if (lvl?.grid) {
                     // Check if grid is not all void (avoid loading empty/void grids)
@@ -146,6 +152,18 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setRows(lvl.grid.length);
                         setCols(lvl.grid[0]?.length || 0);
                         setGrid(lvl.grid.map(row => [...row]));
+                        if (lvl.image) {
+                            void normalizeMapperImage(lvl.image).then((normalizedURL) => {
+                                setImageURL(normalizedURL);
+                            });
+                        } else {
+                            setImageURL(null);
+                        }
+                        setOverlayEnabled(Boolean(lvl.image));
+                        setGridOffsetX(0);
+                        setGridOffsetY(0);
+                        setGridFrameWidth(null);
+                        setGridFrameHeight(null);
                         // Load player start position if it exists
                         if (lvl.playerStart) {
                             setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
@@ -211,6 +229,31 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setRows(result.rows);
                 setCols(result.cols);
                 setGrid(emptyGrid(result.rows, result.cols));
+                const applyGridBounds = async () => {
+                    if (!imageURL) {
+                        setGridOffsetX(result.offsetX);
+                        setGridOffsetY(result.offsetY);
+                        setGridFrameWidth(null);
+                        setGridFrameHeight(null);
+                        return;
+                    }
+
+                    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = () => reject(new Error('Failed to load image for grid detection'));
+                        img.src = imageURL;
+                    });
+
+                    const scaleX = canvas.width > 0 ? image.width / canvas.width : 1;
+                    const scaleY = canvas.height > 0 ? image.height / canvas.height : 1;
+                    setGridOffsetX(Math.round(result.offsetX * scaleX));
+                    setGridOffsetY(Math.round(result.offsetY * scaleY));
+                    setGridFrameWidth(image.width);
+                    setGridFrameHeight(image.height);
+                };
+
+                void applyGridBounds();
             } else {
                 console.error('❌ Grid detection failed');
                 alert('Grid detection failed (not enough line candidates).');
@@ -219,28 +262,37 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         const detectCells = async () => {
             console.log('🔍 detectCells() called - OPTIMIZED VERSION');
-            const canvas = canvasRef.current;
-            if (!canvas || !imageURL) {
-                console.error('❌ No canvas or image in detectCells');
+            if (!imageURL) {
+                console.error('❌ No image in detectCells');
                 alert('Please load an image first');
                 return;
             }
 
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (!ctx) {
-                console.error('❌ No canvas context');
-                return;
-            }
-
             try {
-                const cw = canvas.width;
-                const ch = canvas.height;
-                console.log(`📊 Canvas size: ${cw}x${ch}, Grid: ${rows}x${cols}`);
+                const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error('Failed to load image for cell detection'));
+                    img.src = imageURL;
+                });
 
-                // Get image data once
-                const imageData = ctx.getImageData(0, 0, cw, ch);
+                const sampleCanvas = document.createElement('canvas');
+                sampleCanvas.width = image.width;
+                sampleCanvas.height = image.height;
+                const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) {
+                    console.error('❌ No offscreen canvas context');
+                    return;
+                }
+
+                ctx.drawImage(image, 0, 0);
+                const imageData = ctx.getImageData(0, 0, image.width, image.height);
                 const data = imageData.data;
-                console.log('✓ Image data retrieved:', data.length, 'bytes');
+                const frameWidth = gridFrameWidth ?? image.width;
+                const frameHeight = gridFrameHeight ?? image.height;
+                const cellWidth = frameWidth / cols;
+                const cellHeight = frameHeight / rows;
+                console.log(`📊 Image size: ${image.width}x${image.height}, Grid: ${rows}x${cols}, Frame: ${frameWidth}x${frameHeight}`);
 
                 const newGrid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
                 const totalCells = rows * cols;
@@ -263,7 +315,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     // Sample every 2nd pixel for speed
                     for (let y = y0; y < y1; y += 2) {
                         for (let x = x0; x < x1; x += 2) {
-                            const idx = (y * cw + x) * 4;
+                            const idx = (y * image.width + x) * 4;
                             const r = data[idx];
                             const g = data[idx + 1];
                             const b = data[idx + 2];
@@ -299,10 +351,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                 const r = Math.floor(cellIndex / cols);
                                 const c = cellIndex % cols;
 
-                                const x0 = Math.max(0, Math.min(cw - 1, Math.floor((c * cw) / cols + gridOffsetX)));
-                                const x1 = Math.max(0, Math.min(cw, Math.floor(((c + 1) * cw) / cols + gridOffsetX)));
-                                const y0 = Math.max(0, Math.min(ch - 1, Math.floor((r * ch) / rows + gridOffsetY)));
-                                const y1 = Math.max(0, Math.min(ch, Math.floor(((r + 1) * ch) / rows + gridOffsetY)));
+                                const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(gridOffsetX + c * cellWidth)));
+                                const x1 = Math.max(0, Math.min(image.width, Math.floor(gridOffsetX + (c + 1) * cellWidth)));
+                                const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(gridOffsetY + r * cellHeight)));
+                                const y1 = Math.max(0, Math.min(image.height, Math.floor(gridOffsetY + (r + 1) * cellHeight)));
 
                                 newGrid[r][c] = await classifyCell(x0, y0, x1, y1);
                                 processedCells++;
@@ -365,9 +417,19 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         const pushUndo = () => { setUndoStack(s => [...s, grid.map(r => [...r])]); setRedoStack([]); setIsSaved(false); };
+        const replaceGridShape = (nextGrid: number[][]) => {
+            const nextRows = nextGrid.length;
+            const nextCols = nextGrid[0]?.length ?? 0;
+            skipAutoResizeRef.current = true;
+            prevSizeRef.current = { rows: nextRows, cols: nextCols };
+            setRows(nextRows);
+            setCols(nextCols);
+            setGrid(nextGrid.map((row) => [...row]));
+            setIsSaved(false);
+        };
 
         console.log('✓ Creating context value...');
-        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, exportTS, pushUndo };
+        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, exportTS, pushUndo, replaceGridShape };
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;

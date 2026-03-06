@@ -57,7 +57,8 @@ export const runBulkBuild = async (options: BulkBuildOptions = {}): Promise<Bulk
 
   for (let index = 0; index < levels.length; index += 1) {
     const level = levels[index];
-    const sources = level.sources?.length ? level.sources : (level.image ? [level.image] : []);
+    const primarySource = level.image ?? level.sources?.[0];
+    const sources = primarySource ? [primarySource] : [];
 
     if (sources.length === 0) {
       result.skipped += 1;

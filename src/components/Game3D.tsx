@@ -26,6 +26,19 @@ interface Game3DProps {
   playerFlashCount?: number;
 }
 
+const darkenHexColor = (hex: string, amount = 0.35) => {
+  const normalized = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
+
+  const mix = (channel: string) => {
+    const value = parseInt(channel, 16);
+    const darkened = Math.max(0, Math.round(value * (1 - amount)));
+    return darkened.toString(16).padStart(2, '0');
+  };
+
+  return `#${mix(normalized.slice(0, 2))}${mix(normalized.slice(2, 4))}${mix(normalized.slice(4, 6))}`;
+};
+
 
 // Directional Arrow Block - raft platform
 const ArrowTile = ({
@@ -45,6 +58,8 @@ const ArrowTile = ({
   onClick?: (e: any) => void;
   noiseMap?: THREE.Texture | null;
 }) => {
+  const baseColor = darkenHexColor(color, 0.38);
+  const accentColor = darkenHexColor(color, 0.12);
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
@@ -125,15 +140,15 @@ const ArrowTile = ({
       >
         <boxGeometry args={[0.9, 0.15, 0.9]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={isSelected ? 0.5 : 0.2}
-          roughness={0.6}
-          metalness={0.3}
+          color={baseColor}
+          emissive={baseColor}
+          emissiveIntensity={isSelected ? 0.4 : 0.14}
+          roughness={0.55}
+          metalness={0.38}
           roughnessMap={noiseMap ?? undefined}
           bumpMap={noiseMap ?? undefined}
-          bumpScale={0.03}
-          envMapIntensity={0.5}
+          bumpScale={0.05}
+          envMapIntensity={0.65}
         />
       </mesh>
 
@@ -148,11 +163,11 @@ const ArrowTile = ({
       >
         <coneGeometry args={[0.35, 0.6, 3]} />
         <meshStandardMaterial
-          color="#FF6B6B"
-          emissive="#FF4444"
-          emissiveIntensity={0.6}
-          roughness={0.3}
-          metalness={0.2}
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.45}
+          roughness={0.24}
+          metalness={0.28}
           envMapIntensity={0.6}
         />
       </mesh>
@@ -204,6 +219,8 @@ const BidirectionalArrowTile = ({
   onClick?: (e: any) => void;
   noiseMap?: THREE.Texture | null;
 }) => {
+  const baseColor = darkenHexColor(color, 0.38);
+  const accentColor = darkenHexColor(color, 0.1);
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
@@ -277,15 +294,15 @@ const BidirectionalArrowTile = ({
       >
         <boxGeometry args={[0.9, 0.15, 0.9]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={isSelected ? 0.5 : 0.2}
-          roughness={0.6}
-          metalness={0.3}
+          color={baseColor}
+          emissive={baseColor}
+          emissiveIntensity={isSelected ? 0.4 : 0.14}
+          roughness={0.55}
+          metalness={0.38}
           roughnessMap={noiseMap ?? undefined}
           bumpMap={noiseMap ?? undefined}
-          bumpScale={0.03}
-          envMapIntensity={0.5}
+          bumpScale={0.05}
+          envMapIntensity={0.65}
         />
       </mesh>
 
@@ -300,11 +317,11 @@ const BidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.25, 0.45, 3]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.7}
-          roughness={0.3}
-          metalness={0.2}
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.5}
+          roughness={0.24}
+          metalness={0.28}
           envMapIntensity={0.6}
         />
       </mesh>
@@ -320,11 +337,11 @@ const BidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.25, 0.45, 3]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.7}
-          roughness={0.3}
-          metalness={0.2}
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.5}
+          roughness={0.24}
+          metalness={0.28}
           envMapIntensity={0.6}
         />
       </mesh>
@@ -374,6 +391,8 @@ const OmnidirectionalArrowTile = ({
   onClick?: (e: any) => void;
   noiseMap?: THREE.Texture | null;
 }) => {
+  const baseColor = darkenHexColor(color, 0.38);
+  const accentColor = darkenHexColor(color, 0.08);
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
@@ -446,15 +465,15 @@ const OmnidirectionalArrowTile = ({
       >
         <boxGeometry args={[0.9, 0.15, 0.9]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={isSelected ? 0.5 : 0.2}
-          roughness={0.6}
-          metalness={0.3}
+          color={baseColor}
+          emissive={baseColor}
+          emissiveIntensity={isSelected ? 0.4 : 0.14}
+          roughness={0.55}
+          metalness={0.38}
           roughnessMap={noiseMap ?? undefined}
           bumpMap={noiseMap ?? undefined}
-          bumpScale={0.03}
-          envMapIntensity={0.5}
+          bumpScale={0.05}
+          envMapIntensity={0.65}
         />
       </mesh>
 
@@ -470,11 +489,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.7}
-          roughness={0.3}
-          metalness={0.2}
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.5}
+          roughness={0.24}
+          metalness={0.28}
           envMapIntensity={0.6}
         />
       </mesh>
@@ -490,11 +509,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.7}
-          roughness={0.3}
-          metalness={0.2}
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.5}
+          roughness={0.24}
+          metalness={0.28}
           envMapIntensity={0.6}
         />
       </mesh>
@@ -510,11 +529,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.7}
-          roughness={0.3}
-          metalness={0.2}
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.5}
+          roughness={0.24}
+          metalness={0.28}
           envMapIntensity={0.6}
         />
       </mesh>
@@ -530,11 +549,11 @@ const OmnidirectionalArrowTile = ({
       >
         <coneGeometry args={[0.2, 0.35, 3]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.7}
-          roughness={0.3}
-          metalness={0.2}
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.5}
+          roughness={0.24}
+          metalness={0.28}
           envMapIntensity={0.6}
         />
       </mesh>
@@ -571,75 +590,113 @@ const OmnidirectionalArrowTile = ({
 // Cave entrance - detailed
 const Cave = ({
   position,
-  color,
   noiseMap
 }: {
   position: [number, number, number];
-  color: string;
   noiseMap?: THREE.Texture | null;
 }) => {
+  const mossColor = "#3d8a4b";
+  const rockColor = "#295235";
+  const deepRockColor = "#1b3423";
+  const glowColor = "#7be495";
+
   return (
     <group position={position}>
-      {/* Base platform */}
-      <mesh position={[0, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.55, 0.6, 0.15, 32]} />
+      {/* Mossy cave floor */}
+      <mesh position={[0, 0.03, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.68, 0.75, 0.12, 32]} />
         <meshStandardMaterial
-          color={color}
-          roughness={0.8}
+          color={mossColor}
+          emissive={rockColor}
+          emissiveIntensity={0.08}
+          roughness={0.9}
           metalness={0.1}
           roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.05}
+        />
+      </mesh>
+
+      {/* Main cave body */}
+      <mesh position={[0, 0.28, 0.04]} castShadow receiveShadow>
+        <sphereGeometry args={[0.58, 28, 20, 0, Math.PI * 2, 0, Math.PI * 0.82]} />
+        <meshStandardMaterial
+          color={rockColor}
+          emissive={deepRockColor}
+          emissiveIntensity={0.18}
+          roughness={0.78}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.08}
+          envMapIntensity={0.25}
+        />
+      </mesh>
+
+      {/* Cave mouth outer rim */}
+      <mesh position={[0, 0.25, 0.38]} castShadow receiveShadow>
+        <torusGeometry args={[0.24, 0.11, 16, 28]} />
+        <meshStandardMaterial
+          color={mossColor}
+          emissive={rockColor}
+          emissiveIntensity={0.1}
+          roughness={0.82}
           bumpMap={noiseMap ?? undefined}
           bumpScale={0.04}
         />
       </mesh>
 
-      {/* Main cave structure */}
-      <mesh position={[0, 0.25, 0]} castShadow>
-        <cylinderGeometry args={[0.5, 0.5, 0.4, 32]} />
+      {/* Cave opening */}
+      <mesh position={[0, 0.22, 0.44]}>
+        <cylinderGeometry args={[0.17, 0.22, 0.14, 24]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.5}
-          roughness={0.6}
-          roughnessMap={noiseMap ?? undefined}
-          bumpMap={noiseMap ?? undefined}
-          bumpScale={0.05}
-          envMapIntensity={0.35}
+          color="#050805"
+          emissive="#000000"
+          roughness={1}
+          metalness={0}
         />
       </mesh>
 
-      {/* Decorative rocks around entrance */}
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const angle = (i / 6) * Math.PI * 2;
-        const x = Math.cos(angle) * 0.45;
-        const z = Math.sin(angle) * 0.45;
+      {/* Moss cap */}
+      <mesh position={[0, 0.54, 0.02]} castShadow>
+        <sphereGeometry args={[0.28, 20, 16]} />
+        <meshStandardMaterial
+          color="#56a765"
+          emissive={mossColor}
+          emissiveIntensity={0.12}
+          roughness={0.95}
+        />
+      </mesh>
+
+      {/* Supporting side rocks */}
+      {[-1, 1].map((side) => {
+        const x = side * 0.34;
         return (
-          <mesh key={i} position={[x, 0.1, z]} castShadow>
-            <dodecahedronGeometry args={[0.1 + Math.random() * 0.05, 1]} />
+          <mesh key={side} position={[x, 0.16, 0.14]} rotation={[0.15, side * 0.4, 0]} castShadow>
+            <dodecahedronGeometry args={[0.2, 1]} />
             <meshStandardMaterial
-              color={color}
-              roughness={0.9}
-              emissive={color}
-              emissiveIntensity={0.2}
+              color={deepRockColor}
+              roughness={0.94}
+              emissive={rockColor}
+              emissiveIntensity={0.08}
               roughnessMap={noiseMap ?? undefined}
             />
           </mesh>
         );
       })}
 
-      {/* Glow effects */}
-      <pointLight position={[0, 0.5, 0]} intensity={2} color={color} distance={4} />
-      <pointLight position={[0, 0.2, 0]} intensity={1.2} color={color} distance={2} />
+      {/* Entrance glow */}
+      <pointLight position={[0, 0.38, 0.36]} intensity={1.5} color={glowColor} distance={3.5} />
+      <pointLight position={[0, 0.2, 0.1]} intensity={0.7} color={mossColor} distance={2} />
 
-      {/* Particles effect ring */}
-      <mesh position={[0, 0.35, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.35, 0.45, 32]} />
+      {/* Entrance marker */}
+      <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.44, 0.56, 32]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.8}
+          color={glowColor}
+          emissive={glowColor}
+          emissiveIntensity={0.45}
           transparent
-          opacity={0.5}
+          opacity={0.7}
         />
       </mesh>
     </group>
@@ -1019,9 +1076,9 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]}>
         <planeGeometry args={[gridWidth + 40, gridHeight + 40]} />
         <meshStandardMaterial
-          color="#0a1929"
-          emissive="#1a2a3a"
-          emissiveIntensity={0.3}
+          color="#6fb6ff"
+          emissive="#3a7ecb"
+          emissiveIntensity={0.35}
           roughness={0.9}
         />
       </mesh>
@@ -1327,8 +1384,8 @@ export const Game3D = ({
     floorMaterial.needsUpdate = true;
 
     waterMaterial.color = new THREE.Color('#1e90ff');
-    waterMaterial.transparent = true;
-    waterMaterial.opacity = 0.82;
+    waterMaterial.transparent = false;
+    waterMaterial.opacity = 1;
     waterMaterial.roughness = 0.08;
     waterMaterial.metalness = 0.6;
     waterMaterial.emissive = new THREE.Color('#2aa9ff');
@@ -1369,8 +1426,8 @@ export const Game3D = ({
     breakableMaterial.emissiveIntensity = 0.4;
     breakableMaterial.roughness = 0.5;
     breakableMaterial.metalness = 0.4;
-    breakableMaterial.transparent = true;
-    breakableMaterial.opacity = 0.95;
+    breakableMaterial.transparent = false;
+    breakableMaterial.opacity = 1;
     breakableMaterial.roughnessMap = noiseTexture ?? null;
     breakableMaterial.bumpMap = noiseTexture ?? null;
     breakableMaterial.bumpScale = 0.1;
@@ -1379,7 +1436,7 @@ export const Game3D = ({
   }, [themeColors, noiseTexture, floorMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
 
   return (
-    <div className="w-full h-full bg-gradient-to-b from-blue-950 via-slate-900 to-blue-950 overflow-hidden touch-none relative z-30">
+    <div className="w-full h-full bg-sky-300 overflow-hidden touch-none relative z-30">
       <Canvas
         shadows
         dpr={[1, 2]}
@@ -1392,7 +1449,6 @@ export const Game3D = ({
         onClick={() => onCancelSelection?.()}
       >
         <EnvironmentSetup envMap={environmentMap} />
-        <PostProcessing />
         <WaterAnimator material={waterMaterial} />
         <PerspectiveCamera
           makeDefault
@@ -1409,9 +1465,6 @@ export const Game3D = ({
           cameraOffset={cameraOffset}
           viewMode={viewMode}
         />
-
-        {/* Scene mood */}
-        <fog attach="fog" args={['#0a141f', 10, 40]} />
 
         {/* Enhanced Lighting with theme-based ambient */}
         <ambientLight intensity={0.35} color={themeColors.ambient} />
@@ -1549,7 +1602,7 @@ export const Game3D = ({
         })}
 
         {/* Cave */}
-        <Cave position={[cavePos.x + offsetX, 0.05, cavePos.y + offsetZ]} color={themeColors.cave} noiseMap={noiseTexture} />
+        <Cave position={[cavePos.x + offsetX, 0.05, cavePos.y + offsetZ]} noiseMap={noiseTexture} />
 
         {/* Players */}
         {players.map((player) => {
@@ -1570,7 +1623,7 @@ export const Game3D = ({
         {/* Ground plane - lighter for better visibility */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
           <planeGeometry args={[gridWidth + 10, gridHeight + 10]} />
-          <meshStandardMaterial color="#3a3a3a" emissive="#1a1a1a" />
+          <meshStandardMaterial color="#87ceeb" emissive="#4fa3d9" />
         </mesh>
 
         {/* Selector highlight (white ring) when active and not currently selecting an arrow */}
@@ -1659,7 +1712,6 @@ const WaterAnimator = ({ material }: { material: THREE.MeshStandardMaterial }) =
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     material.emissiveIntensity = 0.18 + Math.sin(t * 2.2) * 0.06;
-    material.opacity = 0.78 + Math.sin(t * 1.6) * 0.04;
   });
 
   return null;

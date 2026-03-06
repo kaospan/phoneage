@@ -10,7 +10,7 @@ interface Game2DProps {
   export const Game2D = ({ grid, playerPos, cavePos, selectedArrow, onArrowClick, onCancelSelection }: Game2DProps) => {
     const getCellDisplay = (cell: number, isPlayer: boolean, isCave: boolean) => {
       if (isPlayer) return "🦖";
-      if (isCave) return "🏠";
+      if (isCave) return "🕳️";
       switch (cell) {
         case 0: return ""; // land
         case 1: return "🔥"; // fire wall
@@ -40,9 +40,9 @@ interface Game2DProps {
         case 10:
         case 11:
         case 12:
-        case 13: return "bg-amber-600"; // arrows
+        case 13: return "bg-amber-800"; // arrows
         case 4: return "bg-blue-400"; // water
-        case 5: return "bg-stone-900"; // void
+        case 5: return "bg-sky-300"; // void
         case 6: return "bg-cyan-400"; // breakable rock
         default: return "bg-stone-300";
       }
@@ -50,11 +50,11 @@ interface Game2DProps {
   
     return (
       <div 
-        className="w-full h-[600px] flex flex-col justify-center items-center p-4 bg-gradient-to-br from-sky-200 via-blue-100 to-purple-200 rounded-lg"
+        className="w-full h-[600px] flex flex-col justify-center items-center p-4 bg-sky-100 rounded-lg"
         onClick={() => onCancelSelection?.()}
       >
         <div className="text-2xl font-bold text-purple-800 mb-4">2D TOP VIEW</div>
-        <div className="inline-grid gap-1 bg-gradient-to-br from-stone-800 to-stone-900 p-4 rounded-xl shadow-2xl border-4 border-purple-400">
+        <div className="inline-grid gap-1 bg-stone-900 p-4 rounded-xl shadow-2xl border-4 border-purple-400">
           {grid.map((row, y) => (
             <div key={y} className="flex gap-1">
               {row.map((cell, x) => {
@@ -62,7 +62,7 @@ interface Game2DProps {
                 const isCave = cavePos.x === x && cavePos.y === y;
                 const isArrow = (cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13;
                 const isSelectedArrow = selectedArrow?.x === x && selectedArrow?.y === y;
-                const cellColor = getCellColor(cell);
+                const cellColor = isCave ? "bg-emerald-700" : getCellColor(cell);
                 
                 return (
                   <div
@@ -71,7 +71,7 @@ interface Game2DProps {
                       w-16 h-16 flex items-center justify-center text-3xl font-bold
                       ${cellColor}
                       ${isPlayer ? "ring-4 ring-green-400 animate-pulse shadow-lg shadow-green-400" : ""}
-                      ${isCave ? "ring-4 ring-yellow-400 shadow-lg shadow-yellow-400" : ""}
+                      ${isCave ? "ring-4 ring-emerald-300 shadow-lg shadow-emerald-400 text-black" : ""}
                       ${isSelectedArrow ? "ring-4 ring-white shadow-lg shadow-white animate-pulse" : ""}
                       transition-all duration-200 rounded-lg
                       border-2 border-stone-700 shadow-md
