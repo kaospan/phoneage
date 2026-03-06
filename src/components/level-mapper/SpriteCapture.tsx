@@ -303,8 +303,8 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         <div className="space-y-4">
             {/* Scanning status */}
             {isScanning && (
-                <Alert className="bg-blue-50 border-blue-200">
-                    <AlertDescription className="font-semibold">
+                <Alert className="border-sky-500/40 bg-slate-950/85 text-sky-50">
+                    <AlertDescription className="font-semibold text-sky-50">
                         🔍 Scanning and detecting all cells...
                     </AlertDescription>
                 </Alert>

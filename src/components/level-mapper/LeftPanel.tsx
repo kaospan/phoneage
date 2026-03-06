@@ -219,11 +219,11 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 <TabsContent value="editor" className="space-y-2 relative">
                     {/* Loading Overlay */}
                     {isDetecting && (
-                        <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded">
-                            <div className="bg-card border rounded-lg p-6 shadow-lg">
+                        <div className="absolute inset-0 z-50 flex items-center justify-center rounded bg-slate-950/70 backdrop-blur-sm">
+                            <div className="rounded-lg border border-sky-500/30 bg-slate-900/90 p-6 text-sky-50 shadow-lg">
                                 <div className="flex flex-col items-center gap-3">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                    <div className="text-sm font-medium">{detectionProgress}</div>
+                                    <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-300"></div>
+                                    <div className="text-sm font-medium text-sky-50">{detectionProgress}</div>
                                 </div>
                             </div>
                         </div>
