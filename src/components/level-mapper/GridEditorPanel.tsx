@@ -26,6 +26,7 @@ export const GridEditorPanel: React.FC = () => {
     const [isSettingPlayerStart, setIsSettingPlayerStart] = React.useState(false);
     const [isDragMode, setIsDragMode] = React.useState(false);
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
+    const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
     const containerRef = useRef<HTMLDivElement>(null);
     const [cellWidth, setCellWidth] = React.useState(32);
     const [cellHeight, setCellHeight] = React.useState(32);
@@ -220,7 +221,7 @@ export const GridEditorPanel: React.FC = () => {
 
         const result = cropOuterVoidCells({
             grid,
-            keepMargin: 3,
+            keepMargin: Math.max(0, Math.min(5, Math.round(outerVoidMargin))),
             playerStart,
             frame: {
                 offsetX: gridOffsetX,
@@ -247,7 +248,7 @@ export const GridEditorPanel: React.FC = () => {
         setGridOffsetY(Math.round(result.frame.offsetY));
         setGridFrameWidth(result.frame.width);
         setGridFrameHeight(result.frame.height);
-        alert(`Cropped void border: top ${result.removed.top}, right ${result.removed.right}, bottom ${result.removed.bottom}, left ${result.removed.left}`);
+        alert(`Cropped void border (kept ${Math.max(0, Math.min(5, Math.round(outerVoidMargin)))}-cell margin): top ${result.removed.top}, right ${result.removed.right}, bottom ${result.removed.bottom}, left ${result.removed.left}`);
     };
 
     const saveCurrentMap = async () => {
@@ -421,9 +422,22 @@ export const GridEditorPanel: React.FC = () => {
                             <Button size="sm" variant="outline" onClick={learnCurrentMap} title="Learn tile references from the corrected current map">
                                 Learn From Map
                             </Button>
-                            <Button size="sm" variant="outline" onClick={cropCurrentMap} title="Crop excess outer void cells while keeping a 3-cell margin">
+                            <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-1 text-xs text-muted-foreground" title="How many void cells to keep around the outside when cropping">
+                                    <span>Void margin</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={5}
+                                        value={outerVoidMargin}
+                                        onChange={(e) => setOuterVoidMargin(Number(e.target.value))}
+                                        className="h-7 w-14 rounded border bg-background px-1 text-foreground"
+                                    />
+                                </label>
+                                <Button size="sm" variant="outline" onClick={cropCurrentMap} title="Crop excess outer void cells while keeping the selected void margin">
                                 Crop Outer Void
                             </Button>
+                            </div>
                         </>
                     )}
                     <Button size="sm" onClick={exportTS}>Copy JSON</Button>
