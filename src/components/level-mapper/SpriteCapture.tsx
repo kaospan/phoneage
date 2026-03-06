@@ -58,6 +58,9 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
     const [matcher, setMatcher] = useState<((cellImageData: ImageData) => Promise<number | null>) | null>(null);
     const [referenceRevision, setReferenceRevision] = useState(0);
     const latestGridRef = React.useRef<number[][] | undefined>(grid);
+    const scanAbortRef = React.useRef<{ abort: boolean } | null>(null);
+    const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
+    const [autoScanEnabled, setAutoScanEnabled] = useState(false);
 
     useEffect(() => {
         latestGridRef.current = grid;
@@ -162,48 +165,68 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         return { x0, y0, x1, y1 };
     };
 
-    useEffect(() => {
-        if (!imageURL || !tempCanvas || !setGrid || !grid || !matcher || !imageSize) return;
-        let cancelled = false;
+    const cancelScan = () => {
+        if (scanAbortRef.current) {
+            scanAbortRef.current.abort = true;
+        }
+        setIsScanning(false);
+        setScanProgress(null);
+    };
 
-        const detectAllCells = async () => {
-            setIsScanning(true);
+    const scanAllCells = async () => {
+        if (!imageURL || !tempCanvas || !setGrid || !matcher || !imageSize) return;
+        if (isScanning) return;
 
-            const dims = getCellDimensions();
-            if (!dims) {
-                setIsScanning(false);
-                return;
-            }
+        const dims = getCellDimensions();
+        if (!dims) return;
 
-            const { cellWidth, cellHeight } = dims;
-            const currentGrid = latestGridRef.current;
-            if (!currentGrid) {
-                setIsScanning(false);
-                return;
-            }
+        const currentGrid = latestGridRef.current;
+        if (!currentGrid) return;
 
-            const newGrid = currentGrid.map(row => [...row]);
-            const detectedMap = new Map<string, number>();
-            let matchCount = 0;
+        const { cellWidth, cellHeight } = dims;
+        const totalCells = rows * cols;
+        const abort = { abort: false };
+        scanAbortRef.current = abort;
 
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    const bounds = getCellBounds(r, c, cellWidth, cellHeight);
-                    if (!bounds) continue;
+        setIsScanning(true);
+        setScanProgress({ done: 0, total: totalCells });
 
-                    const cellImageData = extractCellImageData(tempCanvas, bounds.x0, bounds.y0, bounds.x1, bounds.y1);
-                    if (cellImageData) {
-                        const matchedType = await matcher(cellImageData);
-                        if (matchedType !== null) {
-                            newGrid[r][c] = matchedType;
-                            detectedMap.set(`${r},${c}`, matchedType);
-                            matchCount++;
-                        }
+        const newGrid = currentGrid.map(row => [...row]);
+        const detectedMap = new Map<string, number>();
+        let matchCount = 0;
+
+        const batchSize = 18; // keep UI responsive
+        let done = 0;
+
+        for (let start = 0; start < totalCells; start += batchSize) {
+            if (abort.abort) break;
+            const end = Math.min(totalCells, start + batchSize);
+
+            for (let idx = start; idx < end; idx++) {
+                if (abort.abort) break;
+                const r = Math.floor(idx / cols);
+                const c = idx % cols;
+                const bounds = getCellBounds(r, c, cellWidth, cellHeight);
+                if (!bounds) { done++; continue; }
+
+                const cellImageData = extractCellImageData(tempCanvas, bounds.x0, bounds.y0, bounds.x1, bounds.y1);
+                if (cellImageData) {
+                    const matchedType = await matcher(cellImageData);
+                    if (matchedType !== null) {
+                        newGrid[r][c] = matchedType;
+                        detectedMap.set(`${r},${c}`, matchedType);
+                        matchCount++;
                     }
                 }
+
+                done++;
             }
 
-            if (cancelled) return;
+            setScanProgress({ done, total: totalCells });
+            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        }
+
+        if (!abort.abort) {
             setDetectedGrid(detectedMap);
             const hasGridChanges = newGrid.some((row, rowIndex) =>
                 row.some((cell, colIndex) => cell !== currentGrid[rowIndex]?.[colIndex])
@@ -211,16 +234,22 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
             if (hasGridChanges) {
                 setGrid(newGrid);
             }
-            setIsScanning(false);
+            console.log(`✓ Scanned and mapped ${matchCount}/${rows * cols} cells`);
+        }
 
-            console.log(`✓ Auto-detected and mapped ${matchCount}/${rows * cols} cells`);
-        };
+        setIsScanning(false);
+        setScanProgress(null);
+        scanAbortRef.current = null;
+    };
 
-        void detectAllCells();
-        return () => {
-            cancelled = true;
-        };
-    }, [imageURL, rows, cols, gridOffsetX, gridOffsetY, gridFrameWidth, gridFrameHeight, matcher, imageSize, referenceRevision, setGrid]);
+    useEffect(() => {
+        if (!autoScanEnabled) return;
+        if (!imageURL || !tempCanvas || !setGrid || !grid || !matcher || !imageSize) return;
+        void scanAllCells();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoScanEnabled, imageURL, rows, cols, gridOffsetX, gridOffsetY, gridFrameWidth, gridFrameHeight, matcher, imageSize, referenceRevision]);
+
+    useEffect(() => () => cancelScan(), []);
 
     const handleCellHover = async (row: number, col: number) => {
         if (!imageURL || !tempCanvas || !matcher) return;
@@ -360,10 +389,45 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
             {isScanning && (
                 <Alert className="border-sky-500/40 bg-slate-950/85 text-sky-50">
                     <AlertDescription className="font-semibold text-sky-50">
-                        🔍 Scanning and detecting all cells...
+                        🔍 Scanning cells...{scanProgress ? ` ${scanProgress.done}/${scanProgress.total}` : ''}
                     </AlertDescription>
                 </Alert>
             )}
+
+            <Card className="p-3 bg-muted/30">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="text-xs text-muted-foreground">
+                        Scan is optional. Hover or click to detect a single cell. Full scan can be slow if you have many reference sprites.
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 text-xs select-none">
+                            <input
+                                type="checkbox"
+                                checked={autoScanEnabled}
+                                onChange={(e) => setAutoScanEnabled(e.target.checked)}
+                                disabled={!matcher || !imageSize}
+                            />
+                            Auto
+                        </label>
+                        <button
+                            className="px-3 py-1.5 rounded border bg-background text-xs hover:bg-muted disabled:opacity-50"
+                            onClick={() => void scanAllCells()}
+                            disabled={isScanning || !matcher || !imageSize}
+                            title="Scan all cells using saved reference sprites"
+                        >
+                            Scan
+                        </button>
+                        <button
+                            className="px-3 py-1.5 rounded border bg-background text-xs hover:bg-muted disabled:opacity-50"
+                            onClick={cancelScan}
+                            disabled={!isScanning}
+                            title="Cancel scan"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </Card>
 
             {/* Type Selector and Filter */}
             <div className="space-y-2">
