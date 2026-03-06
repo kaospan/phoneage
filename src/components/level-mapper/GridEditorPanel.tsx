@@ -190,6 +190,21 @@ export const GridEditorPanel: React.FC = () => {
         setIsDraggingGrid(false);
     };
 
+    const onWheelZoom = (e: React.WheelEvent) => {
+        if (!imageURL || !overlayEnabled) return;
+        // Keep normal scrolling unless you're actively aligning.
+        if (!isDragMode && !e.altKey && !e.ctrlKey && !e.metaKey) return;
+        if (!e.deltaY) return;
+        e.preventDefault();
+
+        const sensitivity = e.shiftKey ? 0.003 : 0.0015;
+        const factor = Math.exp(-e.deltaY * sensitivity);
+        setZoom((prev) => {
+            const next = Math.max(0.5, Math.min(2, Number((prev * factor).toFixed(2))));
+            return next;
+        });
+    };
+
     const learnCurrentMap = async (options?: { silent?: boolean }) => {
         if (!imageURL || !imageNaturalSize) {
             alert('Load an aligned image first');
@@ -483,11 +498,15 @@ export const GridEditorPanel: React.FC = () => {
             <div className="text-xs text-muted-foreground mt-1">Diff cells: {differences.length}</div>
             {isDragMode && (
                 <div className="mt-1 text-xs text-amber-600">
-                    Drag anywhere on the grid to fine-tune alignment. Turn drag mode off to paint or click cells.
+                    Drag anywhere on the grid to fine-tune alignment. Use mouse wheel to zoom while dragging. Turn drag mode off to paint or click cells.
                 </div>
             )}
             <div className="mt-2">
-                <div ref={containerRef} className="overflow-auto max-h-[70vh] border rounded p-3">
+                <div
+                    ref={containerRef}
+                    className="overflow-auto max-h-[70vh] border rounded p-3"
+                    onWheel={onWheelZoom}
+                >
                     <div
                         className="relative mx-auto"
                         style={{
