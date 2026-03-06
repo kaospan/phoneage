@@ -33,7 +33,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
-        theme, setTheme, setIsSaved
+        theme, setTheme, setIsSaved,
+        addRowTop, addRowBottom, addColumnLeft, addColumnRight,
+        removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
+        setLoadedSnapshot, resetToLoadedSnapshot
     } = useLevelMapper();
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -259,6 +262,29 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         <input className="w-16 px-2 py-1 rounded border bg-background" type="number" min={1} value={rows} onChange={(e) => setRows(parseInt(e.target.value || '1', 10))} />
                         <label className="text-xs text-muted-foreground">Cols</label>
                         <input className="w-16 px-2 py-1 rounded border bg-background" type="number" min={1} value={cols} onChange={(e) => setCols(parseInt(e.target.value || '1', 10))} />
+                        <div className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
+                            <span className="text-xs text-muted-foreground">Rows</span>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowTop} title="Add a void row at the top">+Top</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowBottom} title="Add a void row at the bottom">+Bot</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeRowTop} title="Remove the top row">-Top</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeRowBottom} title="Remove the bottom row">-Bot</Button>
+                        </div>
+                        <div className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
+                            <span className="text-xs text-muted-foreground">Cols</span>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addColumnLeft} title="Add a void column on the left">+L</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addColumnRight} title="Add a void column on the right">+R</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeColumnLeft} title="Remove the left column">-L</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeColumnRight} title="Remove the right column">-R</Button>
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={resetToLoadedSnapshot}
+                            disabled={importLevelIndex === null}
+                            title="Snap back to the layout as it was loaded"
+                        >
+                            Reset Layout
+                        </Button>
                         <label className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1 text-xs">
                             <input
                                 type="checkbox"
@@ -282,13 +308,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                     setRows(lvl.grid.length);
                                     setCols(lvl.grid[0]?.length || 0);
                                     setGrid(getEditableGridForLevel(lvl.grid));
-                                    if (lvl.image) {
-                                        const normalizedURL = await normalizeMapperImage(lvl.image);
-                                        setImageURL(normalizedURL);
-                                    } else {
-                                        setImageURL(null);
-                                    }
-                                    setOverlayEnabled(Boolean(lvl?.image));
+                                    const normalizedURL = lvl.image ? await normalizeMapperImage(lvl.image) : null;
+                                    setImageURL(normalizedURL);
+                                    setOverlayEnabled(Boolean(normalizedURL));
                                     setGridOffsetX(0);
                                     setGridOffsetY(0);
                                     setGridFrameWidth(null);
@@ -300,6 +322,20 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                     if (lvl.theme) {
                                         setTheme(lvl.theme);
                                     }
+                                    setLoadedSnapshot({
+                                        grid: lvl.grid,
+                                        playerStart: lvl.playerStart ? { x: lvl.playerStart.x, y: lvl.playerStart.y } : null,
+                                        theme: lvl.theme,
+                                        imageURL: normalizedURL,
+                                        overlayEnabled: Boolean(normalizedURL),
+                                        overlayOpacity: 0.5,
+                                        overlayStretch: true,
+                                        zoom: 1,
+                                        gridOffsetX: 0,
+                                        gridOffsetY: 0,
+                                        gridFrameWidth: null,
+                                        gridFrameHeight: null,
+                                    });
                                 })();
                             }}
                         >
@@ -318,6 +354,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
                         Grid detection now auto-detects row and column counts from the screenshot. Enable `Lock current rows/cols` only when you want detection constrained to the values above.
+                    </div>
+                    <div className="mt-1 rounded border border-amber-300/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
+                        Resizing rows/cols or adding/removing edges changes the level layout. Use `Reset Layout` to snap back before saving if you resized by accident.
                     </div>
 
                     {/* Theme Selector */}

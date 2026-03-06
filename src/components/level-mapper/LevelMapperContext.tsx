@@ -76,12 +76,28 @@ interface LevelMapperContextValue {
     addMultipleRows: (side: 'top' | 'bottom', count: number) => void;
     // Shape helpers
     addColumnLeft: () => void; addColumnRight: () => void; addRowTop: () => void; addRowBottom: () => void;
+    removeColumnLeft: () => void; removeColumnRight: () => void; removeRowTop: () => void; removeRowBottom: () => void;
     // Export
     exportTS: () => void;
     jsonInput: string;
     setJsonInput: (json: string) => void;
     syncJsonInputToGrid: () => void;
     applyJsonInput: () => void;
+    setLoadedSnapshot: (snapshot: {
+        grid: number[][];
+        playerStart: { x: number; y: number } | null;
+        theme: ColorTheme | undefined;
+        imageURL: string | null;
+        overlayEnabled: boolean;
+        overlayOpacity: number;
+        overlayStretch: boolean;
+        zoom: number;
+        gridOffsetX: number;
+        gridOffsetY: number;
+        gridFrameWidth: number | null;
+        gridFrameHeight: number | null;
+    }) => void;
+    resetToLoadedSnapshot: () => void;
     // Editing helpers
     pushUndo: () => void;
     replaceGridShape: (nextGrid: number[][]) => void;
@@ -178,6 +194,20 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [overlayOpacity, setOverlayOpacity] = useState(0.5);
         const [overlayStretch, setOverlayStretch] = useState(true);
         const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(false);
+        const loadedSnapshotRef = useRef<null | {
+            grid: number[][];
+            playerStart: { x: number; y: number } | null;
+            theme: ColorTheme | undefined;
+            imageURL: string | null;
+            overlayEnabled: boolean;
+            overlayOpacity: number;
+            overlayStretch: boolean;
+            zoom: number;
+            gridOffsetX: number;
+            gridOffsetY: number;
+            gridFrameWidth: number | null;
+            gridFrameHeight: number | null;
+        }>(null);
 
         // Use custom hooks for side effects
         useJsonSync(grid, jsonInput, setJsonInput);
@@ -270,6 +300,86 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const addMultipleColumns = (side: 'left' | 'right', count: number) => addMultipleCols(side, count, grid, setGrid, setCols, setUndoStack, setRedoStack, setIsSaved, skipAutoResizeRef, prevSizeRef, rows);
         const addMultipleRows = (side: 'top' | 'bottom', count: number) => addMultipleR(side, count, grid, setGrid, setRows, setCols, setUndoStack, setRedoStack, setIsSaved, skipAutoResizeRef, prevSizeRef, cols);
 
+        const removeColumnLeft = () => {
+            setGrid((g) => {
+                const width = g[0]?.length ?? cols;
+                if (width <= 1) return g;
+                const snap = g.map((r) => [...r]);
+                setUndoStack((s) => [...s, snap]);
+                setRedoStack([]);
+                setIsSaved(false);
+                const newG = g.map((r) => r.slice(1));
+                skipAutoResizeRef.current = true;
+                setCols(width - 1);
+                prevSizeRef.current = { rows: g.length, cols: width - 1 };
+                setPlayerStart((prev) =>
+                    prev ? { x: Math.max(0, prev.x - 1), y: Math.min(prev.y, g.length - 1) } : prev
+                );
+                return newG;
+            });
+        };
+
+        const removeColumnRight = () => {
+            setGrid((g) => {
+                const width = g[0]?.length ?? cols;
+                if (width <= 1) return g;
+                const snap = g.map((r) => [...r]);
+                setUndoStack((s) => [...s, snap]);
+                setRedoStack([]);
+                setIsSaved(false);
+                const newG = g.map((r) => r.slice(0, -1));
+                skipAutoResizeRef.current = true;
+                setCols(width - 1);
+                prevSizeRef.current = { rows: g.length, cols: width - 1 };
+                setPlayerStart((prev) =>
+                    prev ? { x: Math.min(prev.x, width - 2), y: Math.min(prev.y, g.length - 1) } : prev
+                );
+                return newG;
+            });
+        };
+
+        const removeRowTop = () => {
+            setGrid((g) => {
+                const height = g.length;
+                if (height <= 1) return g;
+                const snap = g.map((r) => [...r]);
+                setUndoStack((s) => [...s, snap]);
+                setRedoStack([]);
+                setIsSaved(false);
+                const newG = g.slice(1).map((r) => [...r]);
+                skipAutoResizeRef.current = true;
+                setRows(height - 1);
+                prevSizeRef.current = { rows: height - 1, cols: g[0]?.length ?? cols };
+                setPlayerStart((prev) =>
+                    prev
+                        ? { x: Math.min(prev.x, (g[0]?.length ?? cols) - 1), y: Math.max(0, prev.y - 1) }
+                        : prev
+                );
+                return newG;
+            });
+        };
+
+        const removeRowBottom = () => {
+            setGrid((g) => {
+                const height = g.length;
+                if (height <= 1) return g;
+                const snap = g.map((r) => [...r]);
+                setUndoStack((s) => [...s, snap]);
+                setRedoStack([]);
+                setIsSaved(false);
+                const newG = g.slice(0, -1).map((r) => [...r]);
+                skipAutoResizeRef.current = true;
+                setRows(height - 1);
+                prevSizeRef.current = { rows: height - 1, cols: g[0]?.length ?? cols };
+                setPlayerStart((prev) =>
+                    prev
+                        ? { x: Math.min(prev.x, (g[0]?.length ?? cols) - 1), y: Math.min(prev.y, height - 2) }
+                        : prev
+                );
+                return newG;
+            });
+        };
+
         const undo = () => { if (undoStack.length === 0) return; setRedoStack(s => [...s, grid.map(r => [...r])]); const prev = undoStack[undoStack.length - 1]; setGrid(prev.map(r => [...r])); setUndoStack(s => s.slice(0, -1)); setIsSaved(false); };
         const redo = () => { if (redoStack.length === 0) return; setUndoStack(s => [...s, grid.map(r => [...r])]); const next = redoStack[redoStack.length - 1]; setGrid(next.map(r => [...r])); setRedoStack(s => s.slice(0, -1)); setIsSaved(false); };
 
@@ -305,10 +415,15 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
                     const scaleX = canvas.width > 0 ? image.width / canvas.width : 1;
                     const scaleY = canvas.height > 0 ? image.height / canvas.height : 1;
-                    setGridOffsetX(Math.round(result.offsetX * scaleX));
-                    setGridOffsetY(Math.round(result.offsetY * scaleY));
-                    setGridFrameWidth(image.width);
-                    setGridFrameHeight(image.height);
+                    const nextOffsetX = Math.round(result.offsetX * scaleX);
+                    const nextOffsetY = Math.round(result.offsetY * scaleY);
+                    const nextFrameWidth = Math.round(result.cellWidth * result.cols * scaleX);
+                    const nextFrameHeight = Math.round(result.cellHeight * result.rows * scaleY);
+
+                    setGridOffsetX(nextOffsetX);
+                    setGridOffsetY(nextOffsetY);
+                    setGridFrameWidth(Math.min(image.width, Math.max(1, nextFrameWidth)));
+                    setGridFrameHeight(Math.min(image.height, Math.max(1, nextFrameHeight)));
                 };
 
                 void applyGridBounds();
@@ -484,6 +599,55 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
         };
 
+        const setLoadedSnapshot = (snapshot: {
+            grid: number[][];
+            playerStart: { x: number; y: number } | null;
+            theme: ColorTheme | undefined;
+            imageURL: string | null;
+            overlayEnabled: boolean;
+            overlayOpacity: number;
+            overlayStretch: boolean;
+            zoom: number;
+            gridOffsetX: number;
+            gridOffsetY: number;
+            gridFrameWidth: number | null;
+            gridFrameHeight: number | null;
+        }) => {
+            loadedSnapshotRef.current = {
+                ...snapshot,
+                grid: snapshot.grid.map((row) => [...row]),
+                playerStart: snapshot.playerStart ? { ...snapshot.playerStart } : null,
+            };
+        };
+
+        const resetToLoadedSnapshot = () => {
+            const snapshot = loadedSnapshotRef.current;
+            if (!snapshot) {
+                alert('No default layout snapshot is available yet for this level.');
+                return;
+            }
+
+            skipAutoResizeRef.current = true;
+            prevSizeRef.current = { rows: snapshot.grid.length, cols: snapshot.grid[0]?.length ?? 0 };
+            setRows(snapshot.grid.length);
+            setCols(snapshot.grid[0]?.length ?? 0);
+            setGrid(snapshot.grid.map((row) => [...row]));
+            setPlayerStart(snapshot.playerStart ? { ...snapshot.playerStart } : null);
+            setTheme(snapshot.theme);
+            setImageURL(snapshot.imageURL);
+            setOverlayEnabled(snapshot.overlayEnabled);
+            setOverlayOpacity(snapshot.overlayOpacity);
+            setOverlayStretch(snapshot.overlayStretch);
+            setZoom(snapshot.zoom);
+            setGridOffsetX(snapshot.gridOffsetX);
+            setGridOffsetY(snapshot.gridOffsetY);
+            setGridFrameWidth(snapshot.gridFrameWidth);
+            setGridFrameHeight(snapshot.gridFrameHeight);
+            setUndoStack([]);
+            setRedoStack([]);
+            setIsSaved(true);
+        };
+
         const saveChanges = () => {
             const updatedLevels = saveGridChanges(grid, playerStart, theme, importLevelIndex, allLevels);
             setAllLevels(updatedLevels);
@@ -510,7 +674,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         console.log('✓ Creating context value...');
-        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, pushUndo, replaceGridShape };
+        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;

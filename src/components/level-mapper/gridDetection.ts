@@ -10,7 +10,7 @@ export const detectGridLines = (
     useDetectCurrentCounts: boolean,
     currentRows: number,
     currentCols: number
-): { rows: number; cols: number; offsetX: number; offsetY: number } | null => {
+): { rows: number; cols: number; offsetX: number; offsetY: number; cellWidth: number; cellHeight: number } | null => {
     console.log('🔍 detectGridLines() started');
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -124,5 +124,12 @@ export const detectGridLines = (
     }
 
     console.log(`✓ Grid detected: ${finalRows}x${finalCols} (cell ~ ${xSpacing.size}px × ${ySpacing.size}px)`);
-    return { rows: finalRows, cols: finalCols, offsetX: xSpacing.offset, offsetY: ySpacing.offset };
+    return {
+        rows: finalRows,
+        cols: finalCols,
+        offsetX: xSpacing.offset,
+        offsetY: ySpacing.offset,
+        cellWidth: xSpacing.size,
+        cellHeight: ySpacing.size,
+    };
 };
