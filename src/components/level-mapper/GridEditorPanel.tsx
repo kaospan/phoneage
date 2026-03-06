@@ -1,9 +1,10 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Eye, EyeOff, Image as ImageIcon, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { Copy, Crosshair, Eye, EyeOff, Image as ImageIcon, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
+import { detectGridLines } from './gridDetection';
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -29,6 +30,16 @@ export const GridEditorPanel: React.FC = () => {
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
     const [imageScale, setImageScale] = React.useState(1);
+    const [showAlignmentGuide, setShowAlignmentGuide] = React.useState(true);
+    const [guideGrid, setGuideGrid] = React.useState<null | {
+        rows: number;
+        cols: number;
+        offsetX: number;
+        offsetY: number;
+        cellWidth: number;
+        cellHeight: number;
+    }>(null);
+    const [guideStatus, setGuideStatus] = React.useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
     const containerRef = useRef<HTMLDivElement>(null);
     const [cellWidth, setCellWidth] = React.useState(32);
     const [cellHeight, setCellHeight] = React.useState(32);
@@ -39,6 +50,8 @@ export const GridEditorPanel: React.FC = () => {
     React.useEffect(() => {
         if (!imageURL) {
             setImageNaturalSize(null);
+            setGuideGrid(null);
+            setGuideStatus('idle');
             return;
         }
         let cancelled = false;
@@ -52,6 +65,66 @@ export const GridEditorPanel: React.FC = () => {
             cancelled = true;
         };
     }, [imageURL]);
+
+    // Detect the grid spacing in the overlay image and render it as a guide.
+    React.useEffect(() => {
+        if (!overlayEnabled || !imageURL || !imageNaturalSize) {
+            setGuideGrid(null);
+            setGuideStatus('idle');
+            return;
+        }
+
+        let cancelled = false;
+        setGuideStatus('detecting');
+
+        const run = async () => {
+            try {
+                const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+                    const i = new Image();
+                    i.onload = () => resolve(i);
+                    i.onerror = () => reject(new Error('Failed to load image for alignment guide'));
+                    i.src = imageURL;
+                });
+
+                if (cancelled) return;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) {
+                    setGuideGrid(null);
+                    setGuideStatus('failed');
+                    return;
+                }
+                ctx.drawImage(img, 0, 0);
+
+                const detected = detectGridLines(canvas, true, rows, cols);
+                if (cancelled) return;
+                if (!detected) {
+                    setGuideGrid(null);
+                    setGuideStatus('failed');
+                    return;
+                }
+
+                setGuideGrid(detected);
+                setGuideStatus('ready');
+            } catch {
+                if (cancelled) return;
+                setGuideGrid(null);
+                setGuideStatus('failed');
+            }
+        };
+
+        const w = window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => void };
+        if (typeof w.requestIdleCallback === 'function') {
+            w.requestIdleCallback(() => { void run(); }, { timeout: 1200 });
+        } else {
+            setTimeout(() => { void run(); }, 0);
+        }
+
+        return () => { cancelled = true; };
+    }, [overlayEnabled, imageURL, imageNaturalSize, rows, cols]);
 
     // Calculate cell size based on available viewport space (avoid scroll by default).
     React.useEffect(() => {
@@ -134,6 +207,53 @@ export const GridEditorPanel: React.FC = () => {
     const displayOffsetY = gridOffsetY * overlayScaleY;
     const naturalFrameWidth = gridFrameWidth ?? imageNaturalSize?.width ?? 0;
     const naturalFrameHeight = gridFrameHeight ?? imageNaturalSize?.height ?? 0;
+
+    const alignment = React.useMemo(() => {
+        if (!guideGrid || !overlayEnabled || !imageNaturalSize) return null;
+        if (guideGrid.rows !== rows || guideGrid.cols !== cols) return null;
+
+        const guideOffsetX = guideGrid.offsetX * overlayScaleX;
+        const guideOffsetY = guideGrid.offsetY * overlayScaleY;
+        const guideCellW = guideGrid.cellWidth * overlayScaleX;
+        const guideCellH = guideGrid.cellHeight * overlayScaleY;
+
+        const v: { x: number; diff: number }[] = [];
+        const h: { y: number; diff: number }[] = [];
+        let sum = 0;
+        let count = 0;
+        let max = 0;
+
+        for (let c = 0; c <= cols; c++) {
+            const gx = displayOffsetX + c * cellWidth;
+            const ix = guideOffsetX + c * guideCellW;
+            const diff = Math.abs(gx - ix);
+            v.push({ x: ix, diff });
+            sum += diff; count++; max = Math.max(max, diff);
+        }
+        for (let r = 0; r <= rows; r++) {
+            const gy = displayOffsetY + r * cellHeight;
+            const iy = guideOffsetY + r * guideCellH;
+            const diff = Math.abs(gy - iy);
+            h.push({ y: iy, diff });
+            sum += diff; count++; max = Math.max(max, diff);
+        }
+
+        const avg = count ? sum / count : 999;
+        const aligned = avg < 0.6 && max < 1.2;
+        return { aligned, avg, max, v, h, guideOffsetX, guideOffsetY, guideCellW, guideCellH };
+    }, [
+        guideGrid,
+        overlayEnabled,
+        imageNaturalSize,
+        rows,
+        cols,
+        overlayScaleX,
+        overlayScaleY,
+        displayOffsetX,
+        displayOffsetY,
+        cellWidth,
+        cellHeight,
+    ]);
     const cropInsets = React.useMemo(() => {
         if (!imageNaturalSize) return null;
 
@@ -351,6 +471,32 @@ export const GridEditorPanel: React.FC = () => {
                     Diff cells: {differences.length}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                    {imageURL && overlayEnabled && (
+                        <Button
+                            size="icon"
+                            variant={showAlignmentGuide ? "secondary" : "outline"}
+                            className="h-8 w-8"
+                            onClick={() => setShowAlignmentGuide((s) => !s)}
+                            title={showAlignmentGuide ? "Alignment guide: on" : "Alignment guide: off"}
+                            aria-pressed={showAlignmentGuide}
+                        >
+                            <Crosshair />
+                        </Button>
+                    )}
+                    {imageURL && overlayEnabled && showAlignmentGuide && (
+                        <span
+                            className={[
+                                "rounded-md border px-2 py-1 text-xs tabular-nums",
+                                alignment?.aligned ? "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300" : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                            ].join(' ')}
+                            title={guideStatus === 'detecting' ? "Detecting grid lines in the screenshot..." : "Average / max alignment error (px)"}
+                        >
+                            {guideStatus === 'detecting' && '⏳'}
+                            {guideStatus === 'failed' && '⚠'}
+                            {guideStatus === 'ready' && (alignment?.aligned ? '✓' : '≈')}
+                            {guideStatus === 'ready' && alignment ? ` ${alignment.avg.toFixed(2)} / ${alignment.max.toFixed(2)}px` : ''}
+                        </span>
+                    )}
                     <Button
                         size="icon"
                         variant={overlayEnabled ? "secondary" : "outline"}
@@ -647,6 +793,64 @@ export const GridEditorPanel: React.FC = () => {
                                     zIndex: 15
                                 }}
                             />
+                        )}
+                        {overlayEnabled && imageURL && showAlignmentGuide && alignment && (
+                            <svg
+                                className="absolute top-0 left-0 pointer-events-none"
+                                width={Math.max(1, Math.round(scaledDisplayWidth))}
+                                height={Math.max(1, Math.round(scaledDisplayHeight))}
+                                viewBox={`0 0 ${Math.max(1, scaledDisplayWidth)} ${Math.max(1, scaledDisplayHeight)}`}
+                                style={{ zIndex: 16 }}
+                            >
+                                {/* Detected grid bounds */}
+                                <rect
+                                    x={alignment.guideOffsetX}
+                                    y={alignment.guideOffsetY}
+                                    width={alignment.guideCellW * cols}
+                                    height={alignment.guideCellH * rows}
+                                    fill="none"
+                                    stroke={alignment.aligned ? "rgba(34,197,94,0.9)" : "rgba(251,191,36,0.75)"}
+                                    strokeWidth={1.25}
+                                />
+                                {/* Vertical detected lines */}
+                                {alignment.v.map((line, idx) => {
+                                    const color =
+                                        line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
+                                            line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
+                                                "rgba(239,68,68,0.75)";
+                                    return (
+                                        <line
+                                            key={`v-${idx}`}
+                                            x1={line.x}
+                                            y1={alignment.guideOffsetY}
+                                            x2={line.x}
+                                            y2={alignment.guideOffsetY + alignment.guideCellH * rows}
+                                            stroke={color}
+                                            strokeWidth={1}
+                                            strokeDasharray={alignment.aligned ? undefined : "4 4"}
+                                        />
+                                    );
+                                })}
+                                {/* Horizontal detected lines */}
+                                {alignment.h.map((line, idx) => {
+                                    const color =
+                                        line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
+                                            line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
+                                                "rgba(239,68,68,0.75)";
+                                    return (
+                                        <line
+                                            key={`h-${idx}`}
+                                            x1={alignment.guideOffsetX}
+                                            y1={line.y}
+                                            x2={alignment.guideOffsetX + alignment.guideCellW * cols}
+                                            y2={line.y}
+                                            stroke={color}
+                                            strokeWidth={1}
+                                            strokeDasharray={alignment.aligned ? undefined : "4 4"}
+                                        />
+                                    );
+                                })}
+                            </svg>
                         )}
                         <div
                             className="relative z-10"
