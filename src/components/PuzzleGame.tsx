@@ -12,6 +12,7 @@ import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
 import { saveLevelOverride } from "@/lib/levelOverrides";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 console.log('📦 PuzzleGame.tsx loading...');
 
@@ -95,6 +96,10 @@ type LevelData = ReturnType<typeof getAllLevels>[number];
 export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
+  const isMobile = useIsMobile();
+  const [isPortrait, setIsPortrait] = useState(false);
+  const shouldRotateGate = isMobile && isPortrait;
+
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
   const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
@@ -131,6 +136,33 @@ export const PuzzleGame = () => {
 
   const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex]);
   const currentLevel = allLevels[currentLevelIndex];
+
+  // Mobile portrait gate: require landscape so the whole board can be visible.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia?.('(orientation: portrait)');
+    const update = () => {
+      const portrait = mql ? mql.matches : window.innerHeight > window.innerWidth;
+      setIsPortrait(portrait);
+    };
+    update();
+    mql?.addEventListener?.('change', update);
+    window.addEventListener('resize', update, { passive: true });
+    window.addEventListener('orientationchange', update, { passive: true } as AddEventListenerOptions);
+    return () => {
+      mql?.removeEventListener?.('change', update);
+      window.removeEventListener('resize', update as EventListener);
+      window.removeEventListener('orientationchange', update as EventListener);
+    };
+  }, []);
+
+  // On mobile landscape, bias toward zoom-out so the full board is on screen.
+  useEffect(() => {
+    if (!isMobile) return;
+    if (shouldRotateGate) return;
+    setCameraOffset({ x: 0, z: 0 });
+    setCameraZoomIndex(0);
+  }, [isMobile, shouldRotateGate, currentLevelIndex]);
 
     const isPlaceholderGrid = useCallback((levelGrid?: number[][]) => {
       if (!levelGrid || levelGrid.length === 0) return true;
@@ -814,7 +846,7 @@ export const PuzzleGame = () => {
     const prevLevel = () => { if (currentLevelIndex > 0) setCurrentLevelIndex(i => i - 1); };
     const canZoomIn = viewMode !== 'fps' && cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
     const canZoomOut = viewMode !== 'fps' && cameraZoomIndex > 0;
-    const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex];
+  const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex];
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
 
     // Drag handlers for panning the view
@@ -905,6 +937,19 @@ export const PuzzleGame = () => {
           />
         )}
         <div className="absolute inset-0 bg-black/30" />
+        {shouldRotateGate && (
+          <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="mx-6 max-w-sm rounded-2xl border border-white/15 bg-black/55 px-6 py-6 text-center shadow-2xl">
+              <div className="text-lg font-black tracking-[0.18em] text-white/95">ROTATE DEVICE</div>
+              <div className="mt-2 text-sm leading-relaxed text-white/80">
+                Landscape is required on mobile so the whole gameboard fits on screen.
+              </div>
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/70">
+                Tip: disable screen rotation lock.
+              </div>
+            </div>
+          </div>
+        )}
         {isBuilding && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 text-white">
             <div className="bg-black/70 border border-white/20 rounded-lg px-6 py-4 text-center">
@@ -913,10 +958,10 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        <TouchControls onMove={queueMove} disabled={isComplete || isBuilding} />
-        <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding} />
+        <TouchControls onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
+        <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
         <div className="absolute top-2 left-0 right-0 z-50 flex justify-center">
-          <div className="bg-card/95 backdrop-blur px-6 py-3 rounded-lg shadow-lg border border-border/50 flex items-center gap-4">
+          <div className="bg-card/95 backdrop-blur px-3 py-2 md:px-6 md:py-3 rounded-lg shadow-lg border border-border/50 flex items-center gap-2 md:gap-4">
             {/* Previous Level Button */}
             <Button
               onClick={() => {
@@ -929,7 +974,7 @@ export const PuzzleGame = () => {
               }}
               variant="ghost"
               size="default"
-              className="h-10 w-10 p-0 text-xl font-bold hover:bg-primary/20"
+              className="h-9 w-9 md:h-10 md:w-10 p-0 text-lg md:text-xl font-bold hover:bg-primary/20"
               disabled={currentLevelIndex === 0}
               aria-label="Previous level"
               title="Previous level (P)"
@@ -938,13 +983,13 @@ export const PuzzleGame = () => {
             </Button>
 
             {/* Level Info */}
-            <div className="flex items-center gap-3 px-4">
-              <span className="text-primary font-bold text-2xl">Level {currentLevel.id}</span>
-              <span className="text-muted-foreground text-xl">•</span>
-              <span className="text-foreground font-medium text-lg">Moves: {moves}</span>
+            <div className="flex items-center gap-2 md:gap-3 px-2 md:px-4">
+              <span className="text-primary font-bold text-lg md:text-2xl">Level {currentLevel.id}</span>
+              <span className="text-muted-foreground text-base md:text-xl">•</span>
+              <span className="text-foreground font-medium text-sm md:text-lg">Moves: {moves}</span>
               {(localPlayer?.keys.red || localPlayer?.keys.green) && (
                 <>
-                  <span className="text-muted-foreground text-xl">•</span>
+                  <span className="text-muted-foreground text-base md:text-xl">•</span>
                   <div className="flex items-center gap-2">
                     {localPlayer?.keys.red && (
                       <span className="rounded-md border border-red-300 bg-red-600 px-2 py-1 text-xs font-bold text-white">
@@ -997,7 +1042,9 @@ export const PuzzleGame = () => {
             {/* View Mode Toggle & Reset View (right side) */}
             <div className="ml-2 pl-2 border-l border-border/50 flex items-center gap-2">
               <Button
-                onClick={() => setCameraZoomIndex((i) => Math.max(0, i - 1))}
+                onClick={() => {
+                  setCameraZoomIndex((i) => Math.max(0, i - 1));
+                }}
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 text-base hover:bg-primary/20"
@@ -1012,7 +1059,9 @@ export const PuzzleGame = () => {
               </div>
 
               <Button
-                onClick={() => setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1))}
+                onClick={() => {
+                  setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
+                }}
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 text-base hover:bg-primary/20"
@@ -1063,7 +1112,10 @@ export const PuzzleGame = () => {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           onDoubleClick={handleDoubleClick}
-          style={{ cursor: viewMode === 'fps' ? 'default' : isDragging ? 'grabbing' : 'grab' }}
+          style={{
+            cursor: viewMode === 'fps' ? 'default' : isDragging ? 'grabbing' : 'grab',
+            touchAction: viewMode === 'fps' ? 'auto' : 'none',
+          }}
         >
           <Game3D
             grid={renderGrid}

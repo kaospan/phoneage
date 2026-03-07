@@ -2,6 +2,7 @@ import { PuzzleGame } from "@/components/PuzzleGame";
 import LevelMapper from "@/components/LevelMapper";
 import bgImage from "@/assets/stone-age-bg.png";
 import { useLocation } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 console.log('📄 Index.tsx loading...');
 
@@ -10,6 +11,7 @@ const Index = () => {
 
     try {
         const location = useLocation();
+        const isMobile = useIsMobile();
         const showMapper =
             location.pathname.includes("mapper") ||
             location.search.includes("mapper");
@@ -17,12 +19,13 @@ const Index = () => {
 
         return (
             <div
-                className="relative h-dvh w-screen overflow-hidden"
+                className="relative h-[100svh] min-h-[100svh] w-screen overflow-hidden"
                 style={{
                     backgroundImage: `url(${bgImage})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
-                    backgroundAttachment: 'fixed',
+                    // Mobile Safari repaints/janks on fixed backgrounds.
+                    backgroundAttachment: isMobile ? 'scroll' : 'fixed',
                 }}
             >
                 <div
