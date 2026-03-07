@@ -1,0 +1,122 @@
+import { createContext, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { getAllLevels, type ColorTheme } from '@/data/levels';
+
+// Centralized context/types to keep Fast Refresh stable.
+export type BulkContextType = 'column-left' | 'column-right' | 'row-top' | 'row-bottom';
+
+export interface LevelMapperContextValue {
+  // Dimensions & grid
+  rows: number;
+  cols: number;
+  setRows: (r: number) => void;
+  setCols: (c: number) => void;
+  grid: number[][];
+  setGrid: Dispatch<SetStateAction<number[][]>>;
+  activeTile: number;
+  setActiveTile: (id: number) => void;
+
+  // Player start position
+  playerStart: { x: number; y: number } | null;
+  setPlayerStart: (pos: { x: number; y: number } | null) => void;
+
+  // Theme
+  theme: ColorTheme | undefined;
+  setTheme: (theme: ColorTheme | undefined) => void;
+
+  // Image & canvas
+  imageURL: string | null;
+  setImageURL: (url: string | null) => void;
+  canvasRef: RefObject<HTMLCanvasElement>;
+  zoom: number;
+  setZoom: (z: number) => void;
+  gridOffsetX: number;
+  setGridOffsetX: (n: number) => void;
+  gridOffsetY: number;
+  setGridOffsetY: (n: number) => void;
+  gridFrameWidth: number | null;
+  setGridFrameWidth: (n: number | null) => void;
+  gridFrameHeight: number | null;
+  setGridFrameHeight: (n: number | null) => void;
+  showGrid: boolean;
+  setShowGrid: (b: boolean) => void;
+
+  // Overlay
+  overlayEnabled: boolean;
+  setOverlayEnabled: (b: boolean) => void;
+  overlayOpacity: number;
+  setOverlayOpacity: (n: number) => void;
+  overlayStretch: boolean;
+  setOverlayStretch: (b: boolean) => void;
+
+  // Levels compare/import
+  allLevels: ReturnType<typeof getAllLevels>;
+  setAllLevels: Dispatch<SetStateAction<ReturnType<typeof getAllLevels>>>;
+  compareLevelIndex: number;
+  setCompareLevelIndex: (i: number) => void;
+  compareLevel: any;
+  importLevelIndex: number | null;
+  setImportLevelIndex: (i: number | null) => void;
+
+  // Undo/redo
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+
+  // Save state
+  isSaved: boolean;
+  setIsSaved: (b: boolean) => void;
+  saveChanges: () => void;
+  showUnsavedBanner: boolean;
+
+  // Detection
+  detectGrid: () => void;
+  detectCells: () => void;
+  detectGridAndCells: () => void;
+  useDetectCurrentCounts: boolean;
+  setUseDetectCurrentCounts: (b: boolean) => void;
+
+  // Bulk context menu
+  contextMenu: { x: number; y: number; type: BulkContextType } | null;
+  setContextMenu: (m: any) => void;
+  addMultipleColumns: (side: 'left' | 'right', count: number) => void;
+  addMultipleRows: (side: 'top' | 'bottom', count: number) => void;
+
+  // Shape helpers
+  addColumnLeft: () => void;
+  addColumnRight: () => void;
+  addRowTop: () => void;
+  addRowBottom: () => void;
+  removeColumnLeft: () => void;
+  removeColumnRight: () => void;
+  removeRowTop: () => void;
+  removeRowBottom: () => void;
+
+  // Export
+  exportTS: () => void;
+  jsonInput: string;
+  setJsonInput: (json: string) => void;
+  syncJsonInputToGrid: () => void;
+  applyJsonInput: () => void;
+  setLoadedSnapshot: (snapshot: {
+    grid: number[][];
+    playerStart: { x: number; y: number } | null;
+    theme: ColorTheme | undefined;
+    imageURL: string | null;
+    overlayEnabled: boolean;
+    overlayOpacity: number;
+    overlayStretch: boolean;
+    zoom: number;
+    gridOffsetX: number;
+    gridOffsetY: number;
+    gridFrameWidth: number | null;
+    gridFrameHeight: number | null;
+  }) => void;
+  resetToLoadedSnapshot: () => void;
+
+  // Editing helpers
+  pushUndo: () => void;
+  replaceGridShape: (nextGrid: number[][]) => void;
+}
+
+export const LevelMapperContext = createContext<LevelMapperContextValue | undefined>(undefined);

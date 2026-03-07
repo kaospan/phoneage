@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { LevelMapperProvider, useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
+import { LevelMapperProvider } from '@/components/level-mapper/LevelMapperContext';
+import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import UnsavedBanner from '@/components/level-mapper/UnsavedBanner';
 import BulkAddContextMenu from '@/components/level-mapper/BulkAddContextMenu';
 import LeftPanel from '@/components/level-mapper/LeftPanel';

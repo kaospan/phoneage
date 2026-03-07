@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TILE_TYPES, voidGrid } from '@/lib/levelgrid';
 import Palette from './Palette';
-import { useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
+import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SpriteCapture } from './SpriteCapture';
 import { CellReferenceManager } from './CellReferenceManager';

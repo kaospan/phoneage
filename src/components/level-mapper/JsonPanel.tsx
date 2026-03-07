@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
+import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 
 // Format grid with row number comments
 const formatGridWithRowNumbers = (grid: number[][]): string => {

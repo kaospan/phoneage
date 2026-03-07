@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getAllLevels, type ColorTheme } from '@/data/levels';
 import { emptyGrid, formatGridRowsOneLine } from '@/lib/levelgrid';
 import { detectGridLines } from './gridDetection';
+import { LevelMapperContext, type BulkContextType, type LevelMapperContextValue } from './LevelMapperStore';
 import {
     addColumnLeft as addColLeft,
     addColumnRight as addColRight,
@@ -37,75 +38,7 @@ const CELL_SAMPLE_INSET_RATIO = 0.12;
 const MAX_AUTO_DETECT_CELLS = 320;
 
 // Types
-export type BulkContextType = 'column-left' | 'column-right' | 'row-top' | 'row-bottom';
-
-interface LevelMapperContextValue {
-    // Dimensions & grid
-    rows: number; cols: number; setRows: (r: number) => void; setCols: (c: number) => void;
-    grid: number[][]; setGrid: React.Dispatch<React.SetStateAction<number[][]>>;
-    activeTile: number; setActiveTile: (id: number) => void;
-    // Player start position
-    playerStart: { x: number; y: number } | null; setPlayerStart: (pos: { x: number; y: number } | null) => void;
-    // Theme
-    theme: ColorTheme | undefined; setTheme: (theme: ColorTheme | undefined) => void;
-    // Image & canvas
-    imageURL: string | null; setImageURL: (url: string | null) => void;
-    canvasRef: React.RefObject<HTMLCanvasElement>;
-    zoom: number; setZoom: (z: number) => void;
-    gridOffsetX: number; setGridOffsetX: (n: number) => void;
-    gridOffsetY: number; setGridOffsetY: (n: number) => void;
-    gridFrameWidth: number | null; setGridFrameWidth: (n: number | null) => void;
-    gridFrameHeight: number | null; setGridFrameHeight: (n: number | null) => void;
-    showGrid: boolean; setShowGrid: (b: boolean) => void;
-    // Overlay
-    overlayEnabled: boolean; setOverlayEnabled: (b: boolean) => void;
-    overlayOpacity: number; setOverlayOpacity: (n: number) => void;
-    overlayStretch: boolean; setOverlayStretch: (b: boolean) => void;
-    // Levels compare/import
-    allLevels: ReturnType<typeof getAllLevels>; setAllLevels: React.Dispatch<React.SetStateAction<ReturnType<typeof getAllLevels>>>;
-    compareLevelIndex: number; setCompareLevelIndex: (i: number) => void; compareLevel: any;
-    importLevelIndex: number | null; setImportLevelIndex: (i: number | null) => void;
-    // Undo/redo
-    undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
-    // Save state
-    isSaved: boolean; setIsSaved: (b: boolean) => void; saveChanges: () => void;
-    showUnsavedBanner: boolean;
-    // Detection
-    detectGrid: () => void; detectCells: () => void; detectGridAndCells: () => void; useDetectCurrentCounts: boolean; setUseDetectCurrentCounts: (b: boolean) => void;
-    // Bulk context menu
-    contextMenu: { x: number; y: number; type: BulkContextType } | null; setContextMenu: (m: any) => void;
-    addMultipleColumns: (side: 'left' | 'right', count: number) => void;
-    addMultipleRows: (side: 'top' | 'bottom', count: number) => void;
-    // Shape helpers
-    addColumnLeft: () => void; addColumnRight: () => void; addRowTop: () => void; addRowBottom: () => void;
-    removeColumnLeft: () => void; removeColumnRight: () => void; removeRowTop: () => void; removeRowBottom: () => void;
-    // Export
-    exportTS: () => void;
-    jsonInput: string;
-    setJsonInput: (json: string) => void;
-    syncJsonInputToGrid: () => void;
-    applyJsonInput: () => void;
-    setLoadedSnapshot: (snapshot: {
-        grid: number[][];
-        playerStart: { x: number; y: number } | null;
-        theme: ColorTheme | undefined;
-        imageURL: string | null;
-        overlayEnabled: boolean;
-        overlayOpacity: number;
-        overlayStretch: boolean;
-        zoom: number;
-        gridOffsetX: number;
-        gridOffsetY: number;
-        gridFrameWidth: number | null;
-        gridFrameHeight: number | null;
-    }) => void;
-    resetToLoadedSnapshot: () => void;
-    // Editing helpers
-    pushUndo: () => void;
-    replaceGridShape: (nextGrid: number[][]) => void;
-}
-
-const LevelMapperContext = createContext<LevelMapperContextValue | undefined>(undefined);
+// LevelMapperContextValue lives in LevelMapperStore.ts (to keep Fast Refresh stable)
 
 const isPlaceholderGrid = (levelGrid?: number[][]) => {
     if (!levelGrid || levelGrid.length === 0) return true;
@@ -757,5 +690,3 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 };
 
 console.log('✅ LevelMapperContext.tsx loaded');
-
-export const useLevelMapper = () => { const ctx = useContext(LevelMapperContext); if (!ctx) throw new Error('useLevelMapper must be used inside LevelMapperProvider'); return ctx; };

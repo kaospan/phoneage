@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
-import { useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
+import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
 import { detectGridLines } from './gridDetection';
 
