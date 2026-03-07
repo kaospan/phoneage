@@ -11,7 +11,7 @@ export const GridEditorPanel: React.FC = () => {
     const {
         compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
         importLevelIndex,
-        overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch,
+        overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch,
         exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
         pushUndo,
@@ -557,18 +557,7 @@ export const GridEditorPanel: React.FC = () => {
                             <span className="tabular-nums">{Math.round(overlayOpacity * 100)}%</span>
                         </div>
                     )}
-                    {overlayEnabled && (
-                        <Button
-                            size="icon"
-                            variant={overlayStretch ? "secondary" : "outline"}
-                            className="h-8 w-8"
-                            onClick={() => setOverlayStretch(!overlayStretch)}
-                            title={overlayStretch ? "Cell sizing: stretched" : "Cell sizing: uniform"}
-                            aria-pressed={overlayStretch}
-                        >
-                            <Maximize2 />
-                        </Button>
-                    )}
+                    {/* Intentionally no "stretched/uniform" toggle: it was confusing and didn't affect alignment workflow. */}
                     {overlayEnabled && imageNaturalSize && (
                         <span className="text-xs text-muted-foreground">
                             Image: {imageNaturalSize.width}×{imageNaturalSize.height}px | Frame: {Math.round(naturalFrameWidth)}×{Math.round(naturalFrameHeight)}px | View: {Math.round(displaySize.width)}×{Math.round(displaySize.height)}px | Cell: {cellWidth.toFixed(1)}×{cellHeight.toFixed(1)}px
