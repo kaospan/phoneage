@@ -157,54 +157,16 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 setGridOffsetY(0);
                                 setGridFrameWidth(null);
                                 setGridFrameHeight(null);
+                                // Normalize (auto-crop borders/HUD) but do not auto-run detection here.
+                                // Detection can be heavy; the user triggers it explicitly via "Auto-detect Cells".
                                 const normalizedURL = await normalizeMapperImage(url);
                                 setImageURL(normalizedURL);
-                                setIsDetecting(true);
-                                setDetectionProgress('Loading image...');
-                                console.log('⏳ Waiting 400ms for canvas to render...');
+                                setOverlayEnabled(true);
+                                setIsDetecting(false);
+                                setDetectionProgress('');
 
-                                // Wait for canvas to be ready and drawn
-                                await new Promise(resolve => setTimeout(resolve, 400));
-
-                                console.log('🔍 Starting grid detection...');
-                                setDetectionProgress('Detecting grid lines...');
-                                detectGrid();
-                                console.log('✓ detectGrid() called');
-
-                                // Wait for grid state to update
-                                console.log('⏳ Waiting 200ms for grid state update...');
-                                await new Promise(resolve => setTimeout(resolve, 200));
-
-                                console.log('📊 Grid dimensions before cell detection:', { rows, cols, gridSize: grid.length });
-
-                                setDetectionProgress('Analyzing cell types...');
-                                console.log('⏳ Scheduling detectCells in 50ms...');
-
-                                // Use setTimeout to let the progress message render before blocking
-                                setTimeout(() => {
-                                    try {
-                                        console.log('🎯 Starting detectCells...');
-                                        detectCells();
-                                        console.log('✅ detectCells complete!');
-
-                                        console.log('📈 Grid after cell detection:', {
-                                            rows: grid.length,
-                                            cols: grid[0]?.length,
-                                            sampleCells: grid.slice(0, 3).map((row, r) =>
-                                                row.slice(0, 5).map((cell, c) => `[${r},${c}]=${cell}`)
-                                            )
-                                        });
-
-                                        setIsDetecting(false);
-                                        setDetectionProgress('');
-                                        console.log('✅ Full detection complete - grid editor should show results');
-                                    } catch (innerError) {
-                                        console.error('❌ Error in detectCells setTimeout:', innerError);
-                                        setIsDetecting(false);
-                                        setDetectionProgress('');
-                                        alert(`Cell detection failed: ${(innerError as Error).message}`);
-                                    }
-                                }, 50);
+                                // Release the original object URL (normalized image is cached separately).
+                                try { URL.revokeObjectURL(url); } catch { /* ignore */ }
                             } catch (error) {
                                 console.error('❌ Error in file onChange handler:', error);
                                 console.error('Stack trace:', (error as Error).stack);

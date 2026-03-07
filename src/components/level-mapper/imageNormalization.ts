@@ -11,6 +11,10 @@ const loadImage = async (imageURL: string): Promise<HTMLImageElement> => {
     });
 };
 
+const ANALYSIS_MAX_DIM = 900;
+const normalizedCache = new Map<string, string>();
+const normalizedInFlight = new Map<string, Promise<string>>();
+
 const NEAR_BLACK = 10;
 
 const isNearBlack = (r: number, g: number, b: number) => r <= NEAR_BLACK && g <= NEAR_BLACK && b <= NEAR_BLACK;
@@ -278,77 +282,118 @@ const findHudCutRow = (pixels: Uint8ClampedArray, width: number, height: number)
     return null;
 };
 
+const canvasToObjectURL = async (canvas: HTMLCanvasElement): Promise<string> => {
+    // `toBlob` is async and avoids the big sync memory hit of `toDataURL`.
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) return canvas.toDataURL('image/png');
+    return URL.createObjectURL(blob);
+};
+
 export const normalizeMapperImage = async (imageURL: string): Promise<string> => {
-    const image = await loadImage(imageURL);
-    const rotatedCanvas = document.createElement('canvas');
-    const shouldRotate = image.width < image.height;
-    rotatedCanvas.width = shouldRotate ? image.height : image.width;
-    rotatedCanvas.height = shouldRotate ? image.width : image.height;
+    const cached = normalizedCache.get(imageURL);
+    if (cached) return cached;
+    const inflight = normalizedInFlight.get(imageURL);
+    if (inflight) return inflight;
 
-    const rotatedContext = rotatedCanvas.getContext('2d');
-    if (!rotatedContext) {
-        return imageURL;
+    const task = (async () => {
+        try {
+            const image = await loadImage(imageURL);
+            const rotatedCanvas = document.createElement('canvas');
+            const shouldRotate = image.width < image.height;
+            rotatedCanvas.width = shouldRotate ? image.height : image.width;
+            rotatedCanvas.height = shouldRotate ? image.width : image.height;
+
+            const rotatedContext = rotatedCanvas.getContext('2d');
+            if (!rotatedContext) return imageURL;
+
+            if (shouldRotate) {
+                rotatedContext.translate(rotatedCanvas.width, 0);
+                rotatedContext.rotate(Math.PI / 2);
+            }
+            rotatedContext.drawImage(image, 0, 0);
+
+            // Analyze a downscaled copy to avoid huge synchronous `getImageData` calls on 1080p+ images.
+            const maxDim = Math.max(rotatedCanvas.width, rotatedCanvas.height);
+            const analysisScale = Math.min(1, ANALYSIS_MAX_DIM / Math.max(1, maxDim));
+            const analysisW = Math.max(1, Math.round(rotatedCanvas.width * analysisScale));
+            const analysisH = Math.max(1, Math.round(rotatedCanvas.height * analysisScale));
+
+            const analysisCanvas = document.createElement('canvas');
+            analysisCanvas.width = analysisW;
+            analysisCanvas.height = analysisH;
+            const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true });
+            if (!analysisCtx) return imageURL;
+            analysisCtx.drawImage(rotatedCanvas, 0, 0, rotatedCanvas.width, rotatedCanvas.height, 0, 0, analysisW, analysisH);
+
+            const analysisPixels = analysisCtx.getImageData(0, 0, analysisW, analysisH).data;
+
+            // NOTE: Do not apply "center viewport" cropping here. Levels like 7 can have multiple separated islands;
+            // viewport-crop heuristics can mistakenly discard off-center content.
+            const borderCrop = cropBlackEdges(analysisPixels, analysisW, analysisH);
+
+            // Map border crop back to full-res rotated canvas.
+            const pad = 2;
+            const cropLeft = clampInt(Math.floor(borderCrop.left / analysisScale) - pad, 0, rotatedCanvas.width - 1);
+            const cropTop = clampInt(Math.floor(borderCrop.top / analysisScale) - pad, 0, rotatedCanvas.height - 1);
+            const cropRight = clampInt(Math.ceil((borderCrop.left + borderCrop.width) / analysisScale) + pad, 1, rotatedCanvas.width);
+            const cropBottom = clampInt(Math.ceil((borderCrop.top + borderCrop.height) / analysisScale) + pad, 1, rotatedCanvas.height);
+            const croppedWidth = Math.max(1, cropRight - cropLeft);
+            const croppedHeight = Math.max(1, cropBottom - cropTop);
+
+            const workingCanvas = document.createElement('canvas');
+            workingCanvas.width = croppedWidth;
+            workingCanvas.height = croppedHeight;
+            const workingCtx = workingCanvas.getContext('2d');
+            if (!workingCtx) return imageURL;
+
+            workingCtx.drawImage(rotatedCanvas, cropLeft, cropTop, croppedWidth, croppedHeight, 0, 0, croppedWidth, croppedHeight);
+
+            // Optional HUD crop (DOS status bar) using downscaled analysis of the already-cropped image.
+            let finalHeight = croppedHeight;
+            if (croppedHeight > 120) {
+                const workMaxDim = Math.max(croppedWidth, croppedHeight);
+                const workScale = Math.min(1, ANALYSIS_MAX_DIM / Math.max(1, workMaxDim));
+                const workW = Math.max(1, Math.round(croppedWidth * workScale));
+                const workH = Math.max(1, Math.round(croppedHeight * workScale));
+                const hudCanvas = document.createElement('canvas');
+                hudCanvas.width = workW;
+                hudCanvas.height = workH;
+                const hudCtx = hudCanvas.getContext('2d', { willReadFrequently: true });
+                if (hudCtx) {
+                    hudCtx.drawImage(workingCanvas, 0, 0, croppedWidth, croppedHeight, 0, 0, workW, workH);
+                    const hudPixels = hudCtx.getImageData(0, 0, workW, workH).data;
+                    const hudCutRow = findHudCutRow(hudPixels, workW, workH);
+                    if (hudCutRow) {
+                        finalHeight = clampInt(Math.round(hudCutRow / workScale), 1, croppedHeight);
+                    }
+                }
+            }
+
+            // If nothing changes, keep original URL to avoid unnecessary memory.
+            const borderDidCrop =
+                cropLeft !== 0 || cropTop !== 0 || croppedWidth !== rotatedCanvas.width || croppedHeight !== rotatedCanvas.height;
+            const hudDidCrop = finalHeight !== croppedHeight;
+            if (!shouldRotate && !borderDidCrop && !hudDidCrop) return imageURL;
+
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = croppedWidth;
+            finalCanvas.height = finalHeight;
+            const finalCtx = finalCanvas.getContext('2d');
+            if (!finalCtx) return imageURL;
+            finalCtx.drawImage(workingCanvas, 0, 0, croppedWidth, finalHeight, 0, 0, croppedWidth, finalHeight);
+
+            return await canvasToObjectURL(finalCanvas);
+        } catch {
+            return imageURL;
+        }
+    })();
+
+    normalizedInFlight.set(imageURL, task);
+    try {
+        const result = await task;
+        normalizedCache.set(imageURL, result);
+        return result;
+    } finally {
+        normalizedInFlight.delete(imageURL);
     }
-
-    if (shouldRotate) {
-        rotatedContext.translate(rotatedCanvas.width, 0);
-        rotatedContext.rotate(Math.PI / 2);
-    }
-    rotatedContext.drawImage(image, 0, 0);
-
-    const rotatedPixels = rotatedContext.getImageData(0, 0, rotatedCanvas.width, rotatedCanvas.height).data;
-
-    // First, attempt to isolate the central game viewport for screenshots that include browser/UI chrome.
-    const viewportCrop = cropCenterViewport(rotatedPixels, rotatedCanvas.width, rotatedCanvas.height);
-    const useViewportCrop =
-        Boolean(viewportCrop) &&
-        (viewportCrop!.width < rotatedCanvas.width * 0.92 || viewportCrop!.height < rotatedCanvas.height * 0.92);
-
-    const viewportLeft = useViewportCrop ? viewportCrop!.left : 0;
-    const viewportTop = useViewportCrop ? viewportCrop!.top : 0;
-    const viewportWidth = useViewportCrop ? viewportCrop!.width : rotatedCanvas.width;
-    const viewportHeight = useViewportCrop ? viewportCrop!.height : rotatedCanvas.height;
-
-    const viewportPixels = rotatedContext.getImageData(viewportLeft, viewportTop, viewportWidth, viewportHeight).data;
-    const borderCrop = cropBlackEdges(viewportPixels, viewportWidth, viewportHeight);
-    const croppedWidth = borderCrop.width;
-    const croppedHeight = borderCrop.height;
-    const croppedSourceTop = viewportTop + borderCrop.top;
-    const croppedSourceLeft = viewportLeft + borderCrop.left;
-
-    // Build a working canvas for grid-bound detection/cropping.
-    const workingCanvas = document.createElement('canvas');
-    workingCanvas.width = croppedWidth;
-    workingCanvas.height = croppedHeight;
-    const workingContext = workingCanvas.getContext('2d');
-    if (!workingContext) {
-        return imageURL;
-    }
-
-    workingContext.drawImage(
-        rotatedCanvas,
-        croppedSourceLeft,
-        croppedSourceTop,
-        croppedWidth,
-        croppedHeight,
-        0,
-        0,
-        croppedWidth,
-        croppedHeight
-    );
-
-    // Optional HUD crop for older clean screenshots (DOS status bar).
-    const hudPixels = workingContext.getImageData(0, 0, croppedWidth, croppedHeight).data;
-    const hudCutRow = findHudCutRow(hudPixels, croppedWidth, croppedHeight);
-    const finalHeight = hudCutRow ? Math.max(1, Math.min(croppedHeight, hudCutRow)) : croppedHeight;
-
-    const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = croppedWidth;
-    finalCanvas.height = finalHeight;
-    const finalContext = finalCanvas.getContext('2d');
-    if (!finalContext) return imageURL;
-    finalContext.drawImage(workingCanvas, 0, 0, croppedWidth, finalHeight, 0, 0, croppedWidth, finalHeight);
-
-    // Keep pixel-perfect (no stretching). The editor will handle alignment/fit/zoom.
-    return finalCanvas.toDataURL('image/png');
 };

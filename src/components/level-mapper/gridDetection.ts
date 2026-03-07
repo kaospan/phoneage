@@ -118,7 +118,8 @@ export const detectGridLines = (
     const finalCols = useDetectCurrentCounts ? currentCols : detectedCols;
     const finalRows = useDetectCurrentCounts ? currentRows : detectedRows;
 
-    if (!useDetectCurrentCounts && finalRows * finalCols > MAX_DETECTED_CELLS) {
+    // Safety: never allow absurdly large grids (they can freeze the UI during cell analysis).
+    if (finalRows * finalCols > MAX_DETECTED_CELLS) {
         console.error(`❌ Grid detection produced an unsafe cell count: ${finalRows}x${finalCols}`);
         return null;
     }
