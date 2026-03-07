@@ -290,8 +290,8 @@ export const detectGridLines = (
                 const edgeRatio = s.aboveEdge / s.n;
                 const mainRatio = s.aboveMain / s.n;
                 // Include sparse borders if there are some strong cells on that edge.
-                if (edgeRatio >= 0.12 && s.max > expandThr) return true;
-                if (mainRatio >= 0.06 && s.max > thr) return true;
+                if (edgeRatio >= 0.08 && s.max > expandThr) return true;
+                if (mainRatio >= 0.04 && s.max > thr) return true;
                 return false;
             };
 
@@ -300,23 +300,35 @@ export const detectGridLines = (
             for (let i = 0; i < 3; i += 1) {
                 // top
                 if (minR > 0 && (maxR - (minR - 1) + 1) <= MAX_DETECTED_ROWS) {
+                    const candRows = maxR - (minR - 1) + 1;
+                    const candCols = maxC - minC + 1;
+                    const candCells = candRows * candCols;
                     const s = rowStats(minR - 1, minC, maxC);
-                    if (shouldExpand(s)) minR -= 1;
+                    if (candCells <= MAX_DETECTED_CELLS && shouldExpand(s)) minR -= 1;
                 }
                 // bottom
                 if (maxR < maxRows - 1 && ((maxR + 1) - minR + 1) <= MAX_DETECTED_ROWS) {
+                    const candRows = (maxR + 1) - minR + 1;
+                    const candCols = maxC - minC + 1;
+                    const candCells = candRows * candCols;
                     const s = rowStats(maxR + 1, minC, maxC);
-                    if (shouldExpand(s)) maxR += 1;
+                    if (candCells <= MAX_DETECTED_CELLS && shouldExpand(s)) maxR += 1;
                 }
                 // left
                 if (minC > 0 && (maxC - (minC - 1) + 1) <= MAX_DETECTED_COLS) {
+                    const candRows = maxR - minR + 1;
+                    const candCols = maxC - (minC - 1) + 1;
+                    const candCells = candRows * candCols;
                     const s = colStats(minC - 1, minR, maxR);
-                    if (shouldExpand(s)) minC -= 1;
+                    if (candCells <= MAX_DETECTED_CELLS && shouldExpand(s)) minC -= 1;
                 }
                 // right
                 if (maxC < maxCols - 1 && ((maxC + 1) - minC + 1) <= MAX_DETECTED_COLS) {
+                    const candRows = maxR - minR + 1;
+                    const candCols = (maxC + 1) - minC + 1;
+                    const candCells = candRows * candCols;
                     const s = colStats(maxC + 1, minR, maxR);
-                    if (shouldExpand(s)) maxC += 1;
+                    if (candCells <= MAX_DETECTED_CELLS && shouldExpand(s)) maxC += 1;
                 }
             }
 
