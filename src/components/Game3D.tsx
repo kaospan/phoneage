@@ -56,6 +56,57 @@ const smoothstep = (edge0: number, edge1: number, value: number) => {
   return t * t * (3 - 2 * t);
 };
 
+// Unity-like critically damped smoothing (ease-in/out) with stable dt.
+const smoothDampScalar = (
+  current: number,
+  target: number,
+  currentVelocity: number,
+  smoothTime: number,
+  deltaTime: number,
+  maxSpeed = Infinity
+) => {
+  const st = Math.max(0.0001, smoothTime);
+  const omega = 2 / st;
+  const x = omega * deltaTime;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+
+  let change = current - target;
+  const originalTo = target;
+
+  const maxChange = maxSpeed * st;
+  change = THREE.MathUtils.clamp(change, -maxChange, maxChange);
+  target = current - change;
+
+  const temp = (currentVelocity + omega * change) * deltaTime;
+  let newVelocity = (currentVelocity - omega * temp) * exp;
+  let output = target + (change + temp) * exp;
+
+  // Prevent overshooting.
+  const origMinusCurrent = originalTo - current;
+  const outMinusOrig = output - originalTo;
+  if (origMinusCurrent > 0 === outMinusOrig > 0) {
+    output = originalTo;
+    newVelocity = (output - originalTo) / Math.max(0.0001, deltaTime);
+  }
+
+  return { value: output, velocity: newVelocity };
+};
+
+const smoothDampVec3 = (
+  current: THREE.Vector3,
+  target: THREE.Vector3,
+  velocity: THREE.Vector3,
+  smoothTime: number,
+  deltaTime: number,
+  maxSpeed = Infinity
+) => {
+  const x = smoothDampScalar(current.x, target.x, velocity.x, smoothTime, deltaTime, maxSpeed);
+  const y = smoothDampScalar(current.y, target.y, velocity.y, smoothTime, deltaTime, maxSpeed);
+  const z = smoothDampScalar(current.z, target.z, velocity.z, smoothTime, deltaTime, maxSpeed);
+  current.set(x.value, y.value, z.value);
+  velocity.set(x.velocity, y.velocity, z.velocity);
+};
+
 const darkenHexColor = (hex: string, amount = 0.35) => {
   const normalized = hex.replace('#', '');
   if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
@@ -1309,12 +1360,23 @@ const CameraController = ({
   const fpsCameraTargetRef = useRef(new THREE.Vector3());
   const fpsLookCurrentRef = useRef(new THREE.Vector3());
   const fpsLookTargetRef = useRef(new THREE.Vector3());
+  const followPosTargetRef = useRef(new THREE.Vector3());
+  const followLookTargetRef = useRef(new THREE.Vector3());
+  const followLookCurrentRef = useRef(new THREE.Vector3());
+  const followPosVelRef = useRef(new THREE.Vector3());
+  const followLookVelRef = useRef(new THREE.Vector3());
 
   useEffect(() => {
     const playerX = playerPos.x + offsetX;
     const playerZ = playerPos.y + offsetZ;
     targetRef.current.set(playerX, 0, playerZ);
   }, [playerPos, offsetX, offsetZ]);
+
+  useEffect(() => {
+    // Reset camera smoothing when switching modes to avoid a single-frame "kick".
+    followPosVelRef.current.set(0, 0, 0);
+    followLookVelRef.current.set(0, 0, 0);
+  }, [viewMode, zoomFactor]);
 
   useEffect(() => {
     if (viewMode !== 'fps') return;
@@ -1335,7 +1397,7 @@ const CameraController = ({
     fpsLookCurrentRef.current.copy(fpsLookTargetRef.current);
   }, [playerFacing, playerPos, offsetX, offsetZ, viewMode]);
 
-  useFrame((_, delta) => {
+    useFrame((_, delta) => {
     // Camera settings based on view mode
     const is2D = viewMode === '2d';
     const isFps = viewMode === 'fps';
@@ -1416,11 +1478,34 @@ const CameraController = ({
     const targetZ =
       THREE.MathUtils.lerp(contentBounds.centerZ, followTargetZ, followStrengthZ) + panOffsetZ;
 
-    camera.position.lerp(
-      new THREE.Vector3(targetX, cameraHeight, targetZ + cameraDistance),
-      0.08
+    followPosTargetRef.current.set(targetX, cameraHeight, targetZ + cameraDistance);
+    followLookTargetRef.current.set(targetX, 0, targetZ);
+
+    // Critically damped smoothing = ease-in/out without frame-rate jitter.
+    const smoothTime = is2D ? 0.18 : 0.24;
+    if (followLookCurrentRef.current.lengthSq() === 0) {
+      // Initialize on first frame to avoid a long catch-up from (0,0,0).
+      followLookCurrentRef.current.copy(followLookTargetRef.current);
+    }
+
+    smoothDampVec3(
+      camera.position,
+      followPosTargetRef.current,
+      followPosVelRef.current,
+      smoothTime,
+      delta,
+      200
     );
-    camera.lookAt(new THREE.Vector3(targetX, 0, targetZ));
+    smoothDampVec3(
+      followLookCurrentRef.current,
+      followLookTargetRef.current,
+      followLookVelRef.current,
+      smoothTime * 0.9,
+      delta,
+      250
+    );
+
+    camera.lookAt(followLookCurrentRef.current);
   });
 
   return null;
