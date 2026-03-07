@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TILE_TYPES, voidGrid } from '@/lib/levelgrid';
 import Palette from './Palette';
@@ -8,6 +8,8 @@ import { SpriteCapture } from './SpriteCapture';
 import { CellReferenceManager } from './CellReferenceManager';
 import { themes, type ColorTheme } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
+import { detectGridLines } from './gridDetection';
+import { getAlignmentHints } from './alignmentProfile';
 const isPlaceholderGrid = (levelGrid?: number[][]) => {
     if (!levelGrid || levelGrid.length === 0) return true;
     if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
@@ -42,6 +44,8 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [isDetecting, setIsDetecting] = useState(false);
     const [detectionProgress, setDetectionProgress] = useState<string>('');
+    const [tileFitStatus, setTileFitStatus] = useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
+    const [tileFit, setTileFit] = useState<null | { rows: number; cols: number; cellWidth: number; cellHeight: number }>(null);
 
     // Persistent tab state
     const [activeTab, setActiveTab] = useState(() => {
@@ -63,6 +67,77 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         console.log('Captured sprite:', cellData);
         // Don't switch tabs - stay on capture tab
     };
+
+    // Per-image measurement: estimate the cell size (px) and how many cell-widths fit across/down.
+    // This is intentionally fast and only needs floor-tile regularity, not full tile classification.
+    useEffect(() => {
+        if (!imageURL) {
+            setTileFit(null);
+            setTileFitStatus('idle');
+            return;
+        }
+
+        let cancelled = false;
+        setTileFitStatus('detecting');
+
+        const run = async () => {
+            try {
+                const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+                    const i = new Image();
+                    i.onload = () => resolve(i);
+                    i.onerror = () => reject(new Error('Failed to load image for tile sizing'));
+                    i.src = imageURL;
+                });
+                if (cancelled) return;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) throw new Error('No canvas context for tile sizing');
+                ctx.drawImage(img, 0, 0);
+
+                const detected = detectGridLines(canvas, false, 0, 0, getAlignmentHints());
+                if (cancelled) return;
+
+                if (!detected) {
+                    setTileFit(null);
+                    setTileFitStatus('failed');
+                    return;
+                }
+
+                setTileFit({
+                    rows: detected.rows,
+                    cols: detected.cols,
+                    cellWidth: detected.cellWidth,
+                    cellHeight: detected.cellHeight,
+                });
+                setTileFitStatus('ready');
+            } catch (error) {
+                if (cancelled) return;
+                console.warn('Tile sizing failed:', error);
+                setTileFit(null);
+                setTileFitStatus('failed');
+            }
+        };
+
+        const idle = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: { timeout?: number }) => number);
+        const cancelIdle = (window as any).cancelIdleCallback as undefined | ((id: number) => void);
+        let handle: number | null = null;
+        if (idle) {
+            handle = idle(() => { void run(); }, { timeout: 450 });
+        } else {
+            handle = window.setTimeout(() => { void run(); }, 0);
+        }
+
+        return () => {
+            cancelled = true;
+            if (handle !== null) {
+                if (idle && cancelIdle) cancelIdle(handle);
+                else window.clearTimeout(handle);
+            }
+        };
+    }, [imageURL]);
 
     const runCellDetection = async () => {
         try {
