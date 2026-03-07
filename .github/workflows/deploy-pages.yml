@@ -28,6 +28,7 @@ jobs:
       - name: Build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_BUILD_ID: ${{ github.sha }}
         run: npm run build
 
       # Fallback publish for repos still configured as "Deploy from a branch".

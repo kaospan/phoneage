@@ -7,6 +7,26 @@ import { runBulkBuildAndDownload, runBulkBuildReport } from "@/lib/levelBulkBuil
 
 console.log('🚀 main.tsx starting...');
 
+const maybeReloadOnceForNewBuild = () => {
+  if (typeof window === 'undefined') return;
+  // Only do this in production builds where VITE_BUILD_ID is set by CI.
+  if (!import.meta.env.PROD) return;
+  const buildId = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? '';
+  if (!buildId) return;
+
+  const lastKey = 'stone-age-last-build-id';
+  const onceKey = `stone-age-reloaded-${buildId}`;
+  const last = localStorage.getItem(lastKey) ?? '';
+  if (last !== buildId) {
+    localStorage.setItem(lastKey, buildId);
+    // Prevent loops: reload at most once per build per tab/session.
+    if (!sessionStorage.getItem(onceKey)) {
+      sessionStorage.setItem(onceKey, '1');
+      window.location.reload();
+    }
+  }
+};
+
 try {
   const rootElement = document.getElementById("root");
   console.log('📦 Root element:', rootElement);
@@ -14,6 +34,8 @@ try {
   if (!rootElement) {
     throw new Error('Root element not found!');
   }
+
+  maybeReloadOnceForNewBuild();
 
   console.log('🎯 Creating React root...');
   const root = createRoot(rootElement);
