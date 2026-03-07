@@ -1,17 +1,18 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, GraduationCap, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, GraduationCap, Image as ImageIcon, Link2, Link2Off, Magnet, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
-import { detectGridLines } from './gridDetection';
-import { getAlignmentHints, updateAlignmentProfile } from './alignmentProfile';
+import type { DetectedGrid } from './gridDetection';
+import { updateAlignmentProfile } from './alignmentProfile';
 
 export const GridEditorPanel: React.FC = () => {
     const {
         compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
         importLevelIndex,
-        overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch,
+        overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch,
+        lastGridDetection,
         exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
         pushUndo,
@@ -69,65 +70,27 @@ export const GridEditorPanel: React.FC = () => {
         };
     }, [imageURL]);
 
-    // Detect the grid spacing in the overlay image and render it as a guide.
+    // Use the last Auto-detect result as the alignment guide (single source of truth).
     React.useEffect(() => {
         if (!overlayEnabled || !imageURL || !imageNaturalSize) {
             setGuideGrid(null);
             setGuideStatus('idle');
             return;
         }
-
-        let cancelled = false;
-        setGuideStatus('detecting');
-
-        const run = async () => {
-            try {
-                const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-                    const i = new Image();
-                    i.onload = () => resolve(i);
-                    i.onerror = () => reject(new Error('Failed to load image for alignment guide'));
-                    i.src = imageURL;
-                });
-
-                if (cancelled) return;
-
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) {
-                    setGuideGrid(null);
-                    setGuideStatus('failed');
-                    return;
-                }
-                ctx.drawImage(img, 0, 0);
-
-                const detected = detectGridLines(canvas, true, rows, cols, getAlignmentHints());
-                if (cancelled) return;
-                if (!detected) {
-                    setGuideGrid(null);
-                    setGuideStatus('failed');
-                    return;
-                }
-
-                setGuideGrid(detected);
-                setGuideStatus('ready');
-            } catch {
-                if (cancelled) return;
-                setGuideGrid(null);
-                setGuideStatus('failed');
-            }
-        };
-
-        const w = window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => void };
-        if (typeof w.requestIdleCallback === 'function') {
-            w.requestIdleCallback(() => { void run(); }, { timeout: 1200 });
-        } else {
-            setTimeout(() => { void run(); }, 0);
+        if (!lastGridDetection) {
+            setGuideGrid(null);
+            setGuideStatus('idle');
+            return;
         }
-
-        return () => { cancelled = true; };
-    }, [overlayEnabled, imageURL, imageNaturalSize, rows, cols]);
+        const asGuide = lastGridDetection as unknown as DetectedGrid;
+        if (asGuide.rows !== rows || asGuide.cols !== cols) {
+            setGuideGrid(null);
+            setGuideStatus('idle');
+            return;
+        }
+        setGuideGrid(asGuide);
+        setGuideStatus('ready');
+    }, [overlayEnabled, imageURL, imageNaturalSize, lastGridDetection, rows, cols]);
 
     // Calculate cell size based on available viewport space (avoid scroll by default).
     React.useEffect(() => {
@@ -257,6 +220,34 @@ export const GridEditorPanel: React.FC = () => {
         cellWidth,
         cellHeight,
     ]);
+
+    // The stretched/uniform toggle is removed; keep the grid cell sized from the screenshot tiles.
+    React.useEffect(() => {
+        if (!overlayEnabled || !imageURL) return;
+        if (overlayStretch) return;
+        setOverlayStretch(true);
+    }, [overlayEnabled, imageURL, overlayStretch, setOverlayStretch]);
+
+    const snapToGuideGrid = React.useCallback(() => {
+        if (!guideGrid || !imageNaturalSize) return;
+        if (guideGrid.rows !== rows || guideGrid.cols !== cols) {
+            alert(`Detected ${guideGrid.rows}×${guideGrid.cols}, but current grid is ${rows}×${cols}. Run Auto-detect (or adjust rows/cols) first, then snap.`);
+            return;
+        }
+
+        const imgW = imageNaturalSize.width;
+        const imgH = imageNaturalSize.height;
+        const nextOffsetX = Math.max(0, Math.min(imgW - 1, Math.round(guideGrid.offsetX)));
+        const nextOffsetY = Math.max(0, Math.min(imgH - 1, Math.round(guideGrid.offsetY)));
+        const nextFrameWidth = Math.min(imgW, Math.max(1, Math.round(guideGrid.cellWidth * cols)));
+        const nextFrameHeight = Math.min(imgH, Math.max(1, Math.round(guideGrid.cellHeight * rows)));
+
+        setGridOffsetX(nextOffsetX);
+        setGridOffsetY(nextOffsetY);
+        setGridFrameWidth(nextFrameWidth);
+        setGridFrameHeight(nextFrameHeight);
+    }, [guideGrid, imageNaturalSize, rows, cols, setGridOffsetX, setGridOffsetY, setGridFrameWidth, setGridFrameHeight]);
+
     const cropInsets = React.useMemo(() => {
         if (!imageNaturalSize) return null;
 
@@ -539,6 +530,18 @@ export const GridEditorPanel: React.FC = () => {
                             {guideStatus === 'ready' && (alignment?.aligned ? '✓' : '≈')}
                             {guideStatus === 'ready' && alignment ? ` ${alignment.avg.toFixed(2)} / ${alignment.max.toFixed(2)}px` : ''}
                         </span>
+                    )}
+                    {imageURL && overlayEnabled && showAlignmentGuide && guideStatus === 'ready' && guideGrid && (
+                        <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            onClick={snapToGuideGrid}
+                            title="Snap grid frame/offset to detected floor-tile grid"
+                            aria-label="Snap to detected grid"
+                        >
+                            <Magnet />
+                        </Button>
                     )}
                     <Button
                         size="icon"

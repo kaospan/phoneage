@@ -31,7 +31,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         compareLevelIndex, setCompareLevelIndex,
         overlayEnabled, setOverlayEnabled,
         allLevels, imageURL, setImageURL,
-        detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts,
+        detectGrid, snapToLockedCounts, detectCells, detectGridAndCells,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
@@ -44,6 +44,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [isDetecting, setIsDetecting] = useState(false);
     const [detectionProgress, setDetectionProgress] = useState<string>('');
+    const [autoDetectStatus, setAutoDetectStatus] = useState<string>('');
     const [tileFitStatus, setTileFitStatus] = useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
     const [tileFit, setTileFit] = useState<null | { rows: number; cols: number; cellWidth: number; cellHeight: number }>(null);
 
@@ -143,9 +144,15 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         try {
             setIsDetecting(true);
             setDetectionProgress('Snapping grid to floor tiles...');
+            setAutoDetectStatus('');
             await new Promise((resolve) => setTimeout(resolve, 50));
             // Fast path: snap rows/cols + offsets. User can manually fill remaining cells.
-            await Promise.resolve(detectGrid());
+            const res = await detectGrid();
+            if (res) {
+                setAutoDetectStatus(
+                    `Detected: ${res.rows}×${res.cols} | Tile: ${Math.round(res.cellWidth)}×${Math.round(res.cellHeight)}px | Confidence: ${res.confidence.toFixed(2)} | Snapped`
+                );
+            }
         } catch (error) {
             console.error('❌ Error running image cell detection:', error);
             alert(`Auto-detect failed: ${(error as Error).message}`);
@@ -319,14 +326,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         >
                             Reset Layout
                         </Button>
-                        <label className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1 text-xs">
-                            <input
-                                type="checkbox"
-                                checked={useDetectCurrentCounts}
-                                onChange={(e) => setUseDetectCurrentCounts(e.target.checked)}
-                            />
-                            Lock current rows/cols
-                        </label>
                         <select
                             className="px-2 py-1 rounded border bg-background text-foreground text-xs [color-scheme:dark]"
                             value={importLevelIndex ?? ''}
@@ -381,11 +380,50 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             variant="secondary"
                             onClick={runCellDetection}
                             disabled={!imageURL || isDetecting}
-                            title="Analyze the loaded image and fill the grid cells automatically"
+                            title="Auto-detect the grid (rows/cols + snap frame/offset). Does not analyze cell types."
                         >
-                            Auto-detect Cells
+                            Auto-detect Grid
                         </Button>
                     </div>
+                    {autoDetectStatus && (
+                        <div className="mt-1 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
+                            {autoDetectStatus}
+                        </div>
+                    )}
+                    <details className="mt-2 rounded border border-border/50 bg-background/30 p-2">
+                        <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">
+                            Advanced
+                        </summary>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                            Auto-detect ignores locks and will update rows/cols. Use this tool to snap the frame/offset while keeping your current rows/cols.
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                    setIsDetecting(true);
+                                    setDetectionProgress('Snapping frame (keeping rows/cols)...');
+                                    setAutoDetectStatus('');
+                                    try {
+                                        const res = await snapToLockedCounts();
+                                        if (res) {
+                                            setAutoDetectStatus(
+                                                `Snapped (kept ${rows}×${cols}) | Tile: ${Math.round(res.cellWidth)}×${Math.round(res.cellHeight)}px | Confidence: ${res.confidence.toFixed(2)}`
+                                            );
+                                        }
+                                    } finally {
+                                        setIsDetecting(false);
+                                        setDetectionProgress('');
+                                    }
+                                }}
+                                disabled={!imageURL || isDetecting}
+                                title="Snap frame/offset using current rows/cols (does not change rows/cols)"
+                            >
+                                Snap (Keep Rows/Cols)
+                            </Button>
+                        </div>
+                    </details>
                     {imageURL && (
                         <div className="mt-1 text-[11px] leading-tight text-muted-foreground">
                             {tileFitStatus === 'detecting' && <span>Measuring floor tile size and board tile counts...</span>}
@@ -403,7 +441,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         </div>
                     )}
                     <div className="mt-1 text-xs text-muted-foreground">
-                        Grid detection now auto-detects row and column counts from the screenshot. Enable `Lock current rows/cols` only when you want detection constrained to the values above.
+                        Auto-detect finds the screenshot's tile grid and snaps rows/cols + frame. If it misses, adjust crop and re-run.
                     </div>
                     <div className="mt-1 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                         Resizing rows/cols or adding/removing edges changes the level layout. Use `Reset Layout` to snap back before saving if you resized by accident.

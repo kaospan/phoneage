@@ -1,5 +1,6 @@
 import { createContext, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { getAllLevels, type ColorTheme } from '@/data/levels';
+import type { DetectedGrid } from './gridDetection';
 
 // Centralized context/types to keep Fast Refresh stable.
 export type BulkContextType = 'column-left' | 'column-right' | 'row-top' | 'row-bottom';
@@ -70,11 +71,13 @@ export interface LevelMapperContextValue {
   showUnsavedBanner: boolean;
 
   // Detection
-  detectGrid: () => void;
+  detectGrid: () => Promise<DetectedGrid | null>;
+  snapToLockedCounts: () => Promise<DetectedGrid | null>;
   detectCells: () => void;
   detectGridAndCells: () => void;
   useDetectCurrentCounts: boolean;
   setUseDetectCurrentCounts: (b: boolean) => void;
+  lastGridDetection: DetectedGrid | null;
 
   // Bulk context menu
   contextMenu: { x: number; y: number; type: BulkContextType } | null;

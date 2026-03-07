@@ -11,6 +11,23 @@ type DetectGridHints = {
     preferredRows?: number;
 };
 
+export type DetectedGrid = {
+    rows: number;
+    cols: number;
+    offsetX: number;
+    offsetY: number;
+    cellWidth: number;
+    cellHeight: number;
+    // Debug/UX metrics (best-effort heuristics)
+    runLenX: number;
+    runLenY: number;
+    scoreX: number;
+    scoreY: number;
+    confidence: number; // 0..1
+    durationMs: number;
+    usedRunCounts: boolean;
+};
+
 // Grid line detection logic
 export const detectGridLines = (
     canvas: HTMLCanvasElement,
@@ -18,8 +35,9 @@ export const detectGridLines = (
     currentRows: number,
     currentCols: number,
     hints?: DetectGridHints
-): { rows: number; cols: number; offsetX: number; offsetY: number; cellWidth: number; cellHeight: number } | null => {
+): DetectedGrid | null => {
     console.log('🔍 detectGridLines() started');
+    const t0 = performance.now();
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) {
@@ -334,8 +352,36 @@ export const detectGridLines = (
         preferredRows
     );
 
-    const finalCols = useDetectCurrentCounts ? currentCols : detectedColsFromExtent.count;
-    const finalRows = useDetectCurrentCounts ? currentRows : detectedRowsFromExtent.count;
+    const derivedColsFromRun = xSpacing.runLen >= MIN_DETECTED_COLS + 1 ? (xSpacing.runLen - 1) : null;
+    const derivedRowsFromRun = ySpacing.runLen >= MIN_DETECTED_ROWS + 1 ? (ySpacing.runLen - 1) : null;
+
+    let finalCols = useDetectCurrentCounts ? currentCols : detectedColsFromExtent.count;
+    let finalRows = useDetectCurrentCounts ? currentRows : detectedRowsFromExtent.count;
+    let usedRunCounts = false;
+    let usedRunCols = false;
+    let usedRunRows = false;
+
+    if (!useDetectCurrentCounts) {
+        // Prefer the repeated-boundary run length (board region) over extents (background can pollute extents).
+        if (derivedColsFromRun) {
+            finalCols = Math.max(MIN_DETECTED_COLS, Math.min(MAX_DETECTED_COLS, derivedColsFromRun));
+            usedRunCols = true;
+        }
+        if (derivedRowsFromRun) {
+            finalRows = Math.max(MIN_DETECTED_ROWS, Math.min(MAX_DETECTED_ROWS, derivedRowsFromRun));
+            usedRunRows = true;
+        }
+        usedRunCounts = usedRunCols || usedRunRows;
+
+        // If this combination is unsafe, fall back to extents counts.
+        if (finalRows * finalCols > MAX_DETECTED_CELLS) {
+            finalCols = detectedColsFromExtent.count;
+            finalRows = detectedRowsFromExtent.count;
+            usedRunCounts = false;
+            usedRunCols = false;
+            usedRunRows = false;
+        }
+    }
 
     // Safety: never allow absurdly large grids (they can freeze the UI during cell analysis).
     if (finalRows * finalCols > MAX_DETECTED_CELLS) {
@@ -373,11 +419,27 @@ export const detectGridLines = (
 
     const baseOffsetX = useDetectCurrentCounts ? adjustedOffsetX : detectedColsFromExtent.gridStart;
     const baseOffsetY = useDetectCurrentCounts ? adjustedOffsetY : detectedRowsFromExtent.gridStart;
-    const refinedOffsetX = refineOffset(vSmooth, baseOffsetX, xSpacing.size, finalCols);
-    const refinedOffsetY = refineOffset(hSmooth, baseOffsetY, ySpacing.size, finalRows);
+    // If we used run-derived counts, anchor the grid start to the first strong boundary in the run.
+    const runStartOffsetX = xSpacing.runLen >= 3 ? (xSpacing.offsetAbs + xSpacing.runStart * xSpacing.size) : xSpacing.offsetAbs;
+    const runStartOffsetY = ySpacing.runLen >= 3 ? (ySpacing.offsetAbs + ySpacing.runStart * ySpacing.size) : ySpacing.offsetAbs;
+    const startOffsetX = usedRunCols ? runStartOffsetX : baseOffsetX;
+    const startOffsetY = usedRunRows ? runStartOffsetY : baseOffsetY;
+    const refinedOffsetX = refineOffset(vSmooth, startOffsetX, xSpacing.size, finalCols);
+    const refinedOffsetY = refineOffset(hSmooth, startOffsetY, ySpacing.size, finalRows);
 
     const finalOffsetX = clamp(refinedOffsetX, 0, width - 1);
     const finalOffsetY = clamp(refinedOffsetY, 0, height - 1);
+
+    const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+    const expectedBoundaryX = Math.max(2, finalCols + 1);
+    const expectedBoundaryY = Math.max(2, finalRows + 1);
+    const runFracX = clamp01(xSpacing.runLen / expectedBoundaryX);
+    const runFracY = clamp01(ySpacing.runLen / expectedBoundaryY);
+    // Heuristic confidence: mostly driven by how much of the expected boundary run we observed.
+    let confidence = Math.min(runFracX, runFracY);
+    if (!usedRunCounts) confidence *= 0.65;
+
+    const durationMs = performance.now() - t0;
     return {
         rows: finalRows,
         cols: finalCols,
@@ -385,5 +447,12 @@ export const detectGridLines = (
         offsetY: finalOffsetY,
         cellWidth: xSpacing.size,
         cellHeight: ySpacing.size,
+        runLenX: xSpacing.runLen,
+        runLenY: ySpacing.runLen,
+        scoreX: xSpacing.score,
+        scoreY: ySpacing.score,
+        confidence,
+        durationMs,
+        usedRunCounts,
     };
 };

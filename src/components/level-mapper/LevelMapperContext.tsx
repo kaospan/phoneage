@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getAllLevels, type ColorTheme } from '@/data/levels';
-import { emptyGrid, formatGridRowsOneLine } from '@/lib/levelgrid';
+import { emptyGrid, formatGridRowsOneLine, voidGrid } from '@/lib/levelgrid';
 import { detectGridLines } from './gridDetection';
 import { LevelMapperContext, type BulkContextType, type LevelMapperContextValue } from './LevelMapperStore';
 import {
@@ -44,6 +44,16 @@ const isPlaceholderGrid = (levelGrid?: number[][]) => {
     if (!levelGrid || levelGrid.length === 0) return true;
     if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
     return levelGrid.every((row) => row.every((cell) => cell === 5));
+};
+
+const reshapeGridPreservingOverlap = (prev: number[][], nextRows: number, nextCols: number, fill = 5) => {
+    const next = Array.from({ length: nextRows }, () => Array(nextCols).fill(fill));
+    const rMax = Math.min(prev.length, nextRows);
+    const cMax = Math.min(prev[0]?.length ?? 0, nextCols);
+    for (let r = 0; r < rMax; r += 1) {
+        for (let c = 0; c < cMax; c += 1) next[r][c] = prev[r][c];
+    }
+    return next;
 };
 
 const stripJsonComments = (value: string) => value.replace(/\/\/.*$/gm, '').trim();
@@ -129,6 +139,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [overlayOpacity, setOverlayOpacity] = useState(0.5);
         const [overlayStretch, setOverlayStretch] = useState(true);
         const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(false);
+        const [lastGridDetection, setLastGridDetection] = useState<ReturnType<typeof detectGridLines> | null>(null);
         const loadedSnapshotRef = useRef<null | {
             grid: number[][];
             playerStart: { x: number; y: number } | null;
@@ -151,6 +162,11 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         useCanvasDraw(canvasRef, imageURL, showGrid, rows, cols, gridOffsetX, gridOffsetY);
         useSaveCompareLevel(compareLevelIndex, saveCompareLevelIndex);
         useSaveImportLevel(importLevelIndex, saveImportLevelIndex);
+
+        // Detection results are image-specific; clear when the image changes.
+        useEffect(() => {
+            setLastGridDetection(null);
+        }, [imageURL]);
 
         // Auto-load level on startup if one was previously imported.
         // For placeholder auto-build levels, load the image and keep the editor responsive
@@ -318,70 +334,161 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const undo = () => { if (undoStack.length === 0) return; setRedoStack(s => [...s, grid.map(r => [...r])]); const prev = undoStack[undoStack.length - 1]; setGrid(prev.map(r => [...r])); setUndoStack(s => s.slice(0, -1)); setIsSaved(false); };
         const redo = () => { if (redoStack.length === 0) return; setUndoStack(s => [...s, grid.map(r => [...r])]); const next = redoStack[redoStack.length - 1]; setGrid(next.map(r => [...r])); setRedoStack(s => s.slice(0, -1)); setIsSaved(false); };
 
-        const detectGrid = () => {
-            const run = async () => {
-                // Prefer full-resolution detection so cell sizes/offsets snap to real pixels (no rounding drift from preview scaling).
+        const detectGrid = async () => {
+            try {
+                const maxDim = 1100; // speed: run detection on downsampled image, then scale back to source pixels
                 const imageCanvas = document.createElement('canvas');
-                let imageWidth = 0;
-                let imageHeight = 0;
+                let srcW = 0;
+                let srcH = 0;
 
                 if (imageURL) {
                     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
                         const img = new Image();
+                        img.decoding = 'async';
                         img.onload = () => resolve(img);
                         img.onerror = () => reject(new Error('Failed to load image for grid detection'));
                         img.src = imageURL;
                     });
-                    imageWidth = image.width;
-                    imageHeight = image.height;
-                    imageCanvas.width = image.width;
-                    imageCanvas.height = image.height;
+                    srcW = image.width;
+                    srcH = image.height;
+
+                    const scale = Math.min(1, maxDim / Math.max(1, Math.max(srcW, srcH)));
+                    const w = Math.max(1, Math.round(srcW * scale));
+                    const h = Math.max(1, Math.round(srcH * scale));
+                    imageCanvas.width = w;
+                    imageCanvas.height = h;
                     const ctx = imageCanvas.getContext('2d', { willReadFrequently: true });
                     if (!ctx) throw new Error('Failed to create canvas context for grid detection');
-                    ctx.drawImage(image, 0, 0);
+                    ctx.drawImage(image, 0, 0, w, h);
                 } else {
                     const preview = canvasRef.current;
                     if (!preview) {
                         console.error('❌ No canvas/image in detectGrid');
-                        return;
+                        return null;
                     }
+                    srcW = preview.width;
+                    srcH = preview.height;
                     imageCanvas.width = preview.width;
                     imageCanvas.height = preview.height;
-                    imageWidth = preview.width;
-                    imageHeight = preview.height;
                     const ctx = imageCanvas.getContext('2d', { willReadFrequently: true });
                     if (!ctx) throw new Error('Failed to create canvas context for grid detection');
                     ctx.drawImage(preview, 0, 0);
                 }
 
-                const result = detectGridLines(imageCanvas, useDetectCurrentCounts, rows, cols, getAlignmentHints());
-                if (!result) {
+                // Auto-detect always ignores the "Lock current rows/cols" toggle.
+                const detected = detectGridLines(imageCanvas, false, rows, cols, getAlignmentHints());
+                if (!detected) {
+                    setLastGridDetection(null);
                     console.error('❌ Grid detection failed');
-                    alert('Grid detection failed. Try locking the current rows/cols if you already know them, or adjust the crop so the board edges are cleaner.');
-                    return;
+                    alert('Grid detection failed. Try adjusting the crop so the board edges are cleaner.');
+                    return null;
                 }
 
-                console.log(`✓ Grid detected: ${result.rows}x${result.cols}`);
+                const scaleBackX = srcW / Math.max(1, imageCanvas.width);
+                const scaleBackY = srcH / Math.max(1, imageCanvas.height);
+                const result = {
+                    ...detected,
+                    offsetX: detected.offsetX * scaleBackX,
+                    offsetY: detected.offsetY * scaleBackY,
+                    cellWidth: detected.cellWidth * scaleBackX,
+                    cellHeight: detected.cellHeight * scaleBackY,
+                };
+
+                console.log(`✓ Grid detected: ${result.rows}x${result.cols} (conf ${result.confidence.toFixed(2)})`);
+                setLastGridDetection(result);
+
                 setRows(result.rows);
                 setCols(result.cols);
-                setGrid(emptyGrid(result.rows, result.cols));
+                setPlayerStart((prev) => (prev ? { x: Math.min(prev.x, result.cols - 1), y: Math.min(prev.y, result.rows - 1) } : prev));
+
+                // Preserve overlap if the user already painted a map; otherwise start with void.
+                setGrid((prev) => {
+                    const base = voidGrid(result.rows, result.cols);
+                    if (isPlaceholderGrid(prev)) return base;
+                    return reshapeGridPreservingOverlap(prev, result.rows, result.cols, 5);
+                });
 
                 // Snap frame to exact tile multiples in the source image pixels.
-                const nextOffsetX = Math.max(0, Math.min(imageWidth - 1, Math.round(result.offsetX)));
-                const nextOffsetY = Math.max(0, Math.min(imageHeight - 1, Math.round(result.offsetY)));
-                const nextFrameWidth = Math.min(imageWidth, Math.max(1, Math.round(result.cellWidth * result.cols)));
-                const nextFrameHeight = Math.min(imageHeight, Math.max(1, Math.round(result.cellHeight * result.rows)));
+                const nextOffsetX = Math.max(0, Math.min(srcW - 1, Math.round(result.offsetX)));
+                const nextOffsetY = Math.max(0, Math.min(srcH - 1, Math.round(result.offsetY)));
+                const nextFrameWidth = Math.min(srcW, Math.max(1, Math.round(result.cellWidth * result.cols)));
+                const nextFrameHeight = Math.min(srcH, Math.max(1, Math.round(result.cellHeight * result.rows)));
 
                 setGridOffsetX(nextOffsetX);
                 setGridOffsetY(nextOffsetY);
                 setGridFrameWidth(nextFrameWidth);
                 setGridFrameHeight(nextFrameHeight);
-            };
-
-            void run().catch((error) => {
+                setIsSaved(false);
+                return result;
+            } catch (error) {
                 console.error('❌ Grid detection failed:', error);
                 alert(`Grid detection failed: ${(error as Error).message}`);
-            });
+                return null;
+            }
+        };
+
+        // Advanced tool: keep current rows/cols, only snap frame/offset to the detected grid.
+        const snapToLockedCounts = async () => {
+            try {
+                if (!imageURL) {
+                    alert('Please load an image first.');
+                    return null;
+                }
+                const maxDim = 1100;
+                const imageCanvas = document.createElement('canvas');
+                const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+                    const img = new Image();
+                    img.decoding = 'async';
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error('Failed to load image for grid snap'));
+                    img.src = imageURL;
+                });
+
+                const srcW = image.width;
+                const srcH = image.height;
+                const scale = Math.min(1, maxDim / Math.max(1, Math.max(srcW, srcH)));
+                const w = Math.max(1, Math.round(srcW * scale));
+                const h = Math.max(1, Math.round(srcH * scale));
+                imageCanvas.width = w;
+                imageCanvas.height = h;
+                const ctx = imageCanvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) throw new Error('Failed to create canvas context for grid snap');
+                ctx.drawImage(image, 0, 0, w, h);
+
+                const detected = detectGridLines(imageCanvas, true, rows, cols, getAlignmentHints());
+                if (!detected) {
+                    alert('Snap failed. Try adjusting the crop so the board edges are cleaner.');
+                    return null;
+                }
+
+                const scaleBackX = srcW / Math.max(1, imageCanvas.width);
+                const scaleBackY = srcH / Math.max(1, imageCanvas.height);
+                const result = {
+                    ...detected,
+                    offsetX: detected.offsetX * scaleBackX,
+                    offsetY: detected.offsetY * scaleBackY,
+                    cellWidth: detected.cellWidth * scaleBackX,
+                    cellHeight: detected.cellHeight * scaleBackY,
+                };
+
+                setLastGridDetection(result);
+
+                const nextOffsetX = Math.max(0, Math.min(srcW - 1, Math.round(result.offsetX)));
+                const nextOffsetY = Math.max(0, Math.min(srcH - 1, Math.round(result.offsetY)));
+                const nextFrameWidth = Math.min(srcW, Math.max(1, Math.round(result.cellWidth * cols)));
+                const nextFrameHeight = Math.min(srcH, Math.max(1, Math.round(result.cellHeight * rows)));
+
+                setGridOffsetX(nextOffsetX);
+                setGridOffsetY(nextOffsetY);
+                setGridFrameWidth(nextFrameWidth);
+                setGridFrameHeight(nextFrameHeight);
+                setIsSaved(false);
+                return result;
+            } catch (error) {
+                console.error('❌ Snap failed:', error);
+                alert(`Snap failed: ${(error as Error).message}`);
+                return null;
+            }
         };
 
         const detectCells = async () => {
@@ -520,8 +627,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         const detectGridAndCells = () => {
-            detectGrid();
-            setTimeout(() => detectCells(), 300);
+            void detectGrid().then(() => {
+                setTimeout(() => { void detectCells(); }, 300);
+            });
         };
 
         const exportTS = async () => {
@@ -627,7 +735,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         console.log('✓ Creating context value...');
-        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
+        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, snapToLockedCounts, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, lastGridDetection, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;
