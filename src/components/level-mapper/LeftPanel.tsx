@@ -293,9 +293,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
 
                     <div className="flex items-center gap-2 flex-wrap">
                         <label className="text-xs text-muted-foreground">Rows</label>
-                        <input className="w-16 px-2 py-1 rounded border bg-background" type="number" min={1} value={rows} onChange={(e) => setRows(parseInt(e.target.value || '1', 10))} />
+                        <input className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]" type="number" min={1} value={rows} onChange={(e) => setRows(parseInt(e.target.value || '1', 10))} />
                         <label className="text-xs text-muted-foreground">Cols</label>
-                        <input className="w-16 px-2 py-1 rounded border bg-background" type="number" min={1} value={cols} onChange={(e) => setCols(parseInt(e.target.value || '1', 10))} />
+                        <input className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]" type="number" min={1} value={cols} onChange={(e) => setCols(parseInt(e.target.value || '1', 10))} />
                         <div className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
                             <span className="text-xs text-muted-foreground">Rows</span>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowTop} title="Add a void row at the top">+Top</Button>
@@ -328,7 +328,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             Lock current rows/cols
                         </label>
                         <select
-                            className="px-2 py-1 rounded border bg-background text-xs"
+                            className="px-2 py-1 rounded border bg-background text-foreground text-xs [color-scheme:dark]"
                             value={importLevelIndex ?? ''}
                             onChange={(e) => {
                                 const val = e.target.value;
@@ -393,7 +393,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 <span>
                                     Floor tile: ~{Math.round(tileFit.cellWidth)}×{Math.round(tileFit.cellHeight)}px. Across: {tileFit.cols}. Down: {tileFit.rows}.
                                     {((tileFit.rows !== rows) || (tileFit.cols !== cols)) && (
-                                        <span className="ml-2 text-amber-600 dark:text-amber-300">
+                                        <span className="ml-2 text-amber-200">
                                             (Current grid: {rows}×{cols})
                                         </span>
                                     )}
@@ -405,7 +405,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     <div className="mt-1 text-xs text-muted-foreground">
                         Grid detection now auto-detects row and column counts from the screenshot. Enable `Lock current rows/cols` only when you want detection constrained to the values above.
                     </div>
-                    <div className="mt-1 rounded border border-amber-300/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100">
+                    <div className="mt-1 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                         Resizing rows/cols or adding/removing edges changes the level layout. Use `Reset Layout` to snap back before saving if you resized by accident.
                     </div>
 
@@ -413,7 +413,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     <div className="flex items-center gap-2 flex-wrap mt-2 p-2 border rounded bg-muted/30">
                         <label className="text-xs font-semibold text-foreground">Color Theme:</label>
                         <select
-                            className="px-3 py-1.5 rounded border bg-background text-sm flex-1 min-w-[120px]"
+                            className="px-3 py-1.5 rounded border bg-background text-foreground text-sm flex-1 min-w-[120px] [color-scheme:dark]"
                             value={theme || 'default'}
                             onChange={(e) => {
                                 const newTheme = e.target.value === 'default' ? undefined : e.target.value as ColorTheme;
@@ -439,7 +439,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     </div>
                     <div className="mt-2 relative">
                         {imageURL ? (
-                            <div className="text-sm p-4 border rounded bg-green-50 dark:bg-green-950">
+                            <div className="text-sm p-4 border rounded border-emerald-500/25 bg-emerald-500/10 text-emerald-100">
                                 ✅ Image loaded! Switch to <strong>Grid Editor</strong> tab to see the overlay.
                             </div>
                         ) : (

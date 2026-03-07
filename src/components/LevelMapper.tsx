@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LevelMapperProvider } from '@/components/level-mapper/LevelMapperContext';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import UnsavedBanner from '@/components/level-mapper/UnsavedBanner';
@@ -43,8 +44,15 @@ const CollapsedLeftPanel: React.FC<{ onExpand: () => void }> = ({ onExpand }) =>
                     <div className="text-sm">{themeLabel}</div>
                 </div>
 
-                <div className={`rounded border p-2 text-sm ${imageURL ? 'bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100' : 'bg-background/50 text-muted-foreground'}`}>
-                    {imageURL ? '✅ Image loaded! Switch to Grid Editor tab to see the overlay.' : 'No image loaded'}
+                <div
+                    className={[
+                        'rounded border p-2 text-sm',
+                        imageURL
+                            ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                            : 'border-border/60 bg-background/50 text-muted-foreground',
+                    ].join(' ')}
+                >
+                    {imageURL ? 'Image loaded. Open Grid Editor to align.' : 'No image loaded'}
                 </div>
 
                 <div className="space-y-1">

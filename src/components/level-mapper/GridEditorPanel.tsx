@@ -476,6 +476,9 @@ export const GridEditorPanel: React.FC = () => {
 
     // Get the import level info for display
     const importLevel = importLevelIndex !== null && importLevelIndex !== undefined ? allLevels[importLevelIndex] : null;
+    const rulerSizePx = 28;
+    const contentWidthPx = Math.max(scaledDisplayWidth, cols * cellWidth);
+    const contentHeightPx = Math.max(scaledDisplayHeight, rows * cellHeight);
 
     return (
         <div className="w-full lg:flex-1 lg:min-w-0 bg-card rounded border p-2">
@@ -485,13 +488,13 @@ export const GridEditorPanel: React.FC = () => {
                         Grid Editor ({rows}×{cols} = {rows * cols} cells)
                     </div>
                     {importLevel && (
-                        <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-md text-xs font-semibold border border-blue-300 dark:border-blue-700">
-                            📝 Editing: Level {importLevel.id}
+                        <div className="px-3 py-1 rounded-md text-xs font-semibold border border-sky-500/30 bg-sky-500/10 text-sky-100">
+                            Editing: Level {importLevel.id}
                         </div>
                     )}
                     {imageURL && overlayEnabled && (
-                        <div className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-xs border border-green-300 dark:border-green-700">
-                            🖼️ Image overlay active
+                        <div className="px-2 py-1 rounded text-xs border border-emerald-500/25 bg-emerald-500/10 text-emerald-100">
+                            Image overlay active
                         </div>
                     )}
                 </div>
@@ -525,7 +528,9 @@ export const GridEditorPanel: React.FC = () => {
                         <span
                             className={[
                                 "rounded-md border px-2 py-1 text-xs tabular-nums",
-                                alignment?.aligned ? "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300" : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                                alignment?.aligned
+                                    ? "border-green-500/50 bg-green-500/10 text-green-100"
+                                    : "border-amber-500/40 bg-amber-500/10 text-amber-100",
                             ].join(' ')}
                             title={guideStatus === 'detecting' ? "Detecting grid lines in the screenshot..." : "Average / max alignment error (px)"}
                         >
@@ -895,167 +900,242 @@ export const GridEditorPanel: React.FC = () => {
             <div className="mt-2">
                 <div
                     ref={containerRef}
-                    className="overflow-auto border rounded p-3 h-[calc(100vh-260px)] min-h-[320px]"
+                    className="overflow-auto border rounded p-3 h-[calc(100vh-260px)] min-h-[320px] [color-scheme:dark]"
                     onWheel={onWheelZoom}
                 >
                     <div
                         className="relative mx-auto"
                         style={{
-                            width: `${Math.max(scaledDisplayWidth, cols * cellWidth)}px`,
-                            height: `${Math.max(scaledDisplayHeight, rows * cellHeight)}px`,
+                            width: `${contentWidthPx + rulerSizePx}px`,
+                            height: `${contentHeightPx + rulerSizePx}px`,
                             minWidth: '100%',
                         }}
                     >
-                        {overlayEnabled && imageURL && (
-                            <img
-                                src={imageURL}
-                                alt="overlay"
-                                className="absolute top-0 left-0 pointer-events-none"
-                                style={{
-                                    opacity: overlayOpacity,
-                                    width: `${scaledDisplayWidth}px`,
-                                    height: `${scaledDisplayHeight}px`,
-                                    objectFit: 'contain',
-                                    imageRendering: 'pixelated',
-                                    zIndex: 15
-                                }}
-                            />
-                        )}
-                        {overlayEnabled && imageURL && showAlignmentGuide && alignment && (
-                            <svg
-                                className="absolute top-0 left-0 pointer-events-none"
-                                width={Math.max(1, Math.round(scaledDisplayWidth))}
-                                height={Math.max(1, Math.round(scaledDisplayHeight))}
-                                viewBox={`0 0 ${Math.max(1, scaledDisplayWidth)} ${Math.max(1, scaledDisplayHeight)}`}
-                                style={{ zIndex: 16 }}
-                            >
-                                {/* Detected grid bounds */}
-                                <rect
-                                    x={alignment.guideOffsetX}
-                                    y={alignment.guideOffsetY}
-                                    width={alignment.guideCellW * cols}
-                                    height={alignment.guideCellH * rows}
-                                    fill="none"
-                                    stroke={alignment.aligned ? "rgba(34,197,94,0.9)" : "rgba(251,191,36,0.75)"}
-                                    strokeWidth={1.25}
-                                />
-                                {/* Vertical detected lines */}
-                                {alignment.v.map((line, idx) => {
-                                    const color =
-                                        line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
-                                            line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
-                                                "rgba(239,68,68,0.75)";
-                                    return (
-                                        <line
-                                            key={`v-${idx}`}
-                                            x1={line.x}
-                                            y1={alignment.guideOffsetY}
-                                            x2={line.x}
-                                            y2={alignment.guideOffsetY + alignment.guideCellH * rows}
-                                            stroke={color}
-                                            strokeWidth={1}
-                                            strokeDasharray={alignment.aligned ? undefined : "4 4"}
-                                        />
-                                    );
-                                })}
-                                {/* Horizontal detected lines */}
-                                {alignment.h.map((line, idx) => {
-                                    const color =
-                                        line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
-                                            line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
-                                                "rgba(239,68,68,0.75)";
-                                    return (
-                                        <line
-                                            key={`h-${idx}`}
-                                            x1={alignment.guideOffsetX}
-                                            y1={line.y}
-                                            x2={alignment.guideOffsetX + alignment.guideCellW * cols}
-                                            y2={line.y}
-                                            stroke={color}
-                                            strokeWidth={1}
-                                            strokeDasharray={alignment.aligned ? undefined : "4 4"}
-                                        />
-                                    );
-                                })}
-                            </svg>
-                        )}
                         <div
-                            className="relative z-10"
+                            className="grid"
                             style={{
-                                width: `${cols * cellWidth}px`,
-                                transform: `translate(${displayOffsetX}px, ${displayOffsetY}px)`,
-                                transformOrigin: 'top left',
+                                gridTemplateColumns: `${rulerSizePx}px ${contentWidthPx}px`,
+                                gridTemplateRows: `${rulerSizePx}px ${contentHeightPx}px`,
+                                width: `${rulerSizePx + contentWidthPx}px`,
+                                height: `${rulerSizePx + contentHeightPx}px`,
                             }}
                         >
-                            <table className="text-xs border-collapse" style={{ tableLayout: 'fixed', borderSpacing: 0 }}
-                                onMouseUp={endPaint}
-                                onMouseLeave={endPaint}
-                            >
-                                <tbody>
-                                    {grid.map((row, r) => (
-                                        <tr key={r}>
-                                            {row.map((cell, c) => {
-                                                const diff = compareLevel?.grid?.[r]?.[c] !== undefined && compareLevel.grid[r][c] !== cell;
-                                                const isPlayerStart = playerStart?.x === c && playerStart?.y === r;
-                                                return (
-                                                    <td key={`${r}-${c}`} className="relative p-0" style={{ width: `${cellWidth}px`, height: `${cellHeight}px` }}>
-                                                        <button
-                                                            className="w-full h-full border relative"
-                                                            style={{
-                                                                background: TILE_TYPES.find(t => t.id === cell)?.color || '#000',
-                                                                width: `${cellWidth}px`,
-                                                                height: `${cellHeight}px`,
-                                                            }}
-                                                            onMouseDown={(e) => { e.preventDefault(); beginPaint(r, c); }}
-                                                            onMouseEnter={() => continuePaint(r, c)}
-                                                            title={isPlayerStart ? `Player Start (${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}` : `(${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}`}
-                                                            disabled={isDragMode}
-                                                        >
-                                                            {isPlayerStart && (
-                                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                                    <div className="text-white font-bold text-lg drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">👤</div>
-                                                                </div>
-                                                            )}
-                                                        </button>
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {isDragMode && (
+                            {/* Corner ruler label */}
+                            <div className="sticky top-0 left-0 z-30 flex items-center justify-center border border-border/40 bg-background/80 backdrop-blur-sm">
+                                <div className="text-[10px] leading-tight text-muted-foreground tabular-nums text-center">
+                                    {cellWidth.toFixed(1)}×{cellHeight.toFixed(1)}px
+                                </div>
+                            </div>
+
+                            {/* X ruler (px) */}
+                            <div className="sticky top-0 z-20 border border-border/40 bg-background/80 backdrop-blur-sm overflow-hidden">
+                                <svg
+                                    width={Math.max(1, Math.round(contentWidthPx))}
+                                    height={rulerSizePx}
+                                    viewBox={`0 0 ${Math.max(1, contentWidthPx)} ${rulerSizePx}`}
+                                    shapeRendering="crispEdges"
+                                >
+                                    {Array.from({ length: cols + 1 }, (_, i) => {
+                                        const x = i * cellWidth;
+                                        const major = i % 5 === 0;
+                                        const tickTo = major ? 6 : 12;
+                                        return (
+                                            <g key={`xr-${i}`}>
+                                                <line x1={x} y1={rulerSizePx} x2={x} y2={tickTo} stroke="rgba(255,255,255,0.28)" strokeWidth={1} />
+                                                {major && (
+                                                    <text x={x + 2} y={11} fontSize="9" fill="rgba(255,255,255,0.65)">
+                                                        {Math.round(x)}px
+                                                    </text>
+                                                )}
+                                            </g>
+                                        );
+                                    })}
+                                </svg>
+                            </div>
+
+                            {/* Y ruler (px) */}
+                            <div className="sticky left-0 z-20 border border-border/40 bg-background/80 backdrop-blur-sm overflow-hidden">
+                                <svg
+                                    width={rulerSizePx}
+                                    height={Math.max(1, Math.round(contentHeightPx))}
+                                    viewBox={`0 0 ${rulerSizePx} ${Math.max(1, contentHeightPx)}`}
+                                    shapeRendering="crispEdges"
+                                >
+                                    {Array.from({ length: rows + 1 }, (_, i) => {
+                                        const y = i * cellHeight;
+                                        const major = i % 5 === 0;
+                                        const tickTo = major ? 6 : 12;
+                                        return (
+                                            <g key={`yr-${i}`}>
+                                                <line x1={rulerSizePx} y1={y} x2={tickTo} y2={y} stroke="rgba(255,255,255,0.28)" strokeWidth={1} />
+                                                {major && (
+                                                    <text x={2} y={y + 10} fontSize="9" fill="rgba(255,255,255,0.65)">
+                                                        {Math.round(y)}px
+                                                    </text>
+                                                )}
+                                            </g>
+                                        );
+                                    })}
+                                </svg>
+                            </div>
+
+                            {/* Main image + grid */}
+                            <div className="relative">
+                                {overlayEnabled && imageURL && (
+                                    <img
+                                        src={imageURL}
+                                        alt="overlay"
+                                        className="absolute top-0 left-0 pointer-events-none"
+                                        style={{
+                                            opacity: overlayOpacity,
+                                            width: `${scaledDisplayWidth}px`,
+                                            height: `${scaledDisplayHeight}px`,
+                                            objectFit: 'contain',
+                                            imageRendering: 'pixelated',
+                                            zIndex: 15
+                                        }}
+                                    />
+                                )}
+                                {overlayEnabled && imageURL && showAlignmentGuide && alignment && (
+                                    <svg
+                                        className="absolute top-0 left-0 pointer-events-none"
+                                        width={Math.max(1, Math.round(scaledDisplayWidth))}
+                                        height={Math.max(1, Math.round(scaledDisplayHeight))}
+                                        viewBox={`0 0 ${Math.max(1, scaledDisplayWidth)} ${Math.max(1, scaledDisplayHeight)}`}
+                                        style={{ zIndex: 16 }}
+                                    >
+                                        {/* Detected grid bounds */}
+                                        <rect
+                                            x={alignment.guideOffsetX}
+                                            y={alignment.guideOffsetY}
+                                            width={alignment.guideCellW * cols}
+                                            height={alignment.guideCellH * rows}
+                                            fill="none"
+                                            stroke={alignment.aligned ? "rgba(34,197,94,0.9)" : "rgba(251,191,36,0.75)"}
+                                            strokeWidth={1.25}
+                                        />
+                                        {/* Vertical detected lines */}
+                                        {alignment.v.map((line, idx) => {
+                                            const color =
+                                                line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
+                                                    line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
+                                                        "rgba(239,68,68,0.75)";
+                                            return (
+                                                <line
+                                                    key={`v-${idx}`}
+                                                    x1={line.x}
+                                                    y1={alignment.guideOffsetY}
+                                                    x2={line.x}
+                                                    y2={alignment.guideOffsetY + alignment.guideCellH * rows}
+                                                    stroke={color}
+                                                    strokeWidth={1}
+                                                    strokeDasharray={alignment.aligned ? undefined : "4 4"}
+                                                />
+                                            );
+                                        })}
+                                        {/* Horizontal detected lines */}
+                                        {alignment.h.map((line, idx) => {
+                                            const color =
+                                                line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
+                                                    line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
+                                                        "rgba(239,68,68,0.75)";
+                                            return (
+                                                <line
+                                                    key={`h-${idx}`}
+                                                    x1={alignment.guideOffsetX}
+                                                    y1={line.y}
+                                                    x2={alignment.guideOffsetX + alignment.guideCellW * cols}
+                                                    y2={line.y}
+                                                    stroke={color}
+                                                    strokeWidth={1}
+                                                    strokeDasharray={alignment.aligned ? undefined : "4 4"}
+                                                />
+                                            );
+                                        })}
+                                    </svg>
+                                )}
+
                                 <div
-                                    className="absolute inset-0 z-20"
+                                    className="relative z-10"
                                     style={{
-                                        cursor: isDraggingGrid ? 'grabbing' : 'grab',
-                                        touchAction: 'none',
+                                        width: `${cols * cellWidth}px`,
+                                        transform: `translate(${displayOffsetX}px, ${displayOffsetY}px)`,
+                                        transformOrigin: 'top left',
                                     }}
-                                    onPointerDown={(e) => {
-                                        e.preventDefault();
-                                        e.currentTarget.setPointerCapture(e.pointerId);
-                                        startGridDrag(e.clientX, e.clientY);
-                                    }}
-                                    onPointerMove={(e) => {
-                                        if (!isDraggingGrid) return;
-                                        e.preventDefault();
-                                        moveGridDrag(e.clientX, e.clientY);
-                                    }}
-                                    onPointerUp={(e) => {
-                                        e.preventDefault();
-                                        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                                            e.currentTarget.releasePointerCapture(e.pointerId);
-                                        }
-                                        endGridDrag();
-                                    }}
-                                    onPointerCancel={(e) => {
-                                        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                                            e.currentTarget.releasePointerCapture(e.pointerId);
-                                        }
-                                        endGridDrag();
-                                    }}
-                                />
-                            )}
+                                >
+                                    <table
+                                        className="text-xs border-collapse"
+                                        style={{ tableLayout: 'fixed', borderSpacing: 0 }}
+                                        onMouseUp={endPaint}
+                                        onMouseLeave={endPaint}
+                                    >
+                                        <tbody>
+                                            {grid.map((row, r) => (
+                                                <tr key={r}>
+                                                    {row.map((cell, c) => {
+                                                        const diff = compareLevel?.grid?.[r]?.[c] !== undefined && compareLevel.grid[r][c] !== cell;
+                                                        const isPlayerStart = playerStart?.x === c && playerStart?.y === r;
+                                                        return (
+                                                            <td key={`${r}-${c}`} className="relative p-0" style={{ width: `${cellWidth}px`, height: `${cellHeight}px` }}>
+                                                                <button
+                                                                    className="w-full h-full border relative"
+                                                                    style={{
+                                                                        background: TILE_TYPES.find(t => t.id === cell)?.color || '#000',
+                                                                        width: `${cellWidth}px`,
+                                                                        height: `${cellHeight}px`,
+                                                                    }}
+                                                                    onMouseDown={(e) => { e.preventDefault(); beginPaint(r, c); }}
+                                                                    onMouseEnter={() => continuePaint(r, c)}
+                                                                    title={isPlayerStart ? `Player Start (${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}` : `(${r},${c}) = ${cell} - ${TILE_TYPES.find(t => t.id === cell)?.name}`}
+                                                                    disabled={isDragMode}
+                                                                >
+                                                                    {isPlayerStart && (
+                                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                            <div className="text-white font-bold text-lg drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">👤</div>
+                                                                        </div>
+                                                                    )}
+                                                                </button>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {isDragMode && (
+                                        <div
+                                            className="absolute inset-0 z-20"
+                                            style={{
+                                                cursor: isDraggingGrid ? 'grabbing' : 'grab',
+                                                touchAction: 'none',
+                                            }}
+                                            onPointerDown={(e) => {
+                                                e.preventDefault();
+                                                e.currentTarget.setPointerCapture(e.pointerId);
+                                                startGridDrag(e.clientX, e.clientY);
+                                            }}
+                                            onPointerMove={(e) => {
+                                                if (!isDraggingGrid) return;
+                                                e.preventDefault();
+                                                moveGridDrag(e.clientX, e.clientY);
+                                            }}
+                                            onPointerUp={(e) => {
+                                                e.preventDefault();
+                                                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                    e.currentTarget.releasePointerCapture(e.pointerId);
+                                                }
+                                                endGridDrag();
+                                            }}
+                                            onPointerCancel={(e) => {
+                                                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                    e.currentTarget.releasePointerCapture(e.pointerId);
+                                                }
+                                                endGridDrag();
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
