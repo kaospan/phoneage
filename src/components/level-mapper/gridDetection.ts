@@ -237,12 +237,88 @@ export const detectGridLines = (
 
             if (!Number.isFinite(minR) || !Number.isFinite(minC) || maxR < minR || maxC < minC) return null;
 
-            // Keep a small safety margin so clipped edges don't remove the outer ring.
+            // Expand bounds conservatively. Some levels have an outer ring that is lower-contrast (e.g. mostly void),
+            // so a hard threshold can miss the last row/col. We grow the box if the next edge still has "board-like"
+            // center texture energy.
             const pad = 1;
             minR = Math.max(0, minR - pad);
             minC = Math.max(0, minC - pad);
             maxR = Math.min(maxRows - 1, maxR + pad);
             maxC = Math.min(maxCols - 1, maxC + pad);
+
+            const expandThr = p20 + (p80 - p20) * 0.08; // lower than main thr; only used to include faint edge rings
+            const energyAt = (r: number, c: number) => cellEnergy[r * maxCols + c];
+            const rowStats = (r: number, c0: number, c1: number) => {
+                let sum = 0;
+                let n = 0;
+                let max = 0;
+                let aboveMain = 0;
+                let aboveEdge = 0;
+                for (let c = c0; c <= c1; c += 1) {
+                    const e = energyAt(r, c);
+                    sum += e;
+                    n += 1;
+                    if (e > max) max = e;
+                    if (e > thr) aboveMain += 1;
+                    if (e > expandThr) aboveEdge += 1;
+                }
+                const mean = n ? sum / n : 0;
+                return { mean, max, n, aboveMain, aboveEdge };
+            };
+            const colStats = (c: number, r0: number, r1: number) => {
+                let sum = 0;
+                let n = 0;
+                let max = 0;
+                let aboveMain = 0;
+                let aboveEdge = 0;
+                for (let r = r0; r <= r1; r += 1) {
+                    const e = energyAt(r, c);
+                    sum += e;
+                    n += 1;
+                    if (e > max) max = e;
+                    if (e > thr) aboveMain += 1;
+                    if (e > expandThr) aboveEdge += 1;
+                }
+                const mean = n ? sum / n : 0;
+                return { mean, max, n, aboveMain, aboveEdge };
+            };
+
+            // Edge rows/cols can be sparse (thin borders, clipped screenshots). Mean-energy alone is too strict.
+            const shouldExpand = (s: { mean: number; max: number; n: number; aboveMain: number; aboveEdge: number }) => {
+                if (!s.n) return false;
+                if (s.mean > expandThr) return true;
+                const edgeRatio = s.aboveEdge / s.n;
+                const mainRatio = s.aboveMain / s.n;
+                // Include sparse borders if there are some strong cells on that edge.
+                if (edgeRatio >= 0.12 && s.max > expandThr) return true;
+                if (mainRatio >= 0.06 && s.max > thr) return true;
+                return false;
+            };
+
+            // Grow up to 3 cells on each side when it helps; stop early if it would exceed constraints.
+            // This is important for cases where the outermost ring is low-contrast or only partially present.
+            for (let i = 0; i < 3; i += 1) {
+                // top
+                if (minR > 0 && (maxR - (minR - 1) + 1) <= MAX_DETECTED_ROWS) {
+                    const s = rowStats(minR - 1, minC, maxC);
+                    if (shouldExpand(s)) minR -= 1;
+                }
+                // bottom
+                if (maxR < maxRows - 1 && ((maxR + 1) - minR + 1) <= MAX_DETECTED_ROWS) {
+                    const s = rowStats(maxR + 1, minC, maxC);
+                    if (shouldExpand(s)) maxR += 1;
+                }
+                // left
+                if (minC > 0 && (maxC - (minC - 1) + 1) <= MAX_DETECTED_COLS) {
+                    const s = colStats(minC - 1, minR, maxR);
+                    if (shouldExpand(s)) minC -= 1;
+                }
+                // right
+                if (maxC < maxCols - 1 && ((maxC + 1) - minC + 1) <= MAX_DETECTED_COLS) {
+                    const s = colStats(maxC + 1, minR, maxR);
+                    if (shouldExpand(s)) maxC += 1;
+                }
+            }
 
             const rowsFromBox = maxR - minR + 1;
             const colsFromBox = maxC - minC + 1;
