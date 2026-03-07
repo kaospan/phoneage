@@ -30,6 +30,7 @@ import {
 } from './mapperHooks';
 import { buildReferenceMatcher } from '@/lib/spriteMatching';
 import { normalizeMapperImage } from './imageNormalization';
+import { getAlignmentHints } from './alignmentProfile';
 console.log('📦 LevelMapperContext.tsx loading...');
 
 // Sample interior pixels to avoid gridlines/adjacent cell bleed when matching sprites.
@@ -324,7 +325,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 return;
             }
 
-            const result = detectGridLines(canvas, useDetectCurrentCounts, rows, cols);
+            const result = detectGridLines(canvas, useDetectCurrentCounts, rows, cols, getAlignmentHints());
 
             if (result) {
                 console.log(`✓ Grid detected: ${result.rows}x${result.cols}`);

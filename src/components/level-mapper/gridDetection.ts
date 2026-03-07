@@ -4,12 +4,20 @@ const MIN_DETECTED_COLS = 8;
 const MAX_DETECTED_COLS = 24;
 const MAX_DETECTED_CELLS = 320;
 
+type DetectGridHints = {
+    hintCellWidth?: number;
+    hintCellHeight?: number;
+    preferredCols?: number;
+    preferredRows?: number;
+};
+
 // Grid line detection logic
 export const detectGridLines = (
     canvas: HTMLCanvasElement,
     useDetectCurrentCounts: boolean,
     currentRows: number,
-    currentCols: number
+    currentCols: number,
+    hints?: DetectGridHints
 ): { rows: number; cols: number; offsetX: number; offsetY: number; cellWidth: number; cellHeight: number } | null => {
     console.log('🔍 detectGridLines() started');
 
@@ -72,49 +80,132 @@ export const detectGridLines = (
     const vSmooth = smooth(verticalEdge, 7);
     const hSmooth = smooth(horizontalEdge, 7);
 
-    const findBestSpacing = (arr: number[], sizeHint?: number) => {
-        const minSize = Math.max(8, Math.floor(Math.min(width, height) / 80));
+    const scoreOffsetForSize = (
+        arr: number[],
+        size: number,
+        preferredCount?: number
+    ): { offset: number; score: number; runStart: number; runLen: number } => {
+        let bestOffset = 0;
+        let bestScore = -Infinity;
+        let bestRunStart = 0;
+        let bestRunLen = 0;
+
+        for (let offset = 0; offset < size; offset += 1) {
+            const samples: number[] = [];
+            for (let pos = offset; pos < arr.length; pos += size) samples.push(arr[pos]);
+            if (samples.length < 4) continue;
+
+            // Adaptive threshold: prefer the strongest repeated boundaries.
+            const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+            const variance = samples.reduce((a, b) => a + (b - mean) * (b - mean), 0) / samples.length;
+            const std = Math.sqrt(variance);
+            const thr = mean + std * 0.35;
+
+            let runStart = 0;
+            let runLen = 0;
+            let bestLocalStart = 0;
+            let bestLocalLen = 0;
+            let runSum = 0;
+            let bestLocalSum = 0;
+
+            for (let i = 0; i < samples.length; i += 1) {
+                if (samples[i] >= thr) {
+                    if (runLen === 0) runStart = i;
+                    runLen += 1;
+                    runSum += samples[i];
+                    if (runLen > bestLocalLen || (runLen === bestLocalLen && runSum > bestLocalSum)) {
+                        bestLocalLen = runLen;
+                        bestLocalStart = runStart;
+                        bestLocalSum = runSum;
+                    }
+                } else {
+                    runLen = 0;
+                    runSum = 0;
+                }
+            }
+
+            // Score favors long consistent runs; gently boost if it matches the preferred row/col count.
+            const cellCount = Math.max(0, bestLocalLen - 1);
+            const matchBoost = preferredCount && cellCount === preferredCount ? 1.25 : 1;
+            const avgRunStrength = bestLocalLen > 0 ? bestLocalSum / bestLocalLen : 0;
+            const score = matchBoost * (bestLocalLen * 2 + avgRunStrength);
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestOffset = offset;
+                bestRunStart = bestLocalStart;
+                bestRunLen = bestLocalLen;
+            }
+        }
+
+        return { offset: bestOffset, score: bestScore, runStart: bestRunStart, runLen: bestRunLen };
+    };
+
+    const findBestSpacing = (arr: number[], sizeHint?: number, preferredCount?: number) => {
+        const minSize = Math.max(10, Math.floor(Math.min(width, height) / 90));
         const maxSize = Math.min(180, Math.floor(Math.min(width, height) / 2));
-        const sizes = sizeHint ? [Math.max(minSize, Math.min(maxSize, Math.round(sizeHint)))] : Array.from({ length: maxSize - minSize + 1 }, (_, i) => i + minSize);
+
+        const sizes = (() => {
+            if (sizeHint && Number.isFinite(sizeHint)) {
+                const center = Math.round(sizeHint);
+                const span = Math.max(6, Math.round(center * 0.18));
+                const lo = Math.max(minSize, center - span);
+                const hi = Math.min(maxSize, center + span);
+                return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+            }
+            return Array.from({ length: maxSize - minSize + 1 }, (_, i) => i + minSize);
+        })();
 
         let bestSize = 0;
         let bestOffset = 0;
         let bestScore = -Infinity;
+        let bestRunStart = 0;
+        let bestRunLen = 0;
 
         for (const size of sizes) {
-            for (let offset = 0; offset < size; offset += 1) {
-                let score = 0;
-                let count = 0;
-                for (let pos = offset; pos < arr.length; pos += size) {
-                    score += arr[pos];
-                    count++;
-                }
-                if (count > 0) {
-                    const normalized = score / count;
-                    if (normalized > bestScore) {
-                        bestScore = normalized;
-                        bestSize = size;
-                        bestOffset = offset;
-                    }
-                }
+            const scored = scoreOffsetForSize(arr, size, preferredCount);
+            if (scored.score > bestScore) {
+                bestScore = scored.score;
+                bestSize = size;
+                bestOffset = scored.offset;
+                bestRunStart = scored.runStart;
+                bestRunLen = scored.runLen;
             }
         }
-        return { size: bestSize, offset: bestOffset, score: bestScore };
+
+        return { size: bestSize, offset: bestOffset, score: bestScore, runStart: bestRunStart, runLen: bestRunLen };
     };
 
-    const hintCols = currentCols > 0 ? width / currentCols : undefined;
-    const hintRows = currentRows > 0 ? height / currentRows : undefined;
+    const preferredCols = hints?.preferredCols;
+    const preferredRows = hints?.preferredRows;
 
-    const xSpacing = findBestSpacing(vSmooth, useDetectCurrentCounts ? hintCols : undefined);
-    const ySpacing = findBestSpacing(hSmooth, useDetectCurrentCounts ? hintRows : undefined);
+    // Only constrain size search when the user locks counts OR we have a learned cell-size profile.
+    const sizeHintX = useDetectCurrentCounts
+        ? (currentCols > 0 ? width / currentCols : undefined)
+        : hints?.hintCellWidth;
+    const sizeHintY = useDetectCurrentCounts
+        ? (currentRows > 0 ? height / currentRows : undefined)
+        : hints?.hintCellHeight;
+
+    const xSpacing = findBestSpacing(vSmooth, sizeHintX, preferredCols);
+    const ySpacing = findBestSpacing(hSmooth, sizeHintY, preferredRows);
 
     if (xSpacing.size <= 0 || ySpacing.size <= 0) {
         console.error('❌ Grid detection failed: no spacing candidates');
         return null;
     }
 
-    const detectedCols = Math.max(MIN_DETECTED_COLS, Math.min(MAX_DETECTED_COLS, Math.round(width / xSpacing.size)));
-    const detectedRows = Math.max(MIN_DETECTED_ROWS, Math.min(MAX_DETECTED_ROWS, Math.round(height / ySpacing.size)));
+    // If we found a strong run of boundaries, trust it. Otherwise fall back to naive width/height division.
+    const runCols = xSpacing.runLen >= 3 ? Math.max(0, xSpacing.runLen - 1) : 0;
+    const runRows = ySpacing.runLen >= 3 ? Math.max(0, ySpacing.runLen - 1) : 0;
+
+    const detectedCols = runCols
+        ? Math.max(MIN_DETECTED_COLS, Math.min(MAX_DETECTED_COLS, runCols))
+        : Math.max(MIN_DETECTED_COLS, Math.min(MAX_DETECTED_COLS, Math.round(width / xSpacing.size)));
+    const detectedRows = runRows
+        ? Math.max(MIN_DETECTED_ROWS, Math.min(MAX_DETECTED_ROWS, runRows))
+        : Math.max(MIN_DETECTED_ROWS, Math.min(MAX_DETECTED_ROWS, Math.round(height / ySpacing.size)));
+
     const finalCols = useDetectCurrentCounts ? currentCols : detectedCols;
     const finalRows = useDetectCurrentCounts ? currentRows : detectedRows;
 
@@ -125,11 +216,15 @@ export const detectGridLines = (
     }
 
     console.log(`✓ Grid detected: ${finalRows}x${finalCols} (cell ~ ${xSpacing.size}px × ${ySpacing.size}px)`);
+
+    // Use runStart to position the first strong boundary line when available.
+    const adjustedOffsetX = xSpacing.runLen >= 3 ? xSpacing.offset + xSpacing.runStart * xSpacing.size : xSpacing.offset;
+    const adjustedOffsetY = ySpacing.runLen >= 3 ? ySpacing.offset + ySpacing.runStart * ySpacing.size : ySpacing.offset;
     return {
         rows: finalRows,
         cols: finalCols,
-        offsetX: xSpacing.offset,
-        offsetY: ySpacing.offset,
+        offsetX: adjustedOffsetX,
+        offsetY: adjustedOffsetY,
         cellWidth: xSpacing.size,
         cellHeight: ySpacing.size,
     };

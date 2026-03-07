@@ -1,10 +1,11 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, GraduationCap, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
 import { detectGridLines } from './gridDetection';
+import { getAlignmentHints, updateAlignmentProfile } from './alignmentProfile';
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -101,7 +102,7 @@ export const GridEditorPanel: React.FC = () => {
                 }
                 ctx.drawImage(img, 0, 0);
 
-                const detected = detectGridLines(canvas, true, rows, cols);
+                const detected = detectGridLines(canvas, true, rows, cols, getAlignmentHints());
                 if (cancelled) return;
                 if (!detected) {
                     setGuideGrid(null);
@@ -402,6 +403,27 @@ export const GridEditorPanel: React.FC = () => {
             alert(`Learned ${learnedCount} reference cells from the current map`);
         }
     };
+
+    const learnAlignmentFromCurrent = React.useCallback(() => {
+        if (!imageNaturalSize) {
+            alert('Load an image first.');
+            return;
+        }
+        if (rows <= 0 || cols <= 0) {
+            alert('Invalid grid size.');
+            return;
+        }
+
+        const frameW = gridFrameWidth ?? imageNaturalSize.width;
+        const frameH = gridFrameHeight ?? imageNaturalSize.height;
+        const cellW = frameW / cols;
+        const cellH = frameH / rows;
+
+        const next = updateAlignmentProfile({ cellWidthPx: cellW, cellHeightPx: cellH, cols, rows });
+        alert(
+            `Learned cell size ≈ ${next.cellWidthPx.toFixed(2)}×${next.cellHeightPx.toFixed(2)}px (${next.samples} sample${next.samples === 1 ? '' : 's'})`
+        );
+    }, [cols, gridFrameHeight, gridFrameWidth, imageNaturalSize, rows]);
 
     const cropCurrentMap = () => {
         if (!imageNaturalSize) {
@@ -788,6 +810,16 @@ export const GridEditorPanel: React.FC = () => {
                         <>
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={learnCurrentMap} title="Learn references from the corrected map" aria-label="Learn from map">
                                 <Scan />
+                            </Button>
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8"
+                                onClick={learnAlignmentFromCurrent}
+                                title="Learn grid alignment (cell size) from this corrected level to improve auto-detect on other levels"
+                                aria-label="Learn alignment"
+                            >
+                                <GraduationCap />
                             </Button>
                             <div className="flex items-center gap-2">
                                 <label className="flex items-center gap-1 text-xs text-muted-foreground" title="How many void cells to keep around the outside when cropping">
