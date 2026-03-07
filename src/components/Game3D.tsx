@@ -1721,17 +1721,18 @@ export const Game3D = ({
           viewMode={viewMode}
         />
 
-        {/* Enhanced Lighting with theme-based ambient */}
-        <ambientLight intensity={0.35} color={themeColors.ambient} />
-        <hemisphereLight intensity={0.35} color="#dff6ff" groundColor="#1b2a3a" />
+        {/* Lighting: keep depth but avoid heavy/distracting shadows */}
+        <ambientLight intensity={0.48} color={themeColors.ambient} />
+        <hemisphereLight intensity={0.45} color="#e9f8ff" groundColor="#22374a" />
         <directionalLight
           position={[10, 15, 10]}
-          intensity={1.35}
+          intensity={0.95}
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
-          shadow-bias={-0.0008}
-          shadow-radius={3}
+          shadow-bias={-0.00035}
+          shadow-normalBias={0.02}
+          shadow-radius={6}
           color="#ffffff"
         />
         <directionalLight position={[-12, 8, -6]} intensity={0.6} color="#9cc7ff" />

@@ -62,7 +62,7 @@ interface Game2DProps {
         onClick={() => onCancelSelection?.()}
       >
         <div className="text-2xl font-bold text-purple-800 mb-4">2D TOP VIEW</div>
-        <div className="inline-grid gap-1 bg-stone-900 p-4 rounded-xl shadow-2xl border-4 border-purple-400">
+        <div className="inline-grid gap-1 bg-stone-900 p-4 rounded-xl shadow-lg border-4 border-purple-400">
           {grid.map((row, y) => (
             <div key={y} className="flex gap-1">
               {row.map((cell, x) => {
@@ -78,11 +78,11 @@ interface Game2DProps {
                     className={`
                       w-16 h-16 flex items-center justify-center text-3xl font-bold
                       ${cellColor}
-                      ${isPlayer ? "ring-4 ring-green-400 animate-pulse shadow-lg shadow-green-400" : ""}
-                      ${isCave ? "ring-4 ring-emerald-300 shadow-lg shadow-emerald-400 text-black" : ""}
-                      ${isSelectedArrow ? "ring-4 ring-white shadow-lg shadow-white animate-pulse" : ""}
+                      ${isPlayer ? "ring-4 ring-green-400 animate-pulse shadow-sm" : ""}
+                      ${isCave ? "ring-4 ring-emerald-300 shadow-sm text-black" : ""}
+                      ${isSelectedArrow ? "ring-4 ring-white shadow-sm animate-pulse" : ""}
                       transition-all duration-200 rounded-lg
-                      border-2 border-stone-700 shadow-md
+                      border-2 border-stone-700 shadow-sm
                       ${isArrow ? "cursor-pointer hover:brightness-110" : ""}
                     `}
                     onClick={(e) => {
