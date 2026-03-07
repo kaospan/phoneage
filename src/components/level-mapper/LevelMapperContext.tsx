@@ -319,53 +319,69 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const redo = () => { if (redoStack.length === 0) return; setUndoStack(s => [...s, grid.map(r => [...r])]); const next = redoStack[redoStack.length - 1]; setGrid(next.map(r => [...r])); setRedoStack(s => s.slice(0, -1)); setIsSaved(false); };
 
         const detectGrid = () => {
-            const canvas = canvasRef.current;
-            if (!canvas) {
-                console.error('❌ No canvas in detectGrid');
-                return;
-            }
+            const run = async () => {
+                // Prefer full-resolution detection so cell sizes/offsets snap to real pixels (no rounding drift from preview scaling).
+                const imageCanvas = document.createElement('canvas');
+                let imageWidth = 0;
+                let imageHeight = 0;
 
-            const result = detectGridLines(canvas, useDetectCurrentCounts, rows, cols, getAlignmentHints());
-
-            if (result) {
-                console.log(`✓ Grid detected: ${result.rows}x${result.cols}`);
-                setRows(result.rows);
-                setCols(result.cols);
-                setGrid(emptyGrid(result.rows, result.cols));
-                const applyGridBounds = async () => {
-                    if (!imageURL) {
-                        setGridOffsetX(result.offsetX);
-                        setGridOffsetY(result.offsetY);
-                        setGridFrameWidth(null);
-                        setGridFrameHeight(null);
-                        return;
-                    }
-
+                if (imageURL) {
                     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
                         const img = new Image();
                         img.onload = () => resolve(img);
                         img.onerror = () => reject(new Error('Failed to load image for grid detection'));
                         img.src = imageURL;
                     });
+                    imageWidth = image.width;
+                    imageHeight = image.height;
+                    imageCanvas.width = image.width;
+                    imageCanvas.height = image.height;
+                    const ctx = imageCanvas.getContext('2d', { willReadFrequently: true });
+                    if (!ctx) throw new Error('Failed to create canvas context for grid detection');
+                    ctx.drawImage(image, 0, 0);
+                } else {
+                    const preview = canvasRef.current;
+                    if (!preview) {
+                        console.error('❌ No canvas/image in detectGrid');
+                        return;
+                    }
+                    imageCanvas.width = preview.width;
+                    imageCanvas.height = preview.height;
+                    imageWidth = preview.width;
+                    imageHeight = preview.height;
+                    const ctx = imageCanvas.getContext('2d', { willReadFrequently: true });
+                    if (!ctx) throw new Error('Failed to create canvas context for grid detection');
+                    ctx.drawImage(preview, 0, 0);
+                }
 
-                    const scaleX = canvas.width > 0 ? image.width / canvas.width : 1;
-                    const scaleY = canvas.height > 0 ? image.height / canvas.height : 1;
-                    const nextOffsetX = Math.round(result.offsetX * scaleX);
-                    const nextOffsetY = Math.round(result.offsetY * scaleY);
-                    const nextFrameWidth = Math.round(result.cellWidth * result.cols * scaleX);
-                    const nextFrameHeight = Math.round(result.cellHeight * result.rows * scaleY);
+                const result = detectGridLines(imageCanvas, useDetectCurrentCounts, rows, cols, getAlignmentHints());
+                if (!result) {
+                    console.error('❌ Grid detection failed');
+                    alert('Grid detection failed. Try locking the current rows/cols if you already know them, or adjust the crop so the board edges are cleaner.');
+                    return;
+                }
 
-                    setGridOffsetX(nextOffsetX);
-                    setGridOffsetY(nextOffsetY);
-                    setGridFrameWidth(Math.min(image.width, Math.max(1, nextFrameWidth)));
-                    setGridFrameHeight(Math.min(image.height, Math.max(1, nextFrameHeight)));
-                };
+                console.log(`✓ Grid detected: ${result.rows}x${result.cols}`);
+                setRows(result.rows);
+                setCols(result.cols);
+                setGrid(emptyGrid(result.rows, result.cols));
 
-                void applyGridBounds();
-            } else {
-                console.error('❌ Grid detection failed');
-                alert('Grid detection failed. Try locking the current rows/cols if you already know them, or adjust the crop so the board edges are cleaner.');
-            }
+                // Snap frame to exact tile multiples in the source image pixels.
+                const nextOffsetX = Math.max(0, Math.min(imageWidth - 1, Math.round(result.offsetX)));
+                const nextOffsetY = Math.max(0, Math.min(imageHeight - 1, Math.round(result.offsetY)));
+                const nextFrameWidth = Math.min(imageWidth, Math.max(1, Math.round(result.cellWidth * result.cols)));
+                const nextFrameHeight = Math.min(imageHeight, Math.max(1, Math.round(result.cellHeight * result.rows)));
+
+                setGridOffsetX(nextOffsetX);
+                setGridOffsetY(nextOffsetY);
+                setGridFrameWidth(nextFrameWidth);
+                setGridFrameHeight(nextFrameHeight);
+            };
+
+            void run().catch((error) => {
+                console.error('❌ Grid detection failed:', error);
+                alert(`Grid detection failed: ${(error as Error).message}`);
+            });
         };
 
         const detectCells = async () => {
