@@ -386,6 +386,22 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             Auto-detect Cells
                         </Button>
                     </div>
+                    {imageURL && (
+                        <div className="mt-1 text-[11px] leading-tight text-muted-foreground">
+                            {tileFitStatus === 'detecting' && <span>Measuring floor tile size and board tile counts...</span>}
+                            {tileFitStatus !== 'detecting' && tileFit && (
+                                <span>
+                                    Floor tile: ~{Math.round(tileFit.cellWidth)}×{Math.round(tileFit.cellHeight)}px. Across: {tileFit.cols}. Down: {tileFit.rows}.
+                                    {((tileFit.rows !== rows) || (tileFit.cols !== cols)) && (
+                                        <span className="ml-2 text-amber-600 dark:text-amber-300">
+                                            (Current grid: {rows}×{cols})
+                                        </span>
+                                    )}
+                                </span>
+                            )}
+                            {tileFitStatus === 'failed' && <span>Could not estimate tile size from this image. Try a cleaner crop or hit Auto-detect.</span>}
+                        </div>
+                    )}
                     <div className="mt-1 text-xs text-muted-foreground">
                         Grid detection now auto-detects row and column counts from the screenshot. Enable `Lock current rows/cols` only when you want detection constrained to the values above.
                     </div>
