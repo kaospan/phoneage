@@ -6,9 +6,11 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "prestart": "npm run build",
+        "start": "vite preview --host --port 8080",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview",
+        "preview": "vite preview",
     "report:levels": "node scripts/level-build-report.mjs",
     "ws:server": "node server/ws-server.mjs",
     "dev:all": "concurrently -k -n \"front,ws\" -c \"cyan,magenta\" \"npm run dev\" \"npm run ws:server\""
