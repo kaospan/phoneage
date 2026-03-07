@@ -1,7 +1,7 @@
-const MIN_DETECTED_ROWS = 8;
+const MIN_DETECTED_ROWS = 6;
 const MAX_DETECTED_ROWS = 16;
 const MIN_DETECTED_COLS = 8;
-const MAX_DETECTED_COLS = 24;
+const MAX_DETECTED_COLS = 26;
 const MAX_DETECTED_CELLS = 320;
 
 type DetectGridHints = {
@@ -79,6 +79,57 @@ export const detectGridLines = (
 
     const vSmooth = smooth(verticalEdge, 7);
     const hSmooth = smooth(horizontalEdge, 7);
+
+    const movingAverage = (arr: number[], windowSize: number) => {
+        const w = Math.max(3, Math.floor(windowSize) | 1);
+        const half = Math.floor(w / 2);
+        const prefix: number[] = Array(arr.length + 1).fill(0);
+        for (let i = 0; i < arr.length; i += 1) prefix[i + 1] = prefix[i] + arr[i];
+        return arr.map((_, i) => {
+            const lo = Math.max(0, i - half);
+            const hi = Math.min(arr.length - 1, i + half);
+            const sum = prefix[hi + 1] - prefix[lo];
+            const denom = hi - lo + 1;
+            return denom > 0 ? sum / denom : 0;
+        });
+    };
+
+    const percentile = (arr: number[], p: number) => {
+        if (arr.length === 0) return 0;
+        const copy = [...arr].sort((a, b) => a - b);
+        const idx = Math.max(0, Math.min(copy.length - 1, Math.round((copy.length - 1) * p)));
+        return copy[idx];
+    };
+
+    const findActivityExtents = (arr: number[], axisSize: number) => {
+        // Smooth into a "texture energy" signal so islands still contribute even if boundaries are sparse.
+        const window = Math.max(13, Math.round(axisSize / 60) | 1);
+        const energy = movingAverage(arr, window);
+        const p90 = percentile(energy, 0.9);
+        const p50 = percentile(energy, 0.5);
+        const thr = p50 + (p90 - p50) * 0.35;
+
+        let min = Infinity;
+        let max = -Infinity;
+        for (let i = 0; i < energy.length; i += 1) {
+            if (energy[i] >= thr) {
+                if (i < min) min = i;
+                if (i > max) max = i;
+            }
+        }
+        if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+            return { min: 0, max: energy.length - 1, energy };
+        }
+        const pad = Math.min(24, Math.max(6, Math.round(axisSize / 90)));
+        return {
+            min: Math.max(0, Math.floor(min - pad)),
+            max: Math.min(energy.length - 1, Math.ceil(max + pad)),
+            energy,
+        };
+    };
+
+    const xExtent = findActivityExtents(vSmooth, width);
+    const yExtent = findActivityExtents(hSmooth, height);
 
     const scoreOffsetForSize = (
         arr: number[],
@@ -187,27 +238,75 @@ export const detectGridLines = (
         ? (currentRows > 0 ? height / currentRows : undefined)
         : hints?.hintCellHeight;
 
-    const xSpacing = findBestSpacing(vSmooth, sizeHintX, preferredCols);
-    const ySpacing = findBestSpacing(hSmooth, sizeHintY, preferredRows);
+    const findBestSpacingInRange = (
+        arr: number[],
+        rangeMin: number,
+        rangeMax: number,
+        sizeHint?: number,
+        preferredCount?: number
+    ) => {
+        const start = Math.max(0, Math.min(arr.length - 1, rangeMin));
+        const end = Math.max(start, Math.min(arr.length - 1, rangeMax));
+        const sliced = arr.slice(start, end + 1);
+        const res = findBestSpacing(sliced, sizeHint, preferredCount);
+        return { ...res, offsetAbs: start + res.offset, rangeStart: start, rangeEnd: end };
+    };
+
+    // Use the active extents to avoid background noise, but keep the full extents for counting (gap between islands).
+    const xSpacing = findBestSpacingInRange(vSmooth, xExtent.min, xExtent.max, sizeHintX, preferredCols);
+    const ySpacing = findBestSpacingInRange(hSmooth, yExtent.min, yExtent.max, sizeHintY, preferredRows);
 
     if (xSpacing.size <= 0 || ySpacing.size <= 0) {
         console.error('❌ Grid detection failed: no spacing candidates');
         return null;
     }
 
-    // If we found a strong run of boundaries, trust it. Otherwise fall back to naive width/height division.
-    const runCols = xSpacing.runLen >= 3 ? Math.max(0, xSpacing.runLen - 1) : 0;
-    const runRows = ySpacing.runLen >= 3 ? Math.max(0, ySpacing.runLen - 1) : 0;
+    // Use runStart to position the first strong boundary line when available.
+    const adjustedOffsetX = xSpacing.runLen >= 3 ? xSpacing.offsetAbs + xSpacing.runStart * xSpacing.size : xSpacing.offsetAbs;
+    const adjustedOffsetY = ySpacing.runLen >= 3 ? ySpacing.offsetAbs + ySpacing.runStart * ySpacing.size : ySpacing.offsetAbs;
 
-    const detectedCols = runCols
-        ? Math.max(MIN_DETECTED_COLS, Math.min(MAX_DETECTED_COLS, runCols))
-        : Math.max(MIN_DETECTED_COLS, Math.min(MAX_DETECTED_COLS, Math.round(width / xSpacing.size)));
-    const detectedRows = runRows
-        ? Math.max(MIN_DETECTED_ROWS, Math.min(MAX_DETECTED_ROWS, runRows))
-        : Math.max(MIN_DETECTED_ROWS, Math.min(MAX_DETECTED_ROWS, Math.round(height / ySpacing.size)));
+    const snapGridToExtent = (
+        extentMin: number,
+        extentMax: number,
+        size: number,
+        offset: number,
+        minCount: number,
+        maxCount: number,
+        preferredCount?: number
+    ) => {
+        const safeSize = Math.max(1, Math.round(size));
+        const gridStart = Math.floor((extentMin - offset) / safeSize) * safeSize + offset;
+        const gridEnd = Math.ceil((extentMax - offset) / safeSize) * safeSize + offset;
+        const span = Math.max(safeSize, gridEnd - gridStart);
+        let count = Math.max(1, Math.round(span / safeSize));
+        if (preferredCount && Math.abs(preferredCount - count) <= 2) {
+            count = preferredCount;
+        }
+        count = Math.max(minCount, Math.min(maxCount, count));
+        return { gridStart, count };
+    };
 
-    const finalCols = useDetectCurrentCounts ? currentCols : detectedCols;
-    const finalRows = useDetectCurrentCounts ? currentRows : detectedRows;
+    const detectedColsFromExtent = snapGridToExtent(
+        xExtent.min,
+        xExtent.max,
+        xSpacing.size,
+        adjustedOffsetX,
+        MIN_DETECTED_COLS,
+        MAX_DETECTED_COLS,
+        preferredCols
+    );
+    const detectedRowsFromExtent = snapGridToExtent(
+        yExtent.min,
+        yExtent.max,
+        ySpacing.size,
+        adjustedOffsetY,
+        MIN_DETECTED_ROWS,
+        MAX_DETECTED_ROWS,
+        preferredRows
+    );
+
+    const finalCols = useDetectCurrentCounts ? currentCols : detectedColsFromExtent.count;
+    const finalRows = useDetectCurrentCounts ? currentRows : detectedRowsFromExtent.count;
 
     // Safety: never allow absurdly large grids (they can freeze the UI during cell analysis).
     if (finalRows * finalCols > MAX_DETECTED_CELLS) {
@@ -217,14 +316,13 @@ export const detectGridLines = (
 
     console.log(`✓ Grid detected: ${finalRows}x${finalCols} (cell ~ ${xSpacing.size}px × ${ySpacing.size}px)`);
 
-    // Use runStart to position the first strong boundary line when available.
-    const adjustedOffsetX = xSpacing.runLen >= 3 ? xSpacing.offset + xSpacing.runStart * xSpacing.size : xSpacing.offset;
-    const adjustedOffsetY = ySpacing.runLen >= 3 ? ySpacing.offset + ySpacing.runStart * ySpacing.size : ySpacing.offset;
+    const finalOffsetX = useDetectCurrentCounts ? adjustedOffsetX : detectedColsFromExtent.gridStart;
+    const finalOffsetY = useDetectCurrentCounts ? adjustedOffsetY : detectedRowsFromExtent.gridStart;
     return {
         rows: finalRows,
         cols: finalCols,
-        offsetX: adjustedOffsetX,
-        offsetY: adjustedOffsetY,
+        offsetX: finalOffsetX,
+        offsetY: finalOffsetY,
         cellWidth: xSpacing.size,
         cellHeight: ySpacing.size,
     };
