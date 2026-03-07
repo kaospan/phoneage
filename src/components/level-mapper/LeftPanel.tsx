@@ -65,19 +65,15 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     };
 
     const runCellDetection = async () => {
-        if (!imageURL) {
-            alert('Load an image first');
-            return;
-        }
-
         try {
             setIsDetecting(true);
-            setDetectionProgress('Analyzing cell types...');
+            setDetectionProgress('Snapping grid to floor tiles...');
             await new Promise((resolve) => setTimeout(resolve, 50));
-            await detectCells();
+            // Fast path: snap rows/cols + offsets. User can manually fill remaining cells.
+            await Promise.resolve(detectGrid());
         } catch (error) {
             console.error('❌ Error running image cell detection:', error);
-            alert(`Cell detection failed: ${(error as Error).message}`);
+            alert(`Auto-detect failed: ${(error as Error).message}`);
         } finally {
             setIsDetecting(false);
             setDetectionProgress('');
@@ -118,10 +114,11 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
 
                                 console.log('📷 File selected:', f.name, f.type, f.size, 'bytes');
 
-                                // Auto-detect level from filename (e.g., "lvl01.png" or "level1.png")
-                                const levelMatch = f.name.match(/(?:lvl|level)[\s_-]*(\d+)/i);
-                                if (levelMatch) {
-                                    const levelNum = parseInt(levelMatch[1], 10);
+                                // Auto-detect level from filename (e.g., "07.png", "lvl01.png", or "level-9.png")
+                                const levelMatch = f.name.match(/^(\\d{1,2})\\D|(?:lvl|level)[\\s_-]*(\\d+)/i);
+                                const levelNumRaw = levelMatch?.[1] ?? levelMatch?.[2];
+                                if (levelNumRaw) {
+                                    const levelNum = parseInt(levelNumRaw, 10);
                                     const levelIndex = allLevels.findIndex(l => l.id === levelNum);
                                     if (levelIndex !== -1) {
                                         console.log(`🎯 Auto-detected Level ${levelNum} from filename`);

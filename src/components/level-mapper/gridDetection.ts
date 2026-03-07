@@ -33,7 +33,8 @@ export const detectGridLines = (
     const imgData = ctx.getImageData(0, 0, width, height).data;
     console.log(`✓ ImageData retrieved: ${imgData.length} bytes`);
 
-    const step = 2;
+    // Larger images can be scanned with a bigger step without losing the periodicity signal.
+    const step = Math.max(2, Math.round(Math.min(width, height) / 700));
     const verticalEdge: number[] = Array(width).fill(0);
     const horizontalEdge: number[] = Array(height).fill(0);
 
@@ -192,7 +193,12 @@ export const detectGridLines = (
         return { offset: bestOffset, score: bestScore, runStart: bestRunStart, runLen: bestRunLen };
     };
 
-    const findBestSpacing = (arr: number[], sizeHint?: number, preferredCount?: number) => {
+    const findBestSpacing = (
+        arr: number[],
+        sizeHint?: number,
+        preferredCount?: number,
+        candidateSizes?: number[]
+    ) => {
         const minSize = Math.max(10, Math.floor(Math.min(width, height) / 90));
         const maxSize = Math.min(180, Math.floor(Math.min(width, height) / 2));
 
@@ -203,6 +209,12 @@ export const detectGridLines = (
                 const lo = Math.max(minSize, center - span);
                 const hi = Math.min(maxSize, center + span);
                 return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+            }
+            if (candidateSizes && candidateSizes.length > 0) {
+                const unique = Array.from(new Set(candidateSizes.map((v) => Math.round(v))))
+                    .filter((v) => Number.isFinite(v) && v >= minSize && v <= maxSize)
+                    .sort((a, b) => a - b);
+                if (unique.length > 0) return unique;
             }
             return Array.from({ length: maxSize - minSize + 1 }, (_, i) => i + minSize);
         })();
@@ -243,18 +255,35 @@ export const detectGridLines = (
         rangeMin: number,
         rangeMax: number,
         sizeHint?: number,
-        preferredCount?: number
+        preferredCount?: number,
+        candidateSizes?: number[]
     ) => {
         const start = Math.max(0, Math.min(arr.length - 1, rangeMin));
         const end = Math.max(start, Math.min(arr.length - 1, rangeMax));
         const sliced = arr.slice(start, end + 1);
-        const res = findBestSpacing(sliced, sizeHint, preferredCount);
+        const res = findBestSpacing(sliced, sizeHint, preferredCount, candidateSizes);
         return { ...res, offsetAbs: start + res.offset, rangeStart: start, rangeEnd: end };
     };
 
     // Use the active extents to avoid background noise, but keep the full extents for counting (gap between islands).
-    const xSpacing = findBestSpacingInRange(vSmooth, xExtent.min, xExtent.max, sizeHintX, preferredCols);
-    const ySpacing = findBestSpacingInRange(hSmooth, yExtent.min, yExtent.max, sizeHintY, preferredRows);
+    const makeCandidateSizes = (span: number, minCount: number, maxCount: number) => {
+        const sizes: number[] = [];
+        const safeSpan = Math.max(1, span);
+        for (let count = minCount; count <= maxCount; count += 1) {
+            const base = safeSpan / count;
+            const center = Math.round(base);
+            for (let d = -2; d <= 2; d += 1) sizes.push(center + d);
+        }
+        return sizes;
+    };
+
+    const xSpan = Math.max(1, xExtent.max - xExtent.min);
+    const ySpan = Math.max(1, yExtent.max - yExtent.min);
+    const xCandidates = makeCandidateSizes(xSpan, MIN_DETECTED_COLS, MAX_DETECTED_COLS);
+    const yCandidates = makeCandidateSizes(ySpan, MIN_DETECTED_ROWS, MAX_DETECTED_ROWS);
+
+    const xSpacing = findBestSpacingInRange(vSmooth, xExtent.min, xExtent.max, sizeHintX, preferredCols, xCandidates);
+    const ySpacing = findBestSpacingInRange(hSmooth, yExtent.min, yExtent.max, sizeHintY, preferredRows, yCandidates);
 
     if (xSpacing.size <= 0 || ySpacing.size <= 0) {
         console.error('❌ Grid detection failed: no spacing candidates');
@@ -316,8 +345,39 @@ export const detectGridLines = (
 
     console.log(`✓ Grid detected: ${finalRows}x${finalCols} (cell ~ ${xSpacing.size}px × ${ySpacing.size}px)`);
 
-    const finalOffsetX = useDetectCurrentCounts ? adjustedOffsetX : detectedColsFromExtent.gridStart;
-    const finalOffsetY = useDetectCurrentCounts ? adjustedOffsetY : detectedRowsFromExtent.gridStart;
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+    const scoreBoundaries = (arr: number[], offset: number, size: number, count: number) => {
+        let sum = 0;
+        for (let i = 0; i <= count; i += 1) {
+            const pos = Math.round(offset + i * size);
+            if (pos >= 0 && pos < arr.length) sum += arr[pos];
+        }
+        return sum;
+    };
+
+    const refineOffset = (arr: number[], offset: number, size: number, count: number) => {
+        const range = Math.min(10, Math.max(3, Math.round(size * 0.12)));
+        let best = offset;
+        let bestScore = scoreBoundaries(arr, offset, size, count);
+        for (let d = -range; d <= range; d += 1) {
+            const cand = offset + d;
+            const s = scoreBoundaries(arr, cand, size, count);
+            if (s > bestScore) {
+                bestScore = s;
+                best = cand;
+            }
+        }
+        return best;
+    };
+
+    const baseOffsetX = useDetectCurrentCounts ? adjustedOffsetX : detectedColsFromExtent.gridStart;
+    const baseOffsetY = useDetectCurrentCounts ? adjustedOffsetY : detectedRowsFromExtent.gridStart;
+    const refinedOffsetX = refineOffset(vSmooth, baseOffsetX, xSpacing.size, finalCols);
+    const refinedOffsetY = refineOffset(hSmooth, baseOffsetY, ySpacing.size, finalRows);
+
+    const finalOffsetX = clamp(refinedOffsetX, 0, width - 1);
+    const finalOffsetY = clamp(refinedOffsetY, 0, height - 1);
     return {
         rows: finalRows,
         cols: finalCols,
