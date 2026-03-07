@@ -51,6 +51,270 @@ export const detectGridLines = (
     const imgData = ctx.getImageData(0, 0, width, height).data;
     console.log(`✓ ImageData retrieved: ${imgData.length} bytes`);
 
+    // Primary fast path: detect period + offset from gradient periodicity, then derive board bounds by sampling cell centers.
+    // This is intentionally designed to work even when screenshots are clipped or have noisy backgrounds.
+    const primaryDetect = (() => {
+        try {
+            const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+            const minDim = Math.min(width, height);
+            const minSize = Math.max(10, Math.floor(minDim / 90));
+            const maxSize = Math.min(180, Math.floor(minDim / 2));
+
+            // Greyscale (0..255)
+            const gray = new Float32Array(width * height);
+            for (let i = 0, p = 0; p < gray.length; p += 1, i += 4) {
+                const r = imgData[i];
+                const g = imgData[i + 1];
+                const b = imgData[i + 2];
+                gray[p] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            }
+
+            // Simple gradient magnitude (cheap, robust enough): |dx| + |dy|
+            const grad = new Float32Array(width * height);
+            for (let y = 1; y < height - 1; y += 1) {
+                const row = y * width;
+                const rowUp = (y - 1) * width;
+                const rowDn = (y + 1) * width;
+                for (let x = 1; x < width - 1; x += 1) {
+                    const idx = row + x;
+                    const dx = gray[idx + 1] - gray[idx - 1];
+                    const dy = gray[rowDn + x] - gray[rowUp + x];
+                    grad[idx] = Math.abs(dx) + Math.abs(dy);
+                }
+            }
+
+            const step = Math.max(1, Math.round(minDim / 900));
+            const vProfile = new Float32Array(width);
+            const hProfile = new Float32Array(height);
+
+            for (let y = 1; y < height - 1; y += step) {
+                const row = y * width;
+                for (let x = 1; x < width - 1; x += step) {
+                    vProfile[x] += grad[row + x];
+                }
+            }
+            for (let x = 1; x < width - 1; x += step) {
+                for (let y = 1; y < height - 1; y += step) {
+                    hProfile[y] += grad[y * width + x];
+                }
+            }
+
+            const smooth1d = (arr: Float32Array, windowSize: number) => {
+                const w = Math.max(3, Math.floor(windowSize) | 1);
+                const half = Math.floor(w / 2);
+                const out = new Float32Array(arr.length);
+                const prefix = new Float32Array(arr.length + 1);
+                for (let i = 0; i < arr.length; i += 1) prefix[i + 1] = prefix[i] + arr[i];
+                for (let i = 0; i < arr.length; i += 1) {
+                    const lo = Math.max(0, i - half);
+                    const hi = Math.min(arr.length - 1, i + half);
+                    const sum = prefix[hi + 1] - prefix[lo];
+                    out[i] = sum / Math.max(1, (hi - lo + 1));
+                }
+                return out;
+            };
+
+            const vSmooth = smooth1d(vProfile, Math.max(9, Math.round(width / 120) | 1));
+            const hSmooth = smooth1d(hProfile, Math.max(9, Math.round(height / 120) | 1));
+
+            const bestPeriodByAutocorr = (arr: Float32Array, hint?: number) => {
+                const lo = hint ? Math.max(minSize, Math.round(hint * 0.75)) : minSize;
+                const hi = hint ? Math.min(maxSize, Math.round(hint * 1.25)) : maxSize;
+                let bestLag = 0;
+                let bestScore = -Infinity;
+                let bestEnergy = 0;
+
+                // Ignore DC by de-meaning a little (helps on smooth gradients)
+                let mean = 0;
+                for (let i = 0; i < arr.length; i += 1) mean += arr[i];
+                mean /= Math.max(1, arr.length);
+
+                for (let lag = lo; lag <= hi; lag += 1) {
+                    let num = 0;
+                    let denA = 0;
+                    let denB = 0;
+                    const n = arr.length - lag;
+                    if (n < 32) continue;
+                    for (let i = 0; i < n; i += 1) {
+                        const a = arr[i] - mean;
+                        const b = arr[i + lag] - mean;
+                        num += a * b;
+                        denA += a * a;
+                        denB += b * b;
+                    }
+                    const denom = Math.sqrt(denA * denB);
+                    const score = denom > 1e-6 ? num / denom : -1;
+                    // prefer reasonably strong signals
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestLag = lag;
+                        bestEnergy = denA / Math.max(1, n);
+                    }
+                }
+                return { lag: bestLag, score: bestScore, energy: bestEnergy };
+            };
+
+            const hintW = useDetectCurrentCounts
+                ? (currentCols > 0 ? width / currentCols : undefined)
+                : hints?.hintCellWidth;
+            const hintH = useDetectCurrentCounts
+                ? (currentRows > 0 ? height / currentRows : undefined)
+                : hints?.hintCellHeight;
+
+            const px = bestPeriodByAutocorr(vSmooth, hintW);
+            const py = bestPeriodByAutocorr(hSmooth, hintH);
+            if (px.lag <= 0 || py.lag <= 0) return null;
+
+            const bestOffset = (arr: Float32Array, period: number) => {
+                let best = 0;
+                let bestSum = -Infinity;
+                for (let o = 0; o < period; o += 1) {
+                    let s = 0;
+                    for (let p = o; p < arr.length; p += period) s += arr[p];
+                    if (s > bestSum) {
+                        bestSum = s;
+                        best = o;
+                    }
+                }
+                return { offset: best, score: bestSum };
+            };
+
+            const ox = bestOffset(vSmooth, px.lag);
+            const oy = bestOffset(hSmooth, py.lag);
+
+            // Estimate board bounds by sampling cell-center texture/edge energy.
+            const maxCols = Math.max(1, Math.floor((width - ox.offset) / px.lag));
+            const maxRows = Math.max(1, Math.floor((height - oy.offset) / py.lag));
+            if (maxCols * maxRows > 1600) {
+                // Too many cells for a detailed pass at this resolution; skip primary bounds detection.
+                return null;
+            }
+
+            const cellEnergy = new Float32Array(maxCols * maxRows);
+            let idx = 0;
+            for (let r = 0; r < maxRows; r += 1) {
+                const cy = Math.round(oy.offset + (r + 0.5) * py.lag);
+                for (let c = 0; c < maxCols; c += 1) {
+                    const cx = Math.round(ox.offset + (c + 0.5) * px.lag);
+                    // Sample a small 3x3 around center.
+                    let e = 0;
+                    let n = 0;
+                    for (let dy = -1; dy <= 1; dy += 1) {
+                        const y = Math.max(1, Math.min(height - 2, cy + dy));
+                        const row = y * width;
+                        for (let dx = -1; dx <= 1; dx += 1) {
+                            const x = Math.max(1, Math.min(width - 2, cx + dx));
+                            e += grad[row + x];
+                            n += 1;
+                        }
+                    }
+                    cellEnergy[idx++] = n ? e / n : 0;
+                }
+            }
+
+            // Robust threshold using percentiles (background tends to be smooth, board cells have stronger edges/texture).
+            const sample = Array.from(cellEnergy);
+            sample.sort((a, b) => a - b);
+            const q = (p: number) => sample[Math.max(0, Math.min(sample.length - 1, Math.floor((sample.length - 1) * p)))];
+            const p20 = q(0.2);
+            const p80 = q(0.8);
+            const thr = p20 + (p80 - p20) * 0.18;
+
+            let minR = Infinity, minC = Infinity, maxR = -Infinity, maxC = -Infinity;
+            let occupied = 0;
+            idx = 0;
+            for (let r = 0; r < maxRows; r += 1) {
+                for (let c = 0; c < maxCols; c += 1) {
+                    if (cellEnergy[idx++] > thr) {
+                        occupied += 1;
+                        if (r < minR) minR = r;
+                        if (c < minC) minC = c;
+                        if (r > maxR) maxR = r;
+                        if (c > maxC) maxC = c;
+                    }
+                }
+            }
+
+            if (!Number.isFinite(minR) || !Number.isFinite(minC) || maxR < minR || maxC < minC) return null;
+
+            // Keep a small safety margin so clipped edges don't remove the outer ring.
+            const pad = 1;
+            minR = Math.max(0, minR - pad);
+            minC = Math.max(0, minC - pad);
+            maxR = Math.min(maxRows - 1, maxR + pad);
+            maxC = Math.min(maxCols - 1, maxC + pad);
+
+            const rowsFromBox = maxR - minR + 1;
+            const colsFromBox = maxC - minC + 1;
+            if (rowsFromBox < MIN_DETECTED_ROWS || rowsFromBox > MAX_DETECTED_ROWS) return null;
+            if (colsFromBox < MIN_DETECTED_COLS || colsFromBox > MAX_DETECTED_COLS) return null;
+            if (rowsFromBox * colsFromBox > MAX_DETECTED_CELLS) return null;
+
+            const finalRows = useDetectCurrentCounts ? currentRows : rowsFromBox;
+            const finalCols = useDetectCurrentCounts ? currentCols : colsFromBox;
+
+            const offsetX = ox.offset + (useDetectCurrentCounts ? 0 : minC * px.lag);
+            const offsetY = oy.offset + (useDetectCurrentCounts ? 0 : minR * py.lag);
+
+            // Offset refinement: nudge within +/- ~10px to maximize boundary strength at expected lines.
+            const scoreBoundaries = (arr: Float32Array, offset: number, size: number, count: number) => {
+                let sum = 0;
+                for (let i = 0; i <= count; i += 1) {
+                    const pos = Math.round(offset + i * size);
+                    if (pos >= 0 && pos < arr.length) sum += arr[pos];
+                }
+                return sum;
+            };
+            const refineOffset = (arr: Float32Array, offset: number, size: number, count: number) => {
+                const range = Math.min(10, Math.max(3, Math.round(size * 0.12)));
+                let best = offset;
+                let bestScore = scoreBoundaries(arr, offset, size, count);
+                for (let d = -range; d <= range; d += 1) {
+                    const cand = offset + d;
+                    const s = scoreBoundaries(arr, cand, size, count);
+                    if (s > bestScore) { bestScore = s; best = cand; }
+                }
+                return best;
+            };
+
+            const refinedX = Math.max(0, Math.min(width - 1, refineOffset(vSmooth, offsetX, px.lag, finalCols)));
+            const refinedY = Math.max(0, Math.min(height - 1, refineOffset(hSmooth, offsetY, py.lag, finalRows)));
+
+            const expectedOcc = (useDetectCurrentCounts ? (currentRows * currentCols) : (rowsFromBox * colsFromBox));
+            const occRatio = expectedOcc > 0 ? occupied / expectedOcc : 0;
+            const conf =
+                clamp01((px.score + 1) * 0.5) *
+                clamp01((py.score + 1) * 0.5) *
+                clamp01(occRatio);
+
+            const durationMs = performance.now() - t0;
+            const out: DetectedGrid = {
+                rows: finalRows,
+                cols: finalCols,
+                offsetX: refinedX,
+                offsetY: refinedY,
+                cellWidth: px.lag,
+                cellHeight: py.lag,
+                runLenX: finalCols + 1,
+                runLenY: finalRows + 1,
+                scoreX: px.score,
+                scoreY: py.score,
+                confidence: conf,
+                durationMs,
+                usedRunCounts: true,
+            };
+            return out;
+        } catch (e) {
+            console.warn('primaryDetect failed', e);
+            return null;
+        }
+    })();
+
+    if (primaryDetect) {
+        console.log(`✓ Primary grid detected: ${primaryDetect.rows}x${primaryDetect.cols} (conf ${primaryDetect.confidence.toFixed(2)})`);
+        return primaryDetect;
+    }
+
     // Larger images can be scanned with a bigger step without losing the periodicity signal.
     const step = Math.max(2, Math.round(Math.min(width, height) / 700));
     const verticalEdge: number[] = Array(width).fill(0);
