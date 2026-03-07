@@ -111,6 +111,11 @@ export interface Level {
   image?: string;
   sources?: string[];
   autoBuild?: boolean;
+  /**
+   * When true, ignore any `level_override_<id>` stored in localStorage.
+   * Default is false (overrides allowed), which is important for mapper-driven manual corrections.
+   */
+  lockOverride?: boolean;
 }
 
 export const isPlaceholderGrid = (grid?: number[][]) => {
@@ -120,7 +125,7 @@ export const isPlaceholderGrid = (grid?: number[][]) => {
 };
 
 export const shouldAllowLevelOverride = (level: Level) =>
-  level.autoBuild !== false && isPlaceholderGrid(level.grid);
+  level.lockOverride !== true;
 
 export const manualLevels: Level[] = [
   // Level 1 - User custom grid
