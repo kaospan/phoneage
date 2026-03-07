@@ -6,7 +6,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -29,6 +29,16 @@ jobs:
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
         run: npm run build
+
+      # Fallback publish for repos still configured as "Deploy from a branch".
+      # Safe to keep even when Pages is configured for "GitHub Actions".
+      - name: Deploy to gh-pages branch (fallback)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
 
       - name: Upload artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v1
