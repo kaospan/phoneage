@@ -1,4 +1,6 @@
-import { detectGridLines } from './gridDetection';
+// Image normalization runs before the editor knows the true rows/cols.
+// Keep this conservative: rotate if needed, trim real outer borders/HUD,
+// but do not crop to any assumed grid dimensions.
 
 const loadImage = async (imageURL: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -9,10 +11,9 @@ const loadImage = async (imageURL: string): Promise<HTMLImageElement> => {
     });
 };
 
-const NEAR_BLACK = 20;
+const NEAR_BLACK = 10;
 
-const isNearBlack = (r: number, g: number, b: number) =>
-    r <= NEAR_BLACK && g <= NEAR_BLACK && b <= NEAR_BLACK;
+const isNearBlack = (r: number, g: number, b: number) => r <= NEAR_BLACK && g <= NEAR_BLACK && b <= NEAR_BLACK;
 
 const clampInt = (value: number, min: number, max: number) =>
     Math.max(min, Math.min(max, Math.round(value)));
@@ -147,7 +148,7 @@ const isMostlyBlackRow = (
     y: number,
     startX: number,
     endX: number,
-    threshold = 0.92
+    threshold = 0.985
 ) => {
     let dark = 0;
     let total = 0;
@@ -166,7 +167,7 @@ const isMostlyBlackColumn = (
     x: number,
     startY: number,
     endY: number,
-    threshold = 0.92
+    threshold = 0.985
 ) => {
     let dark = 0;
     let total = 0;
@@ -178,6 +179,29 @@ const isMostlyBlackColumn = (
     return total > 0 && dark / total >= threshold;
 };
 
+const estimateCornerBackground = (pixels: Uint8ClampedArray, width: number, height: number) => {
+    const points = [
+        [2, 2],
+        [width - 3, 2],
+        [2, height - 3],
+        [width - 3, height - 3],
+    ];
+
+    const samples = points.map(([x, y]) => {
+        const sx = clampInt(x, 0, width - 1);
+        const sy = clampInt(y, 0, height - 1);
+        const index = (sy * width + sx) * 4;
+        return { r: pixels[index], g: pixels[index + 1], b: pixels[index + 2] };
+    });
+
+    const withLuma = samples
+        .map((c) => ({ ...c, l: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b }))
+        .sort((a, b) => a.l - b.l);
+
+    const mid = withLuma[Math.floor(withLuma.length / 2)];
+    return { r: mid.r, g: mid.g, b: mid.b };
+};
+
 const cropBlackEdges = (
     pixels: Uint8ClampedArray,
     width: number,
@@ -187,36 +211,71 @@ const cropBlackEdges = (
     let right = width - 1;
     let top = 0;
     let bottom = height - 1;
-    const maxHorizontalTrim = Math.floor(width * 0.08);
-    const maxVerticalTrim = Math.floor(height * 0.08);
+    // Only trim small uniform borders (avoid chopping off isolated tiles near the edges).
+    const maxHorizontalTrim = Math.floor(width * 0.07);
+    const maxVerticalTrim = Math.floor(height * 0.07);
 
-    while (left < right && left < maxHorizontalTrim && isMostlyBlackColumn(pixels, width, height, left, top, bottom)) {
+    const cornerBg = estimateCornerBackground(pixels, width, height);
+    const bgDist = 18;
+    const bgThreshold = 0.992;
+
+    const isMostlyBackgroundRow = (y: number, startX: number, endX: number) => {
+        let bg = 0;
+        let total = 0;
+        for (let x = startX; x <= endX; x += 1) {
+            const index = (y * width + x) * 4;
+            const r = pixels[index];
+            const g = pixels[index + 1];
+            const b = pixels[index + 2];
+            const dist = colorDistance(r, g, b, cornerBg);
+            if (dist <= bgDist) bg += 1;
+            total += 1;
+        }
+        return total > 0 && bg / total >= bgThreshold;
+    };
+
+    const isMostlyBackgroundColumn = (x: number, startY: number, endY: number) => {
+        let bg = 0;
+        let total = 0;
+        for (let y = startY; y <= endY; y += 1) {
+            const index = (y * width + x) * 4;
+            const r = pixels[index];
+            const g = pixels[index + 1];
+            const b = pixels[index + 2];
+            const dist = colorDistance(r, g, b, cornerBg);
+            if (dist <= bgDist) bg += 1;
+            total += 1;
+        }
+        return total > 0 && bg / total >= bgThreshold;
+    };
+
+    while (left < right && left < maxHorizontalTrim && isMostlyBackgroundColumn(left, top, bottom)) {
         left += 1;
     }
-    while (right > left && width - 1 - right < maxHorizontalTrim && isMostlyBlackColumn(pixels, width, height, right, top, bottom)) {
+    while (right > left && width - 1 - right < maxHorizontalTrim && isMostlyBackgroundColumn(right, top, bottom)) {
         right -= 1;
     }
-    while (top < bottom && top < maxVerticalTrim && isMostlyBlackRow(pixels, width, top, left, right)) {
+    while (top < bottom && top < maxVerticalTrim && isMostlyBackgroundRow(top, left, right)) {
         top += 1;
     }
-    while (bottom > top && height - 1 - bottom < maxVerticalTrim && isMostlyBlackRow(pixels, width, bottom, left, right)) {
+    while (bottom > top && height - 1 - bottom < maxVerticalTrim && isMostlyBackgroundRow(bottom, left, right)) {
         bottom -= 1;
     }
 
     return { left, top, width: right - left + 1, height: bottom - top + 1 };
 };
 
-const findHudCutRow = (pixels: Uint8ClampedArray, width: number, height: number) => {
+const findHudCutRow = (pixels: Uint8ClampedArray, width: number, height: number): number | null => {
     const minY = Math.floor(height * 0.72);
-    const fallback = Math.floor(height * 0.89);
 
     for (let y = height - 2; y >= minY; y -= 1) {
-        if (isMostlyBlackRow(pixels, width, y, 0, width - 1, 0.78)) {
+        // Look for a strong black separator row above the DOS HUD. If absent, don't crop.
+        if (isMostlyBlackRow(pixels, width, y, 0, width - 1, 0.92)) {
             return y;
         }
     }
 
-    return fallback;
+    return null;
 };
 
 export const normalizeMapperImage = async (imageURL: string): Promise<string> => {
@@ -241,10 +300,14 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
 
     // First, attempt to isolate the central game viewport for screenshots that include browser/UI chrome.
     const viewportCrop = cropCenterViewport(rotatedPixels, rotatedCanvas.width, rotatedCanvas.height);
-    const viewportLeft = viewportCrop?.left ?? 0;
-    const viewportTop = viewportCrop?.top ?? 0;
-    const viewportWidth = viewportCrop?.width ?? rotatedCanvas.width;
-    const viewportHeight = viewportCrop?.height ?? rotatedCanvas.height;
+    const useViewportCrop =
+        Boolean(viewportCrop) &&
+        (viewportCrop!.width < rotatedCanvas.width * 0.92 || viewportCrop!.height < rotatedCanvas.height * 0.92);
+
+    const viewportLeft = useViewportCrop ? viewportCrop!.left : 0;
+    const viewportTop = useViewportCrop ? viewportCrop!.top : 0;
+    const viewportWidth = useViewportCrop ? viewportCrop!.width : rotatedCanvas.width;
+    const viewportHeight = useViewportCrop ? viewportCrop!.height : rotatedCanvas.height;
 
     const viewportPixels = rotatedContext.getImageData(viewportLeft, viewportTop, viewportWidth, viewportHeight).data;
     const borderCrop = cropBlackEdges(viewportPixels, viewportWidth, viewportHeight);
@@ -274,45 +337,18 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
         croppedHeight
     );
 
-    // Try to crop exactly to the grid bounds using detected rows/cols + cell size.
-    const detected = detectGridLines(workingCanvas, false, 11, 20);
-    let gridCanvas: HTMLCanvasElement | null = null;
-    if (detected) {
-        const gridLeft = clampInt(detected.offsetX, 0, workingCanvas.width - 1);
-        const gridTop = clampInt(detected.offsetY, 0, workingCanvas.height - 1);
-        const gridWidth = clampInt(detected.cellWidth * detected.cols, 1, workingCanvas.width - gridLeft);
-        const gridHeight = clampInt(detected.cellHeight * detected.rows, 1, workingCanvas.height - gridTop);
+    // Optional HUD crop for older clean screenshots (DOS status bar).
+    const hudPixels = workingContext.getImageData(0, 0, croppedWidth, croppedHeight).data;
+    const hudCutRow = findHudCutRow(hudPixels, croppedWidth, croppedHeight);
+    const finalHeight = hudCutRow ? Math.max(1, Math.min(croppedHeight, hudCutRow)) : croppedHeight;
 
-        if (gridWidth > 10 && gridHeight > 10) {
-            gridCanvas = document.createElement('canvas');
-            gridCanvas.width = gridWidth;
-            gridCanvas.height = gridHeight;
-            const gridCtx = gridCanvas.getContext('2d');
-            if (gridCtx) {
-                gridCtx.drawImage(workingCanvas, gridLeft, gridTop, gridWidth, gridHeight, 0, 0, gridWidth, gridHeight);
-            } else {
-                gridCanvas = null;
-            }
-        }
-    }
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = croppedWidth;
+    finalCanvas.height = finalHeight;
+    const finalContext = finalCanvas.getContext('2d');
+    if (!finalContext) return imageURL;
+    finalContext.drawImage(workingCanvas, 0, 0, croppedWidth, finalHeight, 0, 0, croppedWidth, finalHeight);
 
-    // Fallback: HUD crop for older clean screenshots (DOS status bar).
-    if (!gridCanvas) {
-        const hudPixels = workingContext.getImageData(0, 0, croppedWidth, croppedHeight).data;
-        const hudCutRow = findHudCutRow(hudPixels, croppedWidth, croppedHeight);
-        const finalHeight = Math.max(1, Math.min(croppedHeight, hudCutRow));
-
-        gridCanvas = document.createElement('canvas');
-        gridCanvas.width = croppedWidth;
-        gridCanvas.height = finalHeight;
-        const finalContext = gridCanvas.getContext('2d');
-        if (!finalContext) {
-            return imageURL;
-        }
-        finalContext.drawImage(workingCanvas, 0, 0, croppedWidth, finalHeight, 0, 0, croppedWidth, finalHeight);
-    }
-
-    // Keep the image pixel-perfect (no non-uniform stretching). This returns a board-only image
-    // cropped to the detected grid bounds (or HUD crop fallback), leaving scale decisions to the editor UI.
-    return gridCanvas.toDataURL('image/png');
+    // Keep pixel-perfect (no stretching). The editor will handle alignment/fit/zoom.
+    return finalCanvas.toDataURL('image/png');
 };
