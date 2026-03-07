@@ -29,7 +29,8 @@ interface SpriteCaptureProps {
     }) => void;
 }
 
-const CELL_INSET_RATIO = 0.08;
+// Trim inward so we don't capture gridlines/neighbor cell pixels in reference sprites.
+const CELL_INSET_RATIO = 0.12;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -373,6 +374,21 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         console.log(`✓ Saved cell [${row},${col}] as type ${tileType} (${TILE_TYPES.find(t => t.id === tileType)?.name})`);
     };
 
+    const overlayFrame = React.useMemo(() => {
+        if (!imageSize) return null;
+        const frameWidth = gridFrameWidth ?? imageSize.width;
+        const frameHeight = gridFrameHeight ?? imageSize.height;
+        if (imageSize.width <= 0 || imageSize.height <= 0) return null;
+
+        const clampPct = (value: number) => Math.max(0, Math.min(100, value));
+        const leftPct = clampPct((gridOffsetX / imageSize.width) * 100);
+        const topPct = clampPct((gridOffsetY / imageSize.height) * 100);
+        const widthPct = clampPct((frameWidth / imageSize.width) * 100);
+        const heightPct = clampPct((frameHeight / imageSize.height) * 100);
+
+        return { leftPct, topPct, widthPct, heightPct };
+    }, [imageSize, gridFrameWidth, gridFrameHeight, gridOffsetX, gridOffsetY]);
+
     if (!imageURL) {
         return (
             <Alert>
@@ -493,7 +509,7 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
 
             <Alert>
                 <AlertDescription>
-                    Cells are automatically detected when the image and references are ready. Hover to inspect a match. Click to save the hovered cell as the tile type currently selected above, even if autodetection guessed it wrong.
+                    Hover a cell to run detection for that one cell. Click to save a cropped reference sprite for the selected tile type, even if detection guessed it wrong. Use Scan only when you want a full pass.
                 </AlertDescription>
             </Alert>
 
@@ -508,8 +524,12 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
                         style={{ display: 'block' }}
                     />
                     <div
-                        className="absolute inset-0 grid"
+                        className="absolute grid"
                         style={{
+                            left: overlayFrame ? `${overlayFrame.leftPct}%` : '0%',
+                            top: overlayFrame ? `${overlayFrame.topPct}%` : '0%',
+                            width: overlayFrame ? `${overlayFrame.widthPct}%` : '100%',
+                            height: overlayFrame ? `${overlayFrame.heightPct}%` : '100%',
                             gridTemplateColumns: `repeat(${cols}, 1fr)`,
                             gridTemplateRows: `repeat(${rows}, 1fr)`
                         }}
@@ -522,27 +542,27 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
                                 // Check if cell matches filter type
                                 const cellDetectedType = detectedGrid.get(`${r},${c}`);
                                 const highlightType = isHovered ? detectedType : cellDetectedType;
-                                let bgColor = 'bg-transparent border-blue-500/30';
+                                let chrome = 'outline outline-1 outline-transparent';
                                 let shouldHighlight = false;
 
                                 if (wasSaved) {
-                                    bgColor = 'bg-green-500/50 border-green-500';
+                                    chrome = 'outline outline-2 outline-green-500';
                                 } else if (isHovered && !isDetecting) {
                                     if (detectedType !== null) {
                                         if (filterType === 'all' || detectedType === filterType) {
                                             shouldHighlight = true;
-                                            bgColor = `border-blue-500 border-2`;
+                                            chrome = 'outline outline-2 outline-blue-500';
                                         } else {
-                                            bgColor = `border-gray-400 border-opacity-50`;
+                                            chrome = 'outline outline-1 outline-gray-400/50';
                                         }
                                     } else {
-                                        bgColor = 'bg-rose-500/20 border-rose-500';
+                                        chrome = 'outline outline-2 outline-rose-500';
                                     }
                                 } else if (filterType !== 'all' && cellDetectedType !== filterType) {
-                                    bgColor = 'bg-transparent border-gray-400/20';
+                                    chrome = 'outline outline-1 outline-transparent';
                                 } else if (filterType !== 'all' && cellDetectedType === filterType) {
                                     shouldHighlight = true;
-                                    bgColor = 'border-blue-500/70';
+                                    chrome = 'outline outline-2 outline-blue-500/70';
                                 }
 
                                 return (
@@ -554,7 +574,7 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
                                             setDetectedType(null);
                                         }}
                                         onClick={() => handleCellClick(r, c)}
-                                        className={`border transition-colors hover:opacity-80 ${bgColor}`}
+                                        className={`transition-colors hover:opacity-80 ${chrome}`}
                                         style={{
                                             backgroundColor: shouldHighlight && highlightType !== null && !wasSaved
                                                 ? `${TILE_TYPES.find(t => t.id === highlightType)?.color ?? '#000000'}80`

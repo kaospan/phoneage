@@ -32,7 +32,8 @@ import { normalizeMapperImage } from './imageNormalization';
 import { cropOuterVoidCells } from './learningOperations';
 console.log('📦 LevelMapperContext.tsx loading...');
 
-const CELL_SAMPLE_INSET_RATIO = 0.08;
+// Sample interior pixels to avoid gridlines/adjacent cell bleed when matching sprites.
+const CELL_SAMPLE_INSET_RATIO = 0.12;
 const MAX_AUTO_DETECT_CELLS = 320;
 
 // Types

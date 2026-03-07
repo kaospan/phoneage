@@ -40,6 +40,9 @@ const loadImage = async (imageURL: string): Promise<HTMLImageElement> => {
     });
 };
 
+// Trim inward so saved sprites don't include gridlines or neighbor-cell bleed.
+const LEARN_SAMPLE_INSET_RATIO = 0.12;
+
 const isBoundarySample = (grid: number[][], row: number, col: number, tileType: number) => {
     const neighbors = [
         grid[row - 1]?.[col],
@@ -122,10 +125,16 @@ export const learnReferencesFromAlignedMap = async ({
     positionsByType.forEach((positions, tileType) => {
         const selected = selectRepresentativeCells(grid, positions, tileType, maxPerType);
         selected.forEach(({ row, col }, index) => {
-            const sx = Math.round(frame.offsetX + col * cellWidth);
-            const sy = Math.round(frame.offsetY + row * cellHeight);
-            const sw = Math.max(1, Math.round(cellWidth));
-            const sh = Math.max(1, Math.round(cellHeight));
+            const insetX = Math.min(cellWidth * LEARN_SAMPLE_INSET_RATIO, Math.max(1, cellWidth / 4));
+            const insetY = Math.min(cellHeight * LEARN_SAMPLE_INSET_RATIO, Math.max(1, cellHeight / 4));
+
+            const x0 = Math.max(0, Math.min(canvas.width - 1, Math.floor(frame.offsetX + col * cellWidth + insetX)));
+            const y0 = Math.max(0, Math.min(canvas.height - 1, Math.floor(frame.offsetY + row * cellHeight + insetY)));
+            const x1 = Math.max(x0 + 1, Math.min(canvas.width, Math.ceil(frame.offsetX + (col + 1) * cellWidth - insetX)));
+            const y1 = Math.max(y0 + 1, Math.min(canvas.height, Math.ceil(frame.offsetY + (row + 1) * cellHeight - insetY)));
+
+            const sw = Math.max(1, x1 - x0);
+            const sh = Math.max(1, y1 - y0);
 
             const sampleCanvas = document.createElement('canvas');
             sampleCanvas.width = sw;
@@ -135,10 +144,11 @@ export const learnReferencesFromAlignedMap = async ({
                 return;
             }
 
+            sampleContext.imageSmoothingEnabled = false;
             sampleContext.drawImage(
                 canvas,
-                sx,
-                sy,
+                x0,
+                y0,
                 sw,
                 sh,
                 0,

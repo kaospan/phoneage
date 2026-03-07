@@ -97,7 +97,24 @@ export const CellReferenceManager: React.FC = () => {
         <div className="space-y-4 p-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Cell Reference Sprites</h3>
-                <span className="text-sm text-muted-foreground">{references.length} saved</span>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">{references.length} saved</span>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                            if (references.length === 0) return;
+                            const ok = window.confirm(`Delete all ${references.length} reference sprites? This cannot be undone.`);
+                            if (!ok) return;
+                            saveReferences([]);
+                        }}
+                        disabled={references.length === 0}
+                        title="Delete all saved reference sprites"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                        Delete all
+                    </Button>
+                </div>
             </div>
 
             <Alert>
