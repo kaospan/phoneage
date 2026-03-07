@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Crosshair, Eye, EyeOff, Image as ImageIcon, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/LevelMapperContext';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
@@ -29,7 +29,9 @@ export const GridEditorPanel: React.FC = () => {
     const [isDragMode, setIsDragMode] = React.useState(false);
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
-    const [imageScale, setImageScale] = React.useState(1);
+    const [imageScaleX, setImageScaleX] = React.useState(1);
+    const [imageScaleY, setImageScaleY] = React.useState(1);
+    const [lockImageAspect, setLockImageAspect] = React.useState(true);
     const [showAlignmentGuide, setShowAlignmentGuide] = React.useState(true);
     const [guideGrid, setGuideGrid] = React.useState<null | {
         rows: number;
@@ -199,8 +201,8 @@ export const GridEditorPanel: React.FC = () => {
     const didPushUndoRef = React.useRef(false);
     const dragStartRef = React.useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 
-    const scaledDisplayWidth = displaySize.width * imageScale;
-    const scaledDisplayHeight = displaySize.height * imageScale;
+    const scaledDisplayWidth = displaySize.width * imageScaleX;
+    const scaledDisplayHeight = displaySize.height * imageScaleY;
     const overlayScaleX = imageNaturalSize ? scaledDisplayWidth / imageNaturalSize.width : 1;
     const overlayScaleY = imageNaturalSize ? scaledDisplayHeight / imageNaturalSize.height : 1;
     const displayOffsetX = gridOffsetX * overlayScaleX;
@@ -350,9 +352,23 @@ export const GridEditorPanel: React.FC = () => {
 
         // Fine-tune overlay image scale without changing the grid.
         if (e.altKey) {
-            const step = e.shiftKey ? 0.01 : 0.002;
+            // Default: tiny increments. If you want bigger jumps, hold Alt+Meta (Mac) or Alt+Ctrl (Win/Linux) while NOT stretching an axis.
+            const step = 0.002;
             const delta = e.deltaY > 0 ? -step : step;
-            setImageScale((prev) => Math.max(0.85, Math.min(1.15, Number((prev + delta).toFixed(3)))));
+
+            // Alt + wheel: uniform scale (locked), unless Ctrl or Shift is held for axis-specific stretch.
+            const nextX = (prev: number) => Math.max(0.85, Math.min(1.15, Number((prev + delta).toFixed(3))));
+
+            if (e.ctrlKey) {
+                setLockImageAspect(false);
+                setImageScaleY((prev) => nextX(prev));
+            } else if (e.shiftKey) {
+                setLockImageAspect(false);
+                setImageScaleX((prev) => nextX(prev));
+            } else {
+                setImageScaleX((prev) => nextX(prev));
+                setImageScaleY((prev) => nextX(prev));
+            }
             return;
         }
 
@@ -555,14 +571,43 @@ export const GridEditorPanel: React.FC = () => {
                         </div>
                     )}
                     {imageURL && overlayEnabled && (
-                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-xs" title="Scale only the overlay image. Hold Alt + mouse wheel for tiny steps.">
+                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-xs" title="Scale only the overlay image (grid stays fixed). Alt+wheel scales uniformly. Alt+Shift stretches X. Alt+Ctrl stretches Y.">
                             <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                            <Button
+                                size="icon"
+                                variant={lockImageAspect ? "secondary" : "outline"}
+                                className="h-8 w-8"
+                                onClick={() => {
+                                    setLockImageAspect((v) => {
+                                        const next = !v;
+                                        if (next) {
+                                            const avg = Number((((imageScaleX + imageScaleY) / 2)).toFixed(3));
+                                            setImageScaleX(avg);
+                                            setImageScaleY(avg);
+                                        }
+                                        return next;
+                                    });
+                                }}
+                                title={lockImageAspect ? "Aspect locked" : "Aspect unlocked"}
+                                aria-pressed={lockImageAspect}
+                                aria-label={lockImageAspect ? "Lock image scale" : "Unlock image scale"}
+                            >
+                                {lockImageAspect ? <Link2 /> : <Link2Off />}
+                            </Button>
+
+                            <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
                             <Button
                                 size="icon"
                                 variant="outline"
                                 className="h-8 w-8"
-                                onClick={() => setImageScale((s) => Math.max(0.85, Number((s - 0.005).toFixed(3))))}
-                                aria-label="Decrease image scale"
+                                onClick={() => {
+                                    setImageScaleX((s) => {
+                                        const next = Math.max(0.85, Number((s - 0.005).toFixed(3)));
+                                        if (lockImageAspect) setImageScaleY(next);
+                                        return next;
+                                    });
+                                }}
+                                aria-label="Decrease image scale X"
                             >
                                 <ZoomOut />
                             </Button>
@@ -571,29 +616,79 @@ export const GridEditorPanel: React.FC = () => {
                                 min={0.85}
                                 max={1.15}
                                 step={0.001}
-                                value={imageScale}
-                                onChange={(e) => setImageScale(Number(e.target.value))}
-                                aria-label="Image scale"
+                                value={imageScaleX}
+                                onChange={(e) => {
+                                    const next = Number(e.target.value);
+                                    setImageScaleX(next);
+                                    if (lockImageAspect) setImageScaleY(next);
+                                }}
+                                aria-label="Image scale X"
                             />
                             <Button
                                 size="icon"
                                 variant="outline"
                                 className="h-8 w-8"
-                                onClick={() => setImageScale((s) => Math.min(1.15, Number((s + 0.005).toFixed(3))))}
-                                aria-label="Increase image scale"
+                                onClick={() => {
+                                    setImageScaleX((s) => {
+                                        const next = Math.min(1.15, Number((s + 0.005).toFixed(3)));
+                                        if (lockImageAspect) setImageScaleY(next);
+                                        return next;
+                                    });
+                                }}
+                                aria-label="Increase image scale X"
                             >
                                 <ZoomIn />
                             </Button>
+                            <span className="tabular-nums">{Math.round(imageScaleX * 1000) / 10}%</span>
+
+                            {!lockImageAspect && (
+                                <>
+                                    <ArrowDownUp className="h-4 w-4 text-muted-foreground" />
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="h-8 w-8"
+                                        onClick={() => setImageScaleY((s) => Math.max(0.85, Number((s - 0.005).toFixed(3))))}
+                                        aria-label="Decrease image scale Y"
+                                    >
+                                        <ZoomOut />
+                                    </Button>
+                                    <input
+                                        type="range"
+                                        min={0.85}
+                                        max={1.15}
+                                        step={0.001}
+                                        value={imageScaleY}
+                                        onChange={(e) => setImageScaleY(Number(e.target.value))}
+                                        aria-label="Image scale Y"
+                                    />
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="h-8 w-8"
+                                        onClick={() => setImageScaleY((s) => Math.min(1.15, Number((s + 0.005).toFixed(3))))}
+                                        aria-label="Increase image scale Y"
+                                    >
+                                        <ZoomIn />
+                                    </Button>
+                                    <span className="tabular-nums">{Math.round(imageScaleY * 1000) / 10}%</span>
+                                </>
+                            )}
+
                             <Button
                                 size="icon"
                                 variant="outline"
                                 className="h-8 w-8"
-                                onClick={() => setImageScale(1)}
+                                onClick={() => {
+                                    setImageScaleX(1);
+                                    setImageScaleY(1);
+                                    setLockImageAspect(true);
+                                }}
                                 aria-label="Reset image scale"
+                                title="Reset image scale"
                             >
                                 1x
                             </Button>
-                            <span className="tabular-nums">{Math.round(imageScale * 1000) / 10}%</span>
                         </div>
                     )}
                     {imageURL && overlayEnabled && (
