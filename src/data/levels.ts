@@ -1,4 +1,5 @@
 import { stageImageSets } from '@/data/assetCatalog';
+import { loadCustomLevelDefinition, loadCustomLevelIds } from '@/lib/customLevels';
 
 // Stone Age DOS game levels
 // Legend: 
@@ -372,7 +373,29 @@ export const getAllLevels = (): Level[] => {
     });
     
     console.log('✅ getAllLevels() complete, returning', result.length, 'levels');
-    return result;
+
+    // Append any custom levels created in the mapper (localStorage). These are only added
+    // when they do not already exist in the built-in stage list, so we never overwrite.
+    const customIds = loadCustomLevelIds();
+    if (customIds.length === 0) return result;
+
+    const existingIds = new Set(result.map((l) => l.id));
+    const customLevels = customIds
+      .filter((id) => !existingIds.has(id))
+      .map((id) => loadCustomLevelDefinition(id))
+      .filter((def): def is NonNullable<typeof def> => Boolean(def))
+      .map((def) => ({
+        id: def.id,
+        grid: def.grid,
+        playerStart: def.playerStart ?? { x: 0, y: 0 },
+        cavePos: def.cavePos ?? { x: 0, y: 0 },
+        theme: def.theme,
+        autoBuild: false,
+      } satisfies Level));
+
+    const merged = [...result, ...customLevels].sort((a, b) => a.id - b.id);
+    console.log('✅ getAllLevels() complete + custom, returning', merged.length, 'levels');
+    return merged;
   } catch (error) {
     console.error('❌ Error in getAllLevels:', error);
     console.error('Stack trace:', (error as Error).stack);

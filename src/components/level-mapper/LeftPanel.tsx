@@ -11,6 +11,9 @@ import { normalizeMapperImage } from './imageNormalization';
 import { detectGridLines } from './gridDetection';
 import { getAlignmentHints } from './alignmentProfile';
 import { loadLevelLayoutOverride } from './persistenceOperations';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLevels';
+import { getLevelImageUrl, putLevelImage } from './levelImageStore';
 const isPlaceholderGrid = (levelGrid?: number[][]) => {
     if (!levelGrid || levelGrid.length === 0) return true;
     if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
@@ -19,10 +22,10 @@ const isPlaceholderGrid = (levelGrid?: number[][]) => {
 
 const getEditableGridForLevel = (levelId: number | null, levelGrid?: number[][]) => {
     if (!isPlaceholderGrid(levelGrid)) {
-        return levelGrid?.map((row) => [...row]) ?? voidGrid(11, 20);
+        return levelGrid?.map((row) => [...row]) ?? voidGrid(12, 20);
     }
     const layout = levelId ? loadLevelLayoutOverride(levelId) : null;
-    const r = layout?.rows ?? 11;
+    const r = layout?.rows ?? 12;
     const c = layout?.cols ?? 20;
     return voidGrid(r, c);
 };
@@ -35,6 +38,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         compareLevelIndex, setCompareLevelIndex,
         overlayEnabled, setOverlayEnabled,
         allLevels, imageURL, setImageURL,
+        setAllLevels,
         detectGrid, snapToLockedCounts, detectCells, detectGridAndCells,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
@@ -51,6 +55,13 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [autoDetectStatus, setAutoDetectStatus] = useState<string>('');
     const [tileFitStatus, setTileFitStatus] = useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
     const [tileFit, setTileFit] = useState<null | { rows: number; cols: number; cellWidth: number; cellHeight: number }>(null);
+
+    // Upload flow: choose an image, then decide which level id to apply it to.
+    const [applyDialogOpen, setApplyDialogOpen] = useState(false);
+    const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+    const [pendingUploadLevelId, setPendingUploadLevelId] = useState<string>('');
+    const [pendingUploadAllowOverwrite, setPendingUploadAllowOverwrite] = useState(false);
+    const [pendingUploadError, setPendingUploadError] = useState<string>('');
 
     // Persistent tab state
     const [activeTab, setActiveTab] = useState(() => {
@@ -188,7 +199,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         setCols(editable[0]?.length || 0);
         setGrid(editable);
 
-        const normalizedURL = lvl.image ? await normalizeMapperImage(lvl.image) : null;
+        // Prefer a user-uploaded screenshot saved in the mapper, otherwise fall back to bundled assets.
+        const storedUpload = await getLevelImageUrl(lvl.id);
+        const normalizedURL = storedUpload ?? (lvl.image ? await normalizeMapperImage(lvl.image) : null);
         setImageURL(normalizedURL);
         setOverlayEnabled(Boolean(normalizedURL));
 
@@ -244,57 +257,25 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
 
                                 console.log('📷 File selected:', f.name, f.type, f.size, 'bytes');
 
-                                // Auto-detect level from filename (e.g., "07.png", "lvl01.png", or "level-9.png")
-                                const levelMatch = f.name.match(/^(\\d{1,2})\\D|(?:lvl|level)[\\s_-]*(\\d+)/i);
-                                const levelNumRaw = levelMatch?.[1] ?? levelMatch?.[2];
-                                if (levelNumRaw) {
-                                    const levelNum = parseInt(levelNumRaw, 10);
-                                    const levelIndex = allLevels.findIndex(l => l.id === levelNum);
-                                    if (levelIndex !== -1) {
-                                        console.log(`🎯 Auto-detected Level ${levelNum} from filename`);
-                                        setImportLevelIndex(levelIndex);
-                                        setCompareLevelIndex(levelIndex);
+                                // Suggest a target level:
+                                // 1) from filename (e.g. "07.png", "lvl01.png", "level-9.png")
+                                // 2) current imported level id
+                                // 3) next id after max
+                                const levelMatch = f.name.match(/^(\\d{1,3})\\D|(?:lvl|level)[\\s_-]*(\\d{1,3})/i);
+                                const raw = levelMatch?.[1] ?? levelMatch?.[2];
+                                const fromName = raw ? parseInt(raw, 10) : null;
+                                const currentId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
+                                const maxId = allLevels.reduce((m, l) => Math.max(m, l.id), 0);
+                                const suggested = fromName ?? currentId ?? (maxId + 1);
 
-                                        // Auto-load the level's grid, player start, and theme
-                                        const lvl = allLevels[levelIndex];
-                                        const editable = getEditableGridForLevel(lvl.id, lvl.grid);
-                                        setRows(editable.length);
-                                        setCols(editable[0]?.length || 0);
-                                        setGrid(editable);
-                                        setGridOffsetX(0);
-                                        setGridOffsetY(0);
-                                        setGridFrameWidth(null);
-                                        setGridFrameHeight(null);
+                                setPendingUploadFile(f);
+                                setPendingUploadLevelId(String(suggested));
+                                setPendingUploadAllowOverwrite(false);
+                                setPendingUploadError('');
+                                setApplyDialogOpen(true);
 
-                                        if (lvl.playerStart) {
-                                            setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
-                                        }
-                                        if (lvl.theme) {
-                                            setTheme(lvl.theme);
-                                        }
-
-                                        // Enable overlay by default
-                                        setOverlayEnabled(true);
-                                    }
-                                }
-
-                                const url = URL.createObjectURL(f);
-                                console.log('✓ Object URL created:', url);
-
-                                setGridOffsetX(0);
-                                setGridOffsetY(0);
-                                setGridFrameWidth(null);
-                                setGridFrameHeight(null);
-                                // Normalize (auto-crop borders/HUD) but do not auto-run detection here.
-                                // Detection can be heavy; the user triggers it explicitly via "Auto-detect Cells".
-                                const normalizedURL = await normalizeMapperImage(url);
-                                setImageURL(normalizedURL);
-                                setOverlayEnabled(true);
-                                setIsDetecting(false);
-                                setDetectionProgress('');
-
-                                // Release the original object URL (normalized image is cached separately).
-                                try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+                                // Allow selecting the same file again.
+                                try { e.currentTarget.value = ''; } catch { /* ignore */ }
                             } catch (error) {
                                 console.error('❌ Error in file onChange handler:', error);
                                 console.error('Stack trace:', (error as Error).stack);
@@ -361,6 +342,139 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     )}
                 </div>
             </div>
+
+            <Dialog
+                open={applyDialogOpen}
+                onOpenChange={(open) => {
+                    setApplyDialogOpen(open);
+                    if (!open) setPendingUploadError('');
+                }}
+            >
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Apply Screenshot To Level</DialogTitle>
+                        <DialogDescription>
+                            Choose which level number this image belongs to. By default this will not overwrite an existing saved screenshot.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3">
+                        <div className="text-xs text-muted-foreground">
+                            File: <span className="font-medium text-foreground">{pendingUploadFile?.name ?? 'None'}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground whitespace-nowrap">Level #</label>
+                            <input
+                                className="w-28 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]"
+                                inputMode="numeric"
+                                pattern="\\d*"
+                                value={pendingUploadLevelId}
+                                onChange={(e) => setPendingUploadLevelId(e.target.value)}
+                            />
+                            <div className="text-xs text-muted-foreground">
+                                {(() => {
+                                    const id = parseInt(pendingUploadLevelId, 10);
+                                    if (!Number.isFinite(id)) return null;
+                                    const exists = allLevels.some((l) => l.id === id);
+                                    return exists ? 'Existing level' : 'New level';
+                                })()}
+                            </div>
+                        </div>
+
+                        <label className="flex items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={pendingUploadAllowOverwrite}
+                                onChange={(e) => setPendingUploadAllowOverwrite(e.target.checked)}
+                            />
+                            Allow overwrite (advanced)
+                        </label>
+
+                        {pendingUploadError ? (
+                            <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+                                {pendingUploadError}
+                            </div>
+                        ) : null}
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setApplyDialogOpen(false);
+                                setPendingUploadFile(null);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                            onClick={async () => {
+                                const file = pendingUploadFile;
+                                const levelId = parseInt(pendingUploadLevelId, 10);
+                                if (!file || !Number.isInteger(levelId) || levelId <= 0) {
+                                    setPendingUploadError('Enter a valid level number.');
+                                    return;
+                                }
+
+                                try {
+                                    setPendingUploadError('');
+                                    setApplyDialogOpen(false);
+
+                                    setIsDetecting(true);
+                                    setDetectionProgress(`Saving ${file.name} as Level ${levelId}...`);
+
+                                    const uploadUrl = URL.createObjectURL(file);
+                                    const normalizedUrl = await normalizeMapperImage(uploadUrl);
+                                    try { URL.revokeObjectURL(uploadUrl); } catch { /* ignore */ }
+
+                                    const blob = await fetch(normalizedUrl).then((r) => r.blob());
+                                    await putLevelImage(levelId, blob, file.name, pendingUploadAllowOverwrite);
+
+                                    // Create a new custom level definition only when the level id does not exist yet.
+                                    // This never overwrites built-in levels.
+                                    let nextLevels = allLevels;
+                                    let idx = nextLevels.findIndex((l) => l.id === levelId);
+                                    if (idx === -1) {
+                                        const newLevel = {
+                                            id: levelId,
+                                            grid: voidGrid(12, 20),
+                                            playerStart: { x: 0, y: 0 },
+                                            cavePos: { x: 0, y: 0 },
+                                            theme: guessThemeForLevelId(levelId),
+                                            autoBuild: false,
+                                        } as any;
+                                        saveCustomLevelDefinition(newLevel);
+                                        nextLevels = [...nextLevels, newLevel].sort((a, b) => a.id - b.id);
+                                        setAllLevels(nextLevels);
+                                        idx = nextLevels.findIndex((l) => l.id === levelId);
+                                    }
+
+                                    setImportLevelIndex(idx);
+                                    setCompareLevelIndex(idx);
+                                    await loadLevelByIndex(idx);
+
+                                    // Auto-detect immediately (fast snap).
+                                    setDetectionProgress('Snapping grid to floor tiles...');
+                                    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+                                    await runCellDetection();
+                                } catch (err) {
+                                    console.error(err);
+                                    setPendingUploadError((err as Error).message ?? 'Upload failed.');
+                                    setApplyDialogOpen(true);
+                                } finally {
+                                    setIsDetecting(false);
+                                    setDetectionProgress('');
+                                    setPendingUploadFile(null);
+                                }
+                            }}
+                        >
+                            Apply + Snap
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Tabs value={activeTab} onValueChange={handleTabChange}>
                 <TabsList className="grid w-full grid-cols-3 mb-2">
