@@ -341,8 +341,30 @@ export const detectGridLines = (
             const finalRows = useDetectCurrentCounts ? currentRows : rowsFromBox;
             const finalCols = useDetectCurrentCounts ? currentCols : colsFromBox;
 
-            const offsetX = ox.offset + (useDetectCurrentCounts ? 0 : minC * px.lag);
-            const offsetY = oy.offset + (useDetectCurrentCounts ? 0 : minR * py.lag);
+            if (useDetectCurrentCounts) {
+                if (currentRows < MIN_DETECTED_ROWS || currentRows > MAX_DETECTED_ROWS) return null;
+                if (currentCols < MIN_DETECTED_COLS || currentCols > MAX_DETECTED_COLS) return null;
+                if (currentRows * currentCols > MAX_DETECTED_CELLS) return null;
+            }
+
+            // When keeping the user's rows/cols ("snap" mode), we still want the detected board origin (minR/minC).
+            // Previously we snapped to the strongest global phase only, which misaligned many boards.
+            let originR = minR;
+            let originC = minC;
+            if (useDetectCurrentCounts) {
+                const extraR = currentRows - rowsFromBox;
+                const extraC = currentCols - colsFromBox;
+                // Center the detected box inside the requested shape when possible.
+                originR = minR - Math.floor(extraR / 2);
+                originC = minC - Math.floor(extraC / 2);
+                const maxOriginR = Math.max(0, maxRows - currentRows);
+                const maxOriginC = Math.max(0, maxCols - currentCols);
+                originR = Math.max(0, Math.min(maxOriginR, originR));
+                originC = Math.max(0, Math.min(maxOriginC, originC));
+            }
+
+            const offsetX = ox.offset + originC * px.lag;
+            const offsetY = oy.offset + originR * py.lag;
 
             // Offset refinement: nudge within +/- ~10px to maximize boundary strength at expected lines.
             const scoreBoundaries = (arr: Float32Array, offset: number, size: number, count: number) => {

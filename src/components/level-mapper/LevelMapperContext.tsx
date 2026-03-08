@@ -28,7 +28,7 @@ import {
     useSaveCompareLevel,
     useSaveImportLevel
 } from './mapperHooks';
-import { buildReferenceMatcher } from '@/lib/spriteMatching';
+import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { normalizeMapperImage } from './imageNormalization';
 import { getAlignmentHints } from './alignmentProfile';
 console.log('📦 LevelMapperContext.tsx loading...');
@@ -334,6 +334,12 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const undo = () => { if (undoStack.length === 0) return; setRedoStack(s => [...s, grid.map(r => [...r])]); const prev = undoStack[undoStack.length - 1]; setGrid(prev.map(r => [...r])); setUndoStack(s => s.slice(0, -1)); setIsSaved(false); };
         const redo = () => { if (redoStack.length === 0) return; setUndoStack(s => [...s, grid.map(r => [...r])]); const next = redoStack[redoStack.length - 1]; setGrid(next.map(r => [...r])); setRedoStack(s => s.slice(0, -1)); setIsSaved(false); };
 
+        const referenceSigCacheRef = useRef<{
+            key: string;
+            sigSize: number;
+            refs: Array<{ tileType: number; sig: Uint8Array }>;
+        } | null>(null);
+
         const detectGrid = async () => {
             try {
                 const maxDim = 1100; // speed: run detection on downsampled image, then scale back to source pixels
@@ -500,6 +506,83 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
 
             try {
+                const sigSize = 8; // 8x8 luma signature, fast and scale-tolerant
+                const signatureFromImageData = (img: ImageData) => {
+                    const out = new Uint8Array(sigSize * sigSize);
+                    const d = img.data;
+                    const w = img.width;
+                    const h = img.height;
+                    let k = 0;
+                    for (let yy = 0; yy < sigSize; yy += 1) {
+                        const y = Math.max(0, Math.min(h - 1, Math.floor(((yy + 0.5) * h) / sigSize)));
+                        for (let xx = 0; xx < sigSize; xx += 1) {
+                            const x = Math.max(0, Math.min(w - 1, Math.floor(((xx + 0.5) * w) / sigSize)));
+                            const idx = (y * w + x) * 4;
+                            const r = d[idx], g = d[idx + 1], b = d[idx + 2];
+                            out[k++] = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
+                        }
+                    }
+                    return out;
+                };
+
+                const signatureFromRegion = (data: Uint8ClampedArray, imgW: number, imgH: number, x0: number, y0: number, x1: number, y1: number) => {
+                    const out = new Uint8Array(sigSize * sigSize);
+                    const rw = Math.max(1, x1 - x0);
+                    const rh = Math.max(1, y1 - y0);
+                    let k = 0;
+                    for (let yy = 0; yy < sigSize; yy += 1) {
+                        const y = Math.max(0, Math.min(imgH - 1, Math.floor(y0 + ((yy + 0.5) * rh) / sigSize)));
+                        const row = y * imgW;
+                        for (let xx = 0; xx < sigSize; xx += 1) {
+                            const x = Math.max(0, Math.min(imgW - 1, Math.floor(x0 + ((xx + 0.5) * rw) / sigSize)));
+                            const idx = (row + x) * 4;
+                            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                            out[k++] = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
+                        }
+                    }
+                    return out;
+                };
+
+                const sigDistance = (a: Uint8Array, b: Uint8Array) => {
+                    let s = 0;
+                    for (let i = 0; i < a.length; i += 1) s += Math.abs(a[i] - b[i]);
+                    return s;
+                };
+
+                const summarizeSig = (sig: Uint8Array) => {
+                    let sum = 0;
+                    let sum2 = 0;
+                    for (let i = 0; i < sig.length; i += 1) {
+                        const v = sig[i];
+                        sum += v;
+                        sum2 += v * v;
+                    }
+                    const n = sig.length;
+                    const mean = sum / n;
+                    const varr = Math.max(0, sum2 / n - mean * mean);
+                    return { mean, std: Math.sqrt(varr) };
+                };
+
+                const storedRefs = getStoredCellReferences();
+                const cacheKey = storedRefs.map((r) => `${r.id}:${r.tileType}:${r.timestamp}`).join('|');
+                let refSigs: Array<{ tileType: number; sig: Uint8Array }> = [];
+                const cached = referenceSigCacheRef.current;
+                if (cached && cached.key === cacheKey && cached.sigSize === sigSize) {
+                    refSigs = cached.refs;
+                } else {
+                    for (const ref of storedRefs) {
+                        const img = await loadImageData(ref.imageData);
+                        if (!img) continue;
+                        refSigs.push({ tileType: ref.tileType, sig: signatureFromImageData(img) });
+                    }
+                    referenceSigCacheRef.current = { key: cacheKey, sigSize, refs: refSigs };
+                }
+
+                if (refSigs.length === 0) {
+                    alert('No reference sprites saved yet. Go to References tab and capture/upload a few cell sprites first.');
+                    return;
+                }
+
                 const image = await new Promise<HTMLImageElement>((resolve, reject) => {
                     const img = new Image();
                     img.onload = () => resolve(img);
@@ -525,53 +608,42 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 const cellHeight = frameHeight / rows;
                 console.log(`📊 Image size: ${image.width}x${image.height}, Grid: ${rows}x${cols}, Frame: ${frameWidth}x${frameHeight}`);
 
-                const newGrid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
+                const gridAllVoid = grid.every((row) => row.every((cell) => cell === 5));
+                const gridAllFloor = grid.length > 0 && grid.every((row) => row.every((cell) => cell === 0));
+                const overwriteAll = gridAllVoid || gridAllFloor;
+
+                // If the grid is clearly a placeholder (all void or all floor), overwrite everything.
+                // Otherwise, be conservative and fill only unknown/void cells so we don't overwrite manual fixes.
+                const newGrid: number[][] = overwriteAll ? voidGrid(rows, cols) : grid.map((row) => [...row]);
                 const totalCells = rows * cols;
                 if (totalCells > MAX_AUTO_DETECT_CELLS) {
                     throw new Error(`Unsafe auto-detect size ${rows}x${cols}. Reduce rows/cols or re-run grid detection with cleaner borders.`);
                 }
                 let processedCells = 0;
 
-                const matcher = await buildReferenceMatcher(0.70);
+                const classifyCellFast = (x0: number, y0: number, x1: number, y1: number): number => {
+                    const sig = signatureFromRegion(data, image.width, image.height, x0, y0, x1, y1);
+                    const stats = summarizeSig(sig);
 
-                // Sprite-first classifier with pattern fallback
-                const classifyCell = async (x0: number, y0: number, x1: number, y1: number): Promise<number> => {
-                    if (matcher) {
-                        const cellImageData = ctx.getImageData(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
-                        const spriteMatch = await matcher(cellImageData);
-                        if (spriteMatch !== null) return spriteMatch;
-                    }
+                    // Quick void fallback when there's no good reference match.
+                    const voidish = stats.mean < 45 && stats.std < 22;
 
-                    let totalBrightness = 0;
-                    let pixelCount = 0;
-                    let darkPixels = 0;
-
-                    // Sample every 2nd pixel for speed
-                    for (let y = y0; y < y1; y += 2) {
-                        for (let x = x0; x < x1; x += 2) {
-                            const idx = (y * image.width + x) * 4;
-                            const r = data[idx];
-                            const g = data[idx + 1];
-                            const b = data[idx + 2];
-                            const brightness = (r + g + b) / 3;
-
-                            totalBrightness += brightness;
-                            pixelCount++;
-                            if (brightness < 80) darkPixels++;
+                    let bestType: number | null = null;
+                    let bestDist = Infinity;
+                    for (const ref of refSigs) {
+                        const d = sigDistance(sig, ref.sig);
+                        if (d < bestDist) {
+                            bestDist = d;
+                            bestType = ref.tileType;
                         }
                     }
 
-                    if (pixelCount === 0) return 5; // void
-
-                    const avgBrightness = totalBrightness / pixelCount;
-                    const darkRatio = darkPixels / pixelCount;
-
-                    // Simple classification
-                    if (avgBrightness < 50) return 5; // void (very dark)
-                    if (darkRatio > 0.6) return 2; // stone (mostly dark)
-                    if (avgBrightness > 180) return 0; // floor (bright)
-                    if (avgBrightness > 120) return 0; // floor
-                    return 2; // default to stone
+                    // Convert to similarity in 0..1 range (approx).
+                    const similarity = bestType === null ? 0 : 1 - bestDist / (255 * sig.length);
+                    const minSimilarity = voidish ? 0.86 : 0.78;
+                    if (bestType !== null && similarity >= minSimilarity) return bestType;
+                    if (voidish) return 5;
+                    return 5; // unknown: leave as void so the user can fill blanks
                 };
 
                 // Process in batches using requestAnimationFrame
@@ -585,6 +657,11 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                 const r = Math.floor(cellIndex / cols);
                                 const c = cellIndex % cols;
 
+                                if (!overwriteAll && newGrid[r]?.[c] !== 5) {
+                                    processedCells++;
+                                    continue;
+                                }
+
                                 const insetX = Math.min(cellWidth * CELL_SAMPLE_INSET_RATIO, Math.max(1, cellWidth / 4));
                                 const insetY = Math.min(cellHeight * CELL_SAMPLE_INSET_RATIO, Math.max(1, cellHeight / 4));
                                 const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(gridOffsetX + c * cellWidth + insetX)));
@@ -592,7 +669,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                 const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(gridOffsetY + r * cellHeight + insetY)));
                                 const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(gridOffsetY + (r + 1) * cellHeight - insetY)));
 
-                                newGrid[r][c] = await classifyCell(x0, y0, x1, y1);
+                                newGrid[r][c] = classifyCellFast(x0, y0, x1, y1);
                                 processedCells++;
                             }
 

@@ -384,6 +384,25 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         >
                             Auto-detect Grid
                         </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                                setIsDetecting(true);
+                                setDetectionProgress('Detecting cell types (fills void cells only)...');
+                                try {
+                                    await new Promise((resolve) => setTimeout(resolve, 50));
+                                    await detectCells();
+                                } finally {
+                                    setIsDetecting(false);
+                                    setDetectionProgress('');
+                                }
+                            }}
+                            disabled={!imageURL || isDetecting}
+                            title="Fast scan using saved reference sprites. Fills only void (unknown) cells so manual fixes are preserved."
+                        >
+                            Scan Cell Types
+                        </Button>
                     </div>
                     {autoDetectStatus && (
                         <div className="mt-1 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
