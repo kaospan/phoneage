@@ -36,6 +36,8 @@ export const GridEditorPanel: React.FC = () => {
     const [imageScaleX, setImageScaleX] = React.useState(1);
     const [imageScaleY, setImageScaleY] = React.useState(1);
     const [lockImageAspect, setLockImageAspect] = React.useState(true);
+    // Track cells the user manually painted/confirmed so learning can use trusted labels only.
+    const trustedCellsRef = React.useRef<Set<string>>(new Set());
     const [showAlignmentGuide, setShowAlignmentGuide] = React.useState(true);
     const [guideGrid, setGuideGrid] = React.useState<null | {
         rows: number;
@@ -291,6 +293,7 @@ export const GridEditorPanel: React.FC = () => {
         if (isSettingPlayerStart) {
             setPlayerStart({ x: c, y: r });
             setIsSettingPlayerStart(false);
+            trustedCellsRef.current.add(`${r},${c}`);
             return;
         }
         isPaintingRef.current = true;
@@ -300,6 +303,7 @@ export const GridEditorPanel: React.FC = () => {
             if (ng[r] && ng[r][c] !== undefined) ng[r][c] = activeTile;
             return ng;
         });
+        trustedCellsRef.current.add(`${r},${c}`);
     };
     const continuePaint = (r: number, c: number) => {
         if (isDragMode) return;
@@ -310,6 +314,7 @@ export const GridEditorPanel: React.FC = () => {
             if (ng[r] && ng[r][c] !== undefined) ng[r][c] = activeTile;
             return ng;
         });
+        trustedCellsRef.current.add(`${r},${c}`);
     };
     const endPaint = () => { isPaintingRef.current = false; didPushUndoRef.current = false; };
 
@@ -383,6 +388,14 @@ export const GridEditorPanel: React.FC = () => {
             return;
         }
 
+        const trusted = Array.from(trustedCellsRef.current);
+        if (trusted.length === 0) {
+            if (!options?.silent) {
+                alert('No manually confirmed cells yet. Paint/place a few tiles first, then Learn.');
+            }
+            return;
+        }
+
         const learnedCount = await learnReferencesFromAlignedMap({
             imageURL,
             grid,
@@ -393,6 +406,7 @@ export const GridEditorPanel: React.FC = () => {
                 height: naturalFrameHeight,
             },
             levelLabel: importLevel ? `level-${importLevel.id}` : 'mapper-current',
+            trustedCells: trusted,
         });
 
         if (!options?.silent) {
@@ -460,7 +474,7 @@ export const GridEditorPanel: React.FC = () => {
     };
 
     const saveCurrentMap = async () => {
-        if (imageURL && imageNaturalSize) {
+        if (imageURL && imageNaturalSize && trustedCellsRef.current.size > 0) {
             try {
                 await learnCurrentMap({ silent: true });
             } catch (error) {
@@ -468,6 +482,7 @@ export const GridEditorPanel: React.FC = () => {
             }
         }
         saveChanges();
+        trustedCellsRef.current.clear();
     };
 
     // Get the import level info for display

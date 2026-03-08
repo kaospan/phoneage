@@ -14,6 +14,12 @@ interface LearnFromMapOptions {
     frame: GridFrame;
     levelLabel?: string;
     maxPerType?: number;
+    /**
+     * Optional trusted positions (row,col) that the user manually verified/painted.
+     * When provided and non-empty, learning will ONLY sample sprites from these cells.
+     * Format: "row,col".
+     */
+    trustedCells?: string[];
 }
 
 interface CropOuterVoidOptions {
@@ -111,6 +117,7 @@ export const learnReferencesFromAlignedMap = async ({
     frame,
     levelLabel,
     maxPerType = 8,
+    trustedCells,
 }: LearnFromMapOptions): Promise<number> => {
     const image = await loadImage(imageURL);
     const canvas = document.createElement('canvas');
@@ -132,9 +139,11 @@ export const learnReferencesFromAlignedMap = async ({
     const cellWidth = frame.width / cols;
     const cellHeight = frame.height / rows;
     const positionsByType = new Map<number, Array<{ row: number; col: number }>>();
+    const trusted = trustedCells && trustedCells.length ? new Set(trustedCells) : null;
 
     grid.forEach((row, rowIndex) => {
         row.forEach((tileType, colIndex) => {
+            if (trusted && !trusted.has(`${rowIndex},${colIndex}`)) return;
             const positions = positionsByType.get(tileType) ?? [];
             positions.push({ row: rowIndex, col: colIndex });
             positionsByType.set(tileType, positions);
