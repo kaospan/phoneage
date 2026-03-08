@@ -122,66 +122,98 @@ const darkenHexColor = (hex: string, amount = 0.35) => {
 
 const KeyTile = ({
   position,
-  color,
   glowColor,
 }: {
   position: [number, number, number];
-  color: string;
   glowColor: string;
-}) => (
-  <group position={position}>
-    <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
-      <cylinderGeometry args={[0.15, 0.15, 0.06, 24]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={glowColor}
-        emissiveIntensity={0.25}
-        roughness={0.3}
-        metalness={0.6}
-      />
-    </mesh>
-    <mesh position={[0, 0.42, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-      <torusGeometry args={[0.14, 0.04, 12, 24]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={glowColor}
-        emissiveIntensity={0.35}
-        roughness={0.25}
-        metalness={0.65}
-      />
-    </mesh>
-    <mesh position={[0.12, 0.3, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-      <boxGeometry args={[0.28, 0.06, 0.06]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={glowColor}
-        emissiveIntensity={0.22}
-        roughness={0.25}
-        metalness={0.7}
-      />
-    </mesh>
-    <mesh position={[0.23, 0.24, 0]} castShadow>
-      <boxGeometry args={[0.05, 0.12, 0.05]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={glowColor}
-        emissiveIntensity={0.22}
-        roughness={0.25}
-        metalness={0.7}
-      />
-    </mesh>
-    <mesh position={[0.28, 0.34, 0]} castShadow>
-      <boxGeometry args={[0.05, 0.08, 0.05]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={glowColor}
-        emissiveIntensity={0.22}
-        roughness={0.25}
-        metalness={0.7}
-      />
-    </mesh>
-  </group>
-);
+}) => {
+  const groupRef = useRef<THREE.Group | null>(null);
+
+  useFrame((state) => {
+    const g = groupRef.current;
+    if (!g) return;
+    const t = state.clock.getElapsedTime();
+    g.position.y = position[1] + 0.04 + Math.sin(t * 2.2) * 0.02;
+    g.rotation.y = t * 0.65;
+  });
+
+  return (
+    <group ref={groupRef} position={position} scale={1.25}>
+      {/* Key marker: gold ring + colored glow (distinct from lock) */}
+      <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+        <ringGeometry args={[0.3, 0.42, 40]} />
+        <meshBasicMaterial color="#fff1bf" transparent opacity={0.95} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
+        <circleGeometry args={[0.3, 40]} />
+        <meshBasicMaterial color={glowColor} transparent opacity={0.22} depthWrite={false} toneMapped={false} />
+      </mesh>
+
+      <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.15, 0.15, 0.06, 24]} />
+        <meshStandardMaterial
+          color="#f5e6a8"
+          emissive={glowColor}
+          emissiveIntensity={0.25}
+          roughness={0.28}
+          metalness={0.75}
+        />
+      </mesh>
+      <mesh position={[0, 0.42, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <torusGeometry args={[0.14, 0.04, 12, 24]} />
+        <meshStandardMaterial
+          color="#f5e6a8"
+          emissive={glowColor}
+          emissiveIntensity={0.35}
+          roughness={0.22}
+          metalness={0.82}
+        />
+      </mesh>
+      <mesh position={[0.12, 0.3, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <boxGeometry args={[0.28, 0.06, 0.06]} />
+        <meshStandardMaterial
+          color="#f5e6a8"
+          emissive={glowColor}
+          emissiveIntensity={0.2}
+          roughness={0.22}
+          metalness={0.82}
+        />
+      </mesh>
+      <mesh position={[0.23, 0.24, 0]} castShadow>
+        <boxGeometry args={[0.05, 0.12, 0.05]} />
+        <meshStandardMaterial
+          color="#f5e6a8"
+          emissive={glowColor}
+          emissiveIntensity={0.2}
+          roughness={0.22}
+          metalness={0.82}
+        />
+      </mesh>
+      <mesh position={[0.28, 0.34, 0]} castShadow>
+        <boxGeometry args={[0.05, 0.08, 0.05]} />
+        <meshStandardMaterial
+          color="#f5e6a8"
+          emissive={glowColor}
+          emissiveIntensity={0.2}
+          roughness={0.22}
+          metalness={0.82}
+        />
+      </mesh>
+
+      {/* Colored gem so "red/green key" is obvious from far away */}
+      <mesh position={[0, 0.56, 0]} castShadow>
+        <octahedronGeometry args={[0.09, 0]} />
+        <meshStandardMaterial
+          color={glowColor}
+          emissive={glowColor}
+          emissiveIntensity={0.7}
+          roughness={0.12}
+          metalness={0.05}
+        />
+      </mesh>
+    </group>
+  );
+};
 
 const LockTile = ({
   position,
@@ -191,34 +223,70 @@ const LockTile = ({
   position: [number, number, number];
   color: string;
   glowColor: string;
-}) => (
-  <group position={position}>
-    <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
-      <boxGeometry args={[0.36, 0.3, 0.18]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={glowColor}
-        emissiveIntensity={0.16}
-        roughness={0.35}
-        metalness={0.62}
-      />
-    </mesh>
-    <mesh position={[0, 0.39, 0]} castShadow>
-      <torusGeometry args={[0.13, 0.035, 12, 24, Math.PI]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={glowColor}
-        emissiveIntensity={0.14}
-        roughness={0.3}
-        metalness={0.7}
-      />
-    </mesh>
-    <mesh position={[0, 0.18, 0.1]}>
-      <cylinderGeometry args={[0.035, 0.035, 0.06, 16]} />
-      <meshStandardMaterial color="#f5e6a8" emissive="#f5e6a8" emissiveIntensity={0.15} roughness={0.4} metalness={0.45} />
-    </mesh>
-  </group>
-);
+}) => {
+  const groupRef = useRef<THREE.Group | null>(null);
+
+  useFrame((state) => {
+    const g = groupRef.current;
+    if (!g) return;
+    const t = state.clock.getElapsedTime();
+    g.position.y = position[1] + 0.02 + Math.sin(t * 1.8) * 0.012;
+  });
+
+  return (
+    <group ref={groupRef} position={position} scale={1.2}>
+      {/* Lock marker: dark disc + colored ring + keyhole (distinct from key) */}
+      <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+        <ringGeometry args={[0.3, 0.42, 40]} />
+        <meshBasicMaterial color={glowColor} transparent opacity={0.85} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
+        <circleGeometry args={[0.3, 40]} />
+        <meshBasicMaterial color="#0b0f19" transparent opacity={0.78} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {/* Keyhole silhouette */}
+      <mesh position={[0, 0.007, 0.06]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={11}>
+        <circleGeometry args={[0.07, 20]} />
+        <meshBasicMaterial color="#fff1bf" transparent opacity={0.92} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.007, -0.06]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={11}>
+        <planeGeometry args={[0.11, 0.18]} />
+        <meshBasicMaterial color="#fff1bf" transparent opacity={0.92} depthWrite={false} toneMapped={false} />
+      </mesh>
+
+      <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.36, 0.3, 0.18]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={glowColor}
+          emissiveIntensity={0.55}
+          roughness={0.32}
+          metalness={0.65}
+        />
+      </mesh>
+      <mesh position={[0, 0.39, 0]} castShadow>
+        <torusGeometry args={[0.13, 0.035, 12, 24, Math.PI]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={glowColor}
+          emissiveIntensity={0.5}
+          roughness={0.28}
+          metalness={0.72}
+        />
+      </mesh>
+      <mesh position={[0, 0.18, 0.1]}>
+        <cylinderGeometry args={[0.035, 0.035, 0.06, 16]} />
+        <meshStandardMaterial
+          color="#f5e6a8"
+          emissive="#f5e6a8"
+          emissiveIntensity={0.35}
+          roughness={0.38}
+          metalness={0.45}
+        />
+      </mesh>
+    </group>
+  );
+};
 
 
 // Directional Arrow Block - raft platform
@@ -1360,10 +1428,8 @@ const CameraController = ({
   const fpsCameraTargetRef = useRef(new THREE.Vector3());
   const fpsLookCurrentRef = useRef(new THREE.Vector3());
   const fpsLookTargetRef = useRef(new THREE.Vector3());
-  const followPosTargetRef = useRef(new THREE.Vector3());
   const followLookTargetRef = useRef(new THREE.Vector3());
   const followLookCurrentRef = useRef(new THREE.Vector3());
-  const followPosVelRef = useRef(new THREE.Vector3());
   const followLookVelRef = useRef(new THREE.Vector3());
 
   useEffect(() => {
@@ -1374,7 +1440,6 @@ const CameraController = ({
 
   useEffect(() => {
     // Reset camera smoothing when switching modes to avoid a single-frame "kick".
-    followPosVelRef.current.set(0, 0, 0);
     followLookVelRef.current.set(0, 0, 0);
   }, [viewMode, zoomFactor]);
 
@@ -1478,24 +1543,17 @@ const CameraController = ({
     const targetZ =
       THREE.MathUtils.lerp(contentBounds.centerZ, followTargetZ, followStrengthZ) + panOffsetZ;
 
-    followPosTargetRef.current.set(targetX, cameraHeight, targetZ + cameraDistance);
     followLookTargetRef.current.set(targetX, 0, targetZ);
 
     // Critically damped smoothing = ease-in/out without frame-rate jitter.
+    // Important: keep camera position and look target derived from the SAME smoothed center
+    // to prevent tiny yaw jitter (rotation back and forth) while the player moves.
     const smoothTime = is2D ? 0.18 : 0.24;
     if (followLookCurrentRef.current.lengthSq() === 0) {
       // Initialize on first frame to avoid a long catch-up from (0,0,0).
       followLookCurrentRef.current.copy(followLookTargetRef.current);
     }
 
-    smoothDampVec3(
-      camera.position,
-      followPosTargetRef.current,
-      followPosVelRef.current,
-      smoothTime,
-      delta,
-      200
-    );
     smoothDampVec3(
       followLookCurrentRef.current,
       followLookTargetRef.current,
@@ -1505,7 +1563,13 @@ const CameraController = ({
       250
     );
 
-    camera.lookAt(followLookCurrentRef.current);
+    camera.up.set(0, 1, 0);
+    camera.position.set(
+      followLookCurrentRef.current.x,
+      cameraHeight,
+      followLookCurrentRef.current.z + cameraDistance
+    );
+    camera.lookAt(followLookCurrentRef.current.x, 0, followLookCurrentRef.current.z);
   });
 
   return null;
@@ -1576,6 +1640,69 @@ export const Game3D = ({
     return texture;
   }, []);
 
+  const breakableTexture = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // Base stone fill
+    ctx.fillStyle = '#8f8a7a';
+    ctx.fillRect(0, 0, size, size);
+
+    // Grain/noise
+    const img = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 26;
+      img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
+      img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n));
+      img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n));
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // Subtle vignette
+    const grad = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.1, size * 0.5, size * 0.5, size * 0.72);
+    grad.addColorStop(0, 'rgba(255,255,255,0.10)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.20)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    // Cracks
+    const drawCrack = (seedX: number, seedY: number, color: string, width: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(seedX, seedY);
+      let x = seedX;
+      let y = seedY;
+      for (let i = 0; i < 10; i += 1) {
+        x += (Math.random() - 0.5) * 22;
+        y += (Math.random() - 0.5) * 22;
+        x = Math.max(10, Math.min(size - 10, x));
+        y = Math.max(10, Math.min(size - 10, y));
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    };
+
+    for (let i = 0; i < 6; i += 1) {
+      const sx = 20 + Math.random() * (size - 40);
+      const sy = 20 + Math.random() * (size - 40);
+      // dark core + light edge to read as a crack
+      drawCrack(sx, sy, 'rgba(25,25,25,0.65)', 3);
+      drawCrack(sx + 1.2, sy - 1.2, 'rgba(245,233,168,0.35)', 1.2);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+
   const environmentMap = useMemo(() => {
     if (typeof document === 'undefined') return null;
     const makeFace = (top: string, bottom: string) => {
@@ -1633,7 +1760,7 @@ export const Game3D = ({
           wallBars.push([pos[0], 0.12, pos[2]]);
         }
         if (cell === 2) stone.push([pos[0], 0.25, pos[2]]);
-        if (cell === 6) breakable.push([pos[0], 0.28, pos[2]]);
+        if (cell === 6) breakable.push([pos[0], 0.16, pos[2]]);
         if (cell === 14) redKeys.push([pos[0], 0, pos[2]]);
         if (cell === 15) greenKeys.push([pos[0], 0, pos[2]]);
         if (cell === 16) redLocks.push([pos[0], 0, pos[2]]);
@@ -1693,17 +1820,20 @@ export const Game3D = ({
     };
   }, [grid, gridHeight, gridWidth, offsetX, offsetZ]);
 
-  const floorGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
+  // Render floor as a slightly smaller plane on top of a dark border plane, so tiles read clearly.
+  const floorGeometry = useMemo(() => new THREE.PlaneGeometry(0.97, 0.97, 8, 8), []);
+  const floorBorderGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 1, 1), []);
   const waterGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
   const wallGeometry = useMemo(() => new THREE.BoxGeometry(0.98, 0.2, 0.98), []);
   const wallBarGeometry = useMemo(() => new THREE.BoxGeometry(0.96, 0.02, 0.08), []);
   const stoneGeometry = useMemo(() => new THREE.DodecahedronGeometry(0.45, 1), []);
-  const breakableGeometry = useMemo(() => new THREE.DodecahedronGeometry(0.48, 1), []);
+  const breakableGeometry = useMemo(() => new THREE.BoxGeometry(0.92, 0.24, 0.92, 1, 1, 1), []);
   const planeRotation = useMemo(() => new THREE.Euler(-Math.PI / 2, 0, 0), []);
   const wallBarRotA = useMemo(() => new THREE.Euler(0, Math.PI / 4, 0), []);
   const wallBarRotB = useMemo(() => new THREE.Euler(0, -Math.PI / 4, 0), []);
 
   const floorMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+  const floorBorderMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const waterMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const wallMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const wallBarMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
@@ -1719,6 +1849,16 @@ export const Game3D = ({
     floorMaterial.bumpMap = noiseTexture ?? null;
     floorMaterial.bumpScale = 0.02;
     floorMaterial.needsUpdate = true;
+
+    // Medium-dark gray border around each floor tile (inset border effect).
+    floorBorderMaterial.color = new THREE.Color('#4b5563');
+    floorBorderMaterial.emissive = new THREE.Color('#0b1220');
+    floorBorderMaterial.emissiveIntensity = 0.06;
+    floorBorderMaterial.roughness = 0.95;
+    floorBorderMaterial.metalness = 0.0;
+    floorBorderMaterial.transparent = false;
+    floorBorderMaterial.opacity = 1;
+    floorBorderMaterial.needsUpdate = true;
 
     waterMaterial.color = new THREE.Color('#1e90ff');
     waterMaterial.transparent = false;
@@ -1759,18 +1899,29 @@ export const Game3D = ({
     stoneMaterial.needsUpdate = true;
 
     breakableMaterial.color = new THREE.Color(themeColors.breakable);
-    breakableMaterial.emissive = new THREE.Color(themeColors.breakable);
-    breakableMaterial.emissiveIntensity = 0.4;
-    breakableMaterial.roughness = 0.5;
-    breakableMaterial.metalness = 0.4;
+    breakableMaterial.map = breakableTexture ?? null;
+    breakableMaterial.color = new THREE.Color('#ffffff');
+    breakableMaterial.emissive = new THREE.Color('#111111');
+    breakableMaterial.emissiveIntensity = 0.08;
+    breakableMaterial.roughness = 0.88;
+    breakableMaterial.metalness = 0.06;
     breakableMaterial.transparent = false;
     breakableMaterial.opacity = 1;
-    breakableMaterial.roughnessMap = noiseTexture ?? null;
-    breakableMaterial.bumpMap = noiseTexture ?? null;
-    breakableMaterial.bumpScale = 0.1;
-    breakableMaterial.envMapIntensity = 0.6;
+    breakableMaterial.roughnessMap = null;
+    breakableMaterial.bumpMap = breakableTexture ?? (noiseTexture ?? null);
+    breakableMaterial.bumpScale = 0.06;
+    breakableMaterial.envMapIntensity = 0.35;
     breakableMaterial.needsUpdate = true;
-  }, [themeColors, noiseTexture, floorMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
+  }, [themeColors, noiseTexture, breakableTexture, floorMaterial, floorBorderMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
+
+  const floorBorderPositions = useMemo(
+    () => tileData.floor.map(([x, y, z]) => [x, y + 0.001, z] as [number, number, number]),
+    [tileData.floor]
+  );
+  const floorInnerPositions = useMemo(
+    () => tileData.floor.map(([x, y, z]) => [x, y + 0.003, z] as [number, number, number]),
+    [tileData.floor]
+  );
 
   return (
     <div className="w-full h-full bg-sky-400 overflow-hidden touch-none relative z-30">
@@ -1831,7 +1982,14 @@ export const Game3D = ({
 
         {/* Grid (Instanced) */}
         <InstancedMeshSet
-          positions={tileData.floor}
+          positions={floorBorderPositions}
+          geometry={floorBorderGeometry}
+          material={floorBorderMaterial}
+          rotation={planeRotation}
+          receiveShadow
+        />
+        <InstancedMeshSet
+          positions={floorInnerPositions}
           geometry={floorGeometry}
           material={floorMaterial}
           rotation={planeRotation}
@@ -1886,7 +2044,6 @@ export const Game3D = ({
           <KeyTile
             key={`red-key-${index}-${position[0]}-${position[2]}`}
             position={position}
-            color="#e53935"
             glowColor="#ff8a80"
           />
         ))}
@@ -1894,7 +2051,6 @@ export const Game3D = ({
           <KeyTile
             key={`green-key-${index}-${position[0]}-${position[2]}`}
             position={position}
-            color="#43a047"
             glowColor="#b9f6ca"
           />
         ))}

@@ -10,17 +10,21 @@ import { themes, type ColorTheme } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
 import { detectGridLines } from './gridDetection';
 import { getAlignmentHints } from './alignmentProfile';
+import { loadLevelLayoutOverride } from './persistenceOperations';
 const isPlaceholderGrid = (levelGrid?: number[][]) => {
     if (!levelGrid || levelGrid.length === 0) return true;
     if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
     return levelGrid.every((row) => row.every((cell) => cell === 5));
 };
 
-const getEditableGridForLevel = (levelGrid?: number[][]) => {
+const getEditableGridForLevel = (levelId: number | null, levelGrid?: number[][]) => {
     if (!isPlaceholderGrid(levelGrid)) {
         return levelGrid?.map((row) => [...row]) ?? voidGrid(11, 20);
     }
-    return voidGrid(11, 20);
+    const layout = levelId ? loadLevelLayoutOverride(levelId) : null;
+    const r = layout?.rows ?? 11;
+    const c = layout?.cols ?? 20;
+    return voidGrid(r, c);
 };
 
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
@@ -168,11 +172,55 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         if (lvl.autoBuild && isPlaceholderGrid(lvl.grid)) {
             return {
                 ...lvl,
-                grid: getEditableGridForLevel(lvl.grid),
+                grid: getEditableGridForLevel(lvl.id, lvl.grid),
             };
         }
 
         return lvl;
+    };
+
+    const loadLevelByIndex = async (idx: number) => {
+        const lvl = await resolveLevelForMapper(idx);
+        if (!lvl?.grid) return;
+
+        const editable = getEditableGridForLevel(lvl.id, lvl.grid);
+        setRows(editable.length);
+        setCols(editable[0]?.length || 0);
+        setGrid(editable);
+
+        const normalizedURL = lvl.image ? await normalizeMapperImage(lvl.image) : null;
+        setImageURL(normalizedURL);
+        setOverlayEnabled(Boolean(normalizedURL));
+
+        setGridOffsetX(0);
+        setGridOffsetY(0);
+        setGridFrameWidth(null);
+        setGridFrameHeight(null);
+        setZoom(1);
+
+        if (lvl.playerStart) {
+            setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
+        } else {
+            setPlayerStart(null);
+        }
+        if (lvl.theme) {
+            setTheme(lvl.theme);
+        }
+
+        setLoadedSnapshot({
+            grid: editable,
+            playerStart: lvl.playerStart ? { x: lvl.playerStart.x, y: lvl.playerStart.y } : null,
+            theme: lvl.theme,
+            imageURL: normalizedURL,
+            overlayEnabled: Boolean(normalizedURL),
+            overlayOpacity: 0.5,
+            overlayStretch: true,
+            zoom: 1,
+            gridOffsetX: 0,
+            gridOffsetY: 0,
+            gridFrameWidth: null,
+            gridFrameHeight: null,
+        });
     };
 
     return (
@@ -209,9 +257,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
 
                                         // Auto-load the level's grid, player start, and theme
                                         const lvl = allLevels[levelIndex];
-                                        setRows(lvl.grid.length);
-                                        setCols(lvl.grid[0]?.length || 0);
-                                        setGrid(lvl.grid.map(row => [...row]));
+                                        const editable = getEditableGridForLevel(lvl.id, lvl.grid);
+                                        setRows(editable.length);
+                                        setCols(editable[0]?.length || 0);
+                                        setGrid(editable);
                                         setGridOffsetX(0);
                                         setGridOffsetY(0);
                                         setGridFrameWidth(null);
@@ -275,6 +324,41 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     >
                         New Level
                     </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={importLevelIndex === null || importLevelIndex <= 0}
+                        title={importLevelIndex === null ? 'Load a level first' : 'Load previous level'}
+                        onClick={() => {
+                            if (importLevelIndex === null) return;
+                            const nextIdx = Math.max(0, importLevelIndex - 1);
+                            setImportLevelIndex(nextIdx);
+                            setCompareLevelIndex(nextIdx);
+                            void loadLevelByIndex(nextIdx);
+                        }}
+                    >
+                        Prev Level
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={importLevelIndex === null || importLevelIndex >= allLevels.length - 1}
+                        title={importLevelIndex === null ? 'Load a level first' : 'Load next level'}
+                        onClick={() => {
+                            if (importLevelIndex === null) return;
+                            const nextIdx = Math.min(allLevels.length - 1, importLevelIndex + 1);
+                            setImportLevelIndex(nextIdx);
+                            setCompareLevelIndex(nextIdx);
+                            void loadLevelByIndex(nextIdx);
+                        }}
+                    >
+                        Next Level
+                    </Button>
+                    {importLevelIndex !== null && allLevels[importLevelIndex] && (
+                        <div className="ml-1 rounded border border-border/60 bg-background px-2 py-1 text-xs text-muted-foreground">
+                            Level {allLevels[importLevelIndex]!.id}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -335,41 +419,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 const idx = parseInt(val, 10);
                                 setImportLevelIndex(idx);
                                 setCompareLevelIndex(idx);
-                                void (async () => {
-                                    const lvl = await resolveLevelForMapper(idx);
-                                    if (!lvl?.grid) return;
-                                    setRows(lvl.grid.length);
-                                    setCols(lvl.grid[0]?.length || 0);
-                                    setGrid(getEditableGridForLevel(lvl.grid));
-                                    const normalizedURL = lvl.image ? await normalizeMapperImage(lvl.image) : null;
-                                    setImageURL(normalizedURL);
-                                    setOverlayEnabled(Boolean(normalizedURL));
-                                    setGridOffsetX(0);
-                                    setGridOffsetY(0);
-                                    setGridFrameWidth(null);
-                                    setGridFrameHeight(null);
-                                    setZoom(1);
-                                    if (lvl.playerStart) {
-                                        setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
-                                    }
-                                    if (lvl.theme) {
-                                        setTheme(lvl.theme);
-                                    }
-                                    setLoadedSnapshot({
-                                        grid: lvl.grid,
-                                        playerStart: lvl.playerStart ? { x: lvl.playerStart.x, y: lvl.playerStart.y } : null,
-                                        theme: lvl.theme,
-                                        imageURL: normalizedURL,
-                                        overlayEnabled: Boolean(normalizedURL),
-                                        overlayOpacity: 0.5,
-                                        overlayStretch: true,
-                                        zoom: 1,
-                                        gridOffsetX: 0,
-                                        gridOffsetY: 0,
-                                        gridFrameWidth: null,
-                                        gridFrameHeight: null,
-                                    });
-                                })();
+                                void loadLevelByIndex(idx);
                             }}
                         >
                             <option value="">Load level...</option>

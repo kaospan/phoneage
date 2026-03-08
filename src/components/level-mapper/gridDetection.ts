@@ -332,6 +332,55 @@ export const detectGridLines = (
                 }
             }
 
+            // After expansion, trim any "background-only" edge rows/cols that were included due to noise.
+            // This helps with screenshots that have a thin extra column of rocky background on one side,
+            // which can otherwise inflate cols by +1 (e.g. 21 instead of 20).
+            const shouldTrim = (s: { mean: number; max: number; n: number; aboveMain: number; aboveEdge: number }) => {
+                if (!s.n) return false;
+                // If there are any clearly "board" cells, do not trim.
+                if (s.aboveMain > 0) return false;
+                // A tiny amount of edge activity is still likely background noise.
+                const edgeRatio = s.aboveEdge / s.n;
+                if (edgeRatio >= 0.04) return false;
+                return true;
+            };
+
+            for (let i = 0; i < 2; i += 1) {
+                const rowsNow = maxR - minR + 1;
+                const colsNow = maxC - minC + 1;
+                if (rowsNow <= MIN_DETECTED_ROWS || colsNow <= MIN_DETECTED_COLS) break;
+
+                // left
+                if (colsNow > MIN_DETECTED_COLS) {
+                    const s = colStats(minC, minR, maxR);
+                    if (shouldTrim(s)) minC += 1;
+                }
+                // right
+                {
+                    const colsNow2 = maxC - minC + 1;
+                    if (colsNow2 > MIN_DETECTED_COLS) {
+                        const s = colStats(maxC, minR, maxR);
+                        if (shouldTrim(s)) maxC -= 1;
+                    }
+                }
+                // top
+                {
+                    const rowsNow2 = maxR - minR + 1;
+                    if (rowsNow2 > MIN_DETECTED_ROWS) {
+                        const s = rowStats(minR, minC, maxC);
+                        if (shouldTrim(s)) minR += 1;
+                    }
+                }
+                // bottom
+                {
+                    const rowsNow3 = maxR - minR + 1;
+                    if (rowsNow3 > MIN_DETECTED_ROWS) {
+                        const s = rowStats(maxR, minC, maxC);
+                        if (shouldTrim(s)) maxR -= 1;
+                    }
+                }
+            }
+
             const rowsFromBox = maxR - minR + 1;
             const colsFromBox = maxC - minC + 1;
             if (rowsFromBox < MIN_DETECTED_ROWS || rowsFromBox > MAX_DETECTED_ROWS) return null;

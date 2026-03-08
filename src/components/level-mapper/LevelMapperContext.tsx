@@ -18,7 +18,9 @@ import {
     saveCompareLevelIndex,
     loadImportLevelIndex,
     saveImportLevelIndex,
-    clearImportLevel
+    clearImportLevel,
+    loadLevelLayoutOverride,
+    saveLevelLayoutOverride
 } from './persistenceOperations';
 import {
     useJsonSync,
@@ -168,6 +170,15 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setLastGridDetection(null);
         }, [imageURL]);
 
+        // Persist per-level layout (rows/cols) so placeholder auto-build levels can remember a user-chosen size
+        // like "Level 21 is 12 rows" even before the grid is fully mapped.
+        useEffect(() => {
+            if (importLevelIndex === null) return;
+            const lvl = allLevels[importLevelIndex];
+            if (!lvl) return;
+            saveLevelLayoutOverride(lvl.id, rows, cols);
+        }, [rows, cols, importLevelIndex, allLevels]);
+
         // Auto-load level on startup if one was previously imported.
         // For placeholder auto-build levels, load the image and keep the editor responsive
         // instead of running a heavy full image-to-grid build during mount.
@@ -179,9 +190,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         let resolved = lvl;
 
                         if (resolved.autoBuild && isPlaceholderGrid(resolved.grid)) {
+                            const layout = loadLevelLayoutOverride(resolved.id) ?? { rows: 11, cols: 20 };
                             resolved = {
                                 ...resolved,
-                                grid: emptyGrid(11, 20),
+                                grid: voidGrid(layout.rows, layout.cols),
                             };
                         }
 
@@ -388,6 +400,44 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     console.error('❌ Grid detection failed');
                     alert('Grid detection failed. Try adjusting the crop so the board edges are cleaner.');
                     return null;
+                }
+
+                // If auto-detect produced a different layout with low confidence (common when a faint outer ring exists),
+                // keep the user's current rows/cols and only snap offset/frame.
+                const lowConfidenceLayoutChange =
+                    detected.confidence < 0.35 && (detected.rows !== rows || detected.cols !== cols);
+                if (lowConfidenceLayoutChange) {
+                    const snapped = detectGridLines(imageCanvas, true, rows, cols, getAlignmentHints());
+                    if (snapped) {
+                        const scaleBackX = srcW / Math.max(1, imageCanvas.width);
+                        const scaleBackY = srcH / Math.max(1, imageCanvas.height);
+                        const result = {
+                            ...snapped,
+                            offsetX: snapped.offsetX * scaleBackX,
+                            offsetY: snapped.offsetY * scaleBackY,
+                            cellWidth: snapped.cellWidth * scaleBackX,
+                            cellHeight: snapped.cellHeight * scaleBackY,
+                        };
+
+                        console.log(
+                            `⚠️ Low-confidence auto-detect (${detected.confidence.toFixed(2)}) changed layout ` +
+                            `${detected.rows}x${detected.cols} -> keeping ${rows}x${cols} and snapping frame only.`
+                        );
+
+                        setLastGridDetection(result);
+
+                        const nextOffsetX = Math.max(0, Math.min(srcW - 1, Math.round(result.offsetX)));
+                        const nextOffsetY = Math.max(0, Math.min(srcH - 1, Math.round(result.offsetY)));
+                        const nextFrameWidth = Math.min(srcW, Math.max(1, Math.round(result.cellWidth * cols)));
+                        const nextFrameHeight = Math.min(srcH, Math.max(1, Math.round(result.cellHeight * rows)));
+
+                        setGridOffsetX(nextOffsetX);
+                        setGridOffsetY(nextOffsetY);
+                        setGridFrameWidth(nextFrameWidth);
+                        setGridFrameHeight(nextFrameHeight);
+                        setIsSaved(false);
+                        return result;
+                    }
                 }
 
                 const scaleBackX = srcW / Math.max(1, imageCanvas.width);

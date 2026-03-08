@@ -45,6 +45,35 @@ export const saveGridChanges = (
     return getAllLevels();
 };
 
+const LEVEL_LAYOUT_OVERRIDE_PREFIX = 'level_layout_override_';
+
+export const saveLevelLayoutOverride = (levelId: number, rows: number, cols: number): void => {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(`${LEVEL_LAYOUT_OVERRIDE_PREFIX}${levelId}`, JSON.stringify({ rows, cols }));
+    } catch {
+        // ignore
+    }
+};
+
+export const loadLevelLayoutOverride = (levelId: number): { rows: number; cols: number } | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(`${LEVEL_LAYOUT_OVERRIDE_PREFIX}${levelId}`);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const rows = Number((parsed as any).rows);
+        const cols = Number((parsed as any).cols);
+        if (!Number.isFinite(rows) || !Number.isFinite(cols)) return null;
+        if (!Number.isInteger(rows) || !Number.isInteger(cols)) return null;
+        if (rows <= 0 || cols <= 0) return null;
+        return { rows, cols };
+    } catch {
+        return null;
+    }
+};
+
 /**
  * Exports the current grid as JSON to clipboard
  * @param grid - The grid to export

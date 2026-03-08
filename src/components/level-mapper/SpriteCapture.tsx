@@ -10,6 +10,7 @@ import {
     CELL_REFERENCES_UPDATED_EVENT,
     extractCellImageData,
 } from '@/lib/spriteMatching';
+import { assessSingleCellReference } from './referenceQuality';
 
 interface SpriteCaptureProps {
     imageURL: string | null;
@@ -334,8 +335,24 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
             captureHeight
         );
 
+        // Reject "bad" captures that look like they include gridlines / neighbor-cell bleed.
+        const captured = extractCellImageData(canvas, 0, 0, captureWidth, captureHeight);
+        if (captured) {
+            const quality = assessSingleCellReference(captured);
+            if (!quality.ok) {
+                alert(
+                    `Rejected capture: ${quality.reason}\n\nFix alignment (drag/zoom/stretch overlay) and try again.`
+                );
+                return;
+            }
+        }
+
         const imageData = canvas.toDataURL('image/png');
         const tileType = selectedType;
+        if (tileType === 5) {
+            alert('Void (5) cannot be captured as a reference sprite. Pick any other tile type.');
+            return;
+        }
 
         onCapture({
             imageData,
@@ -492,7 +509,7 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        {TILE_TYPES.map((tile) => (
+                        {TILE_TYPES.filter((tile) => tile.id !== 5).map((tile) => (
                             <SelectItem key={tile.id} value={tile.id.toString()}>
                                 <div className="flex items-center gap-2">
                                     <div

@@ -7,6 +7,8 @@ import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOpe
 import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
 
+const RULER_SIZE_PX = 28;
+
 export const GridEditorPanel: React.FC = () => {
     const {
         compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
@@ -96,9 +98,10 @@ export const GridEditorPanel: React.FC = () => {
     React.useEffect(() => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
-            const containerWidth = Math.max(320, containerRef.current.clientWidth - 32);
+            // Reserve space for the rulers so they sit above/left of the map (never overlay it).
+            const containerWidth = Math.max(320, containerRef.current.clientWidth - 32 - RULER_SIZE_PX);
             const fallbackHeight = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.65) : 600;
-            const containerHeight = Math.max(240, ((containerRef.current.clientHeight || fallbackHeight) - 32));
+            const containerHeight = Math.max(240, ((containerRef.current.clientHeight || fallbackHeight) - 32 - RULER_SIZE_PX));
 
             if (imageURL) {
                 if (!imageNaturalSize) return;
@@ -118,6 +121,8 @@ export const GridEditorPanel: React.FC = () => {
                     const imageCellHeight = (naturalGridHeight * imageScaleY) / rows;
 
                     if (overlayStretch) {
+                        // Keep the grid geometry faithful to the screenshot's detected frame.
+                        // Forcing square cells here breaks snapping/alignment on images that are slightly non-uniformly scaled.
                         setCellWidth(imageCellWidth);
                         setCellHeight(imageCellHeight);
                     } else {
@@ -467,7 +472,7 @@ export const GridEditorPanel: React.FC = () => {
 
     // Get the import level info for display
     const importLevel = importLevelIndex !== null && importLevelIndex !== undefined ? allLevels[importLevelIndex] : null;
-    const rulerSizePx = 28;
+    const rulerSizePx = RULER_SIZE_PX;
     const contentWidthPx = Math.max(scaledDisplayWidth, cols * cellWidth);
     const contentHeightPx = Math.max(scaledDisplayHeight, rows * cellHeight);
 
@@ -842,48 +847,52 @@ export const GridEditorPanel: React.FC = () => {
                     <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { pushUndo(); setGrid(g => { const width = g[0]?.length || cols; return g.map(r => r.map(() => 5)); }); }} title="Fill all cells with Void" aria-label="All void">
                         <Trash2 />
                     </Button>
-                    <Button
-                        size="icon"
-                        variant={isSettingPlayerStart ? "secondary" : "outline"}
-                        className="h-8 w-8"
-                        onClick={() => setIsSettingPlayerStart(!isSettingPlayerStart)}
-                        title="Click a cell to set player start position"
-                        aria-pressed={isSettingPlayerStart}
-                        aria-label={isSettingPlayerStart ? "Setting player start: on" : "Setting player start: off"}
-                    >
-                        <UserRound />
-                    </Button>
-                    {playerStart && (
-                        <>
-                            <span className="text-xs text-muted-foreground tabular-nums" title="Player start (col,row)">
-                                ({playerStart.x}, {playerStart.y})
+                    <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2 py-1">
+                        <Button
+                            size="icon"
+                            variant={isSettingPlayerStart ? "secondary" : "outline"}
+                            className="h-8 w-8"
+                            onClick={() => setIsSettingPlayerStart(!isSettingPlayerStart)}
+                            title="Click a cell to set player start position"
+                            aria-pressed={isSettingPlayerStart}
+                            aria-label={isSettingPlayerStart ? "Setting player start: on" : "Setting player start: off"}
+                        >
+                            <UserRound />
+                        </Button>
+                        {playerStart && (
+                            <>
+                                <span className="text-xs text-muted-foreground tabular-nums" title="Player start (col,row)">
+                                    ({playerStart.x}, {playerStart.y})
+                                </span>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setPlayerStart(null)}
+                                    className="h-8 w-8"
+                                    title="Clear player start position"
+                                    aria-label="Clear player start"
+                                >
+                                    ✕
+                                </Button>
+                            </>
+                        )}
+                        <Button
+                            size="sm"
+                            variant="default"
+                            className="h-10 px-4 font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-900/30 disabled:text-emerald-100/60"
+                            onClick={() => { void saveCurrentMap(); }}
+                            disabled={isSaved}
+                            title={isSaved ? "Saved" : "Save changes (also learns references if overlay is loaded)"}
+                            aria-label="Save Changes"
+                        >
+                            <span className="flex items-center gap-2">
+                                <Save className="h-4 w-4" />
+                                {isSaved ? 'Saved' : 'Save Changes'}
                             </span>
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => setPlayerStart(null)}
-                                className="h-8 w-8"
-                                title="Clear player start position"
-                                aria-label="Clear player start"
-                            >
-                                ✕
-                            </Button>
-                        </>
-                    )}
-                    <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-8 w-8"
-                        onClick={() => { void saveCurrentMap(); }}
-                        disabled={isSaved}
-                        title={isSaved ? "Saved" : "Save + Learn"}
-                        aria-label="Save + Learn"
-                    >
-                        <Save />
-                    </Button>
+                        </Button>
+                    </div>
                 </div>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Diff cells: {differences.length}</div>
             {isDragMode && (
                 <div className="mt-1 text-xs text-amber-600">
                     Drag anywhere on the grid to fine-tune alignment. Mouse wheel zooms the view; hold Alt to scale only the overlay image. Turn drag mode off to paint or click cells.
@@ -913,14 +922,14 @@ export const GridEditorPanel: React.FC = () => {
                             }}
                         >
                             {/* Corner ruler label */}
-                            <div className="sticky top-0 left-0 z-30 flex items-center justify-center border border-border/40 bg-background/80 backdrop-blur-sm">
+                            <div className="flex items-center justify-center border border-border/40 bg-background/80 backdrop-blur-sm">
                                 <div className="text-[10px] leading-tight text-muted-foreground tabular-nums text-center">
                                     {cellWidth.toFixed(1)}×{cellHeight.toFixed(1)}px
                                 </div>
                             </div>
 
                             {/* X ruler (px) */}
-                            <div className="sticky top-0 z-20 border border-border/40 bg-background/80 backdrop-blur-sm overflow-hidden">
+                            <div className="border border-border/40 bg-background/80 backdrop-blur-sm overflow-hidden">
                                 <svg
                                     width={Math.max(1, Math.round(contentWidthPx))}
                                     height={rulerSizePx}
@@ -946,7 +955,7 @@ export const GridEditorPanel: React.FC = () => {
                             </div>
 
                             {/* Y ruler (px) */}
-                            <div className="sticky left-0 z-20 border border-border/40 bg-background/80 backdrop-blur-sm overflow-hidden">
+                            <div className="border border-border/40 bg-background/80 backdrop-blur-sm overflow-hidden">
                                 <svg
                                     width={rulerSizePx}
                                     height={Math.max(1, Math.round(contentHeightPx))}
@@ -982,7 +991,8 @@ export const GridEditorPanel: React.FC = () => {
                                             opacity: overlayOpacity,
                                             width: `${scaledDisplayWidth}px`,
                                             height: `${scaledDisplayHeight}px`,
-                                            objectFit: 'contain',
+                                            // When aspect is unlocked we intentionally allow distortion to match screenshots.
+                                            objectFit: lockImageAspect ? 'contain' : 'fill',
                                             imageRendering: 'pixelated',
                                             zIndex: 15
                                         }}

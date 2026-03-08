@@ -8,7 +8,7 @@ export const TILE_TYPES: TileType[] = [
   { id: 2, name: "Stone (2)", color: "#6b4423" },
   { id: 3, name: "Cave (3)", color: "#6ab82e" },
   { id: 4, name: "Water (4)", color: "#1e90ff" },
-  { id: 5, name: "Void (5)", color: "#5da7e6" },
+  { id: 5, name: "Void (5)", color: "#ffffff" },
   { id: 6, name: "Breakable (6)", color: "#4a9eff" },
   { id: 7, name: "Arrow Up (7)", color: "#1976d2" },
   { id: 8, name: "Arrow Right (8)", color: "#43a047" },

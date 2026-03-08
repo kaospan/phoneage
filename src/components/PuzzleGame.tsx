@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
+import { GameSprite2D } from "./GameSprite2D";
 import { TouchControls } from "./TouchControls";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
@@ -59,13 +60,14 @@ interface SimulationState {
 
 const CAMERA_ZOOM_LEVELS = [1.08, 1, 0.93, 0.86] as const;
 const DEFAULT_CAMERA_ZOOM_INDEX = 2;
-const VIEW_MODES = ["3d", "fps", "2d"] as const;
-type ViewMode = (typeof VIEW_MODES)[number];
-const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+  const VIEW_MODES = ["3d", "fps", "2d", "sprite"] as const;
+  type ViewMode = (typeof VIEW_MODES)[number];
+  const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   "3d": "3D",
   fps: "FPS",
   "2d": "2D",
-};
+  sprite: "SPR",
+  };
 const EMPTY_KEYS: KeyInventory = { red: false, green: false };
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
@@ -695,6 +697,8 @@ export const PuzzleGame = () => {
       [renderPlayers]
     );
     const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
+    const redKeyCount = localPlayer?.keys.red ? 1 : 0;
+    const greenKeyCount = localPlayer?.keys.green ? 1 : 0;
 
     const resetSelectorToPlayer = useCallback(() => {
       setIsSelectorActive(false);
@@ -851,7 +855,7 @@ export const PuzzleGame = () => {
 
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
-      if (viewMode === 'fps') return;
+      if (viewMode === 'fps' || viewMode === 'sprite') return;
       // Only start dragging with left mouse button and not on UI elements
       if (e.button === 0 && e.target === e.currentTarget) {
         setIsDragging(true);
@@ -861,7 +865,7 @@ export const PuzzleGame = () => {
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-      if (viewMode === 'fps') return;
+      if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (isDragging) {
         const deltaX = e.clientX - dragStart.x;
         const deltaY = e.clientY - dragStart.y;
@@ -885,7 +889,7 @@ export const PuzzleGame = () => {
 
     // Touch handlers for mobile dragging
     const handleTouchStart = (e: React.TouchEvent) => {
-      if (viewMode === 'fps') return;
+      if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (e.touches.length === 1 && e.target === e.currentTarget) {
         const touch = e.touches[0];
         setIsDragging(true);
@@ -895,7 +899,7 @@ export const PuzzleGame = () => {
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
-      if (viewMode === 'fps') return;
+      if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (isDragging && e.touches.length === 1) {
         const touch = e.touches[0];
         const deltaX = touch.clientX - dragStart.x;
@@ -915,7 +919,7 @@ export const PuzzleGame = () => {
 
     // Double-click or double-tap to reset camera
     const handleDoubleClick = () => {
-      if (viewMode === 'fps') return;
+      if (viewMode === 'fps' || viewMode === 'sprite') return;
       setCameraOffset({ x: 0, z: 0 });
       toast.info("View reset");
     };
@@ -987,23 +991,23 @@ export const PuzzleGame = () => {
               <span className="text-primary font-bold text-lg md:text-2xl">Level {currentLevel.id}</span>
               <span className="text-muted-foreground text-base md:text-xl">•</span>
               <span className="text-foreground font-medium text-sm md:text-lg">Moves: {moves}</span>
-              {(localPlayer?.keys.red || localPlayer?.keys.green) && (
-                <>
-                  <span className="text-muted-foreground text-base md:text-xl">•</span>
-                  <div className="flex items-center gap-2">
-                    {localPlayer?.keys.red && (
-                      <span className="rounded-md border border-red-300 bg-red-600 px-2 py-1 text-xs font-bold text-white">
-                        Red Key
-                      </span>
-                    )}
-                    {localPlayer?.keys.green && (
-                      <span className="rounded-md border border-green-300 bg-green-600 px-2 py-1 text-xs font-bold text-white">
-                        Green Key
-                      </span>
-                    )}
-                  </div>
-                </>
-              )}
+              <span className="text-muted-foreground text-base md:text-xl">•</span>
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 px-2 py-1 text-xs font-black text-white"
+                  title="Red keys collected"
+                >
+                  <span aria-hidden>🗝</span>
+                  <span>{redKeyCount}</span>
+                </span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 px-2 py-1 text-xs font-black text-white"
+                  title="Green keys collected"
+                >
+                  <span aria-hidden>🔑</span>
+                  <span>{greenKeyCount}</span>
+                </span>
+              </div>
             </div>
 
             {/* Restart Button */}
@@ -1113,50 +1117,95 @@ export const PuzzleGame = () => {
           onTouchEnd={handleTouchEnd}
           onDoubleClick={handleDoubleClick}
           style={{
-            cursor: viewMode === 'fps' ? 'default' : isDragging ? 'grabbing' : 'grab',
-            touchAction: viewMode === 'fps' ? 'auto' : 'none',
+            cursor: viewMode === 'fps' || viewMode === 'sprite' ? 'default' : isDragging ? 'grabbing' : 'grab',
+            touchAction: viewMode === 'fps' || viewMode === 'sprite' ? 'auto' : 'none',
           }}
         >
-          <Game3D
-            grid={renderGrid}
-            cavePos={renderCavePos}
-            selectedArrow={selectedArrow}
-            selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
-            cameraOffset={cameraOffset}
-            zoomFactor={cameraZoomFactor}
-            viewMode={viewMode}
-            theme={currentLevel.theme}
-            players={renderPlayers}
-            localPlayerId={localPlayer?.id}
-            onPlayerClick={flashPlayerHighlight}
-            playerFlashCount={playerFlashCount}
-            onArrowClick={(x, y) => {
-              if (localPlayer?.isGliding) return;
-              const cell = renderGrid[y]?.[x];
-              if (cell !== undefined && isArrowCell(cell)) {
-                if (localPlayerPos.x === x && localPlayerPos.y === y) { toast.error("Cannot select arrow while standing on it!"); return; }
-                const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
-                if (isSameArrow) {
+          {viewMode === "sprite" ? (
+            <GameSprite2D
+              grid={renderGrid}
+              cavePos={renderCavePos}
+              levelImageUrl={currentLevel?.image ?? null}
+              playerStart={currentLevel?.playerStart ?? null}
+              selectedArrow={selectedArrow}
+              selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+              players={renderPlayers}
+              zoomFactor={cameraZoomFactor}
+              onArrowClick={(x, y) => {
+                if (localPlayer?.isGliding) return;
+                const cell = renderGrid[y]?.[x];
+                if (cell !== undefined && isArrowCell(cell)) {
+                  if (localPlayerPos.x === x && localPlayerPos.y === y) {
+                    toast.error("Cannot select arrow while standing on it!");
+                    return;
+                  }
+                  const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                  if (isSameArrow) {
+                    enqueueInput({ type: "deselect" });
+                    resetSelectorToPlayer();
+                    flashPlayerHighlight();
+                    toast.info("Arrow deselected - control returned to player");
+                  } else {
+                    enqueueInput({ type: "select", x, y });
+                    setIsSelectorActive(false);
+                    setSelectorPos({ x, y });
+                    toast.info("Arrow selected! Use controls to move it remotely.");
+                  }
+                }
+              }}
+              onCancelSelection={() => {
+                if (selectedArrow) {
                   enqueueInput({ type: "deselect" });
                   resetSelectorToPlayer();
-                  flashPlayerHighlight();
-                  toast.info("Arrow deselected - control returned to player");
-                } else {
-                  enqueueInput({ type: "select", x, y });
-                  setIsSelectorActive(false);
-                  setSelectorPos({ x, y });
-                  toast.info("Arrow selected! Use controls to move it remotely.");
+                  toast.info("Arrow deselected");
                 }
-              }
-            }}
-            onCancelSelection={() => {
-              if (selectedArrow) {
-                enqueueInput({ type: "deselect" });
-                resetSelectorToPlayer();
-                toast.info("Arrow deselected");
-              }
-            }}
-          />
+              }}
+            />
+          ) : (
+            <Game3D
+              grid={renderGrid}
+              cavePos={renderCavePos}
+              selectedArrow={selectedArrow}
+              selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+              cameraOffset={cameraOffset}
+              zoomFactor={cameraZoomFactor}
+              viewMode={viewMode}
+              theme={currentLevel.theme}
+              players={renderPlayers}
+              localPlayerId={localPlayer?.id}
+              onPlayerClick={flashPlayerHighlight}
+              playerFlashCount={playerFlashCount}
+              onArrowClick={(x, y) => {
+                if (localPlayer?.isGliding) return;
+                const cell = renderGrid[y]?.[x];
+                if (cell !== undefined && isArrowCell(cell)) {
+                  if (localPlayerPos.x === x && localPlayerPos.y === y) {
+                    toast.error("Cannot select arrow while standing on it!");
+                    return;
+                  }
+                  const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                  if (isSameArrow) {
+                    enqueueInput({ type: "deselect" });
+                    resetSelectorToPlayer();
+                    flashPlayerHighlight();
+                    toast.info("Arrow deselected - control returned to player");
+                  } else {
+                    enqueueInput({ type: "select", x, y });
+                    setIsSelectorActive(false);
+                    setSelectorPos({ x, y });
+                    toast.info("Arrow selected! Use controls to move it remotely.");
+                  }
+                }
+              }}
+              onCancelSelection={() => {
+                if (selectedArrow) {
+                  enqueueInput({ type: "deselect" });
+                  resetSelectorToPlayer();
+                  toast.info("Arrow deselected");
+                }
+              }}
+            />
+          )}
         </div>
         <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
           <div className="bg-card/95 backdrop-blur border border-border/50 px-2 py-1 rounded shadow-md">
