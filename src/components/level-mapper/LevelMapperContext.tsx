@@ -105,10 +105,11 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         console.log('✓ Basic state initialized');
 
         const canvasRef = useRef<HTMLCanvasElement | null>(null);
-        const [rows, setRows] = useState(11);
+        // Default mapper layout is 12x20 unless a level has a saved manual layout override.
+        const [rows, setRows] = useState(12);
         const [cols, setCols] = useState(20);
         const [activeTile, setActiveTile] = useState(0);
-        const [grid, setGrid] = useState<number[][]>(() => emptyGrid(11, 20));
+        const [grid, setGrid] = useState<number[][]>(() => emptyGrid(12, 20));
         const [playerStart, setPlayerStart] = useState<{ x: number; y: number } | null>(null);
         const [theme, setTheme] = useState<ColorTheme | undefined>(undefined);
         console.log('✓ Grid state initialized');
@@ -190,7 +191,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         let resolved = lvl;
 
                         if (resolved.autoBuild && isPlaceholderGrid(resolved.grid)) {
-                            const layout = loadLevelLayoutOverride(resolved.id) ?? { rows: 11, cols: 20 };
+                            const layout = loadLevelLayoutOverride(resolved.id) ?? { rows: 12, cols: 20 };
                             resolved = {
                                 ...resolved,
                                 grid: voidGrid(layout.rows, layout.cols),

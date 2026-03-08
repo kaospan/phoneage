@@ -11,7 +11,7 @@ import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
-import { saveLevelOverride } from "@/lib/levelOverrides";
+import { LEVEL_OVERRIDES_UPDATED_EVENT, saveLevelOverride } from "@/lib/levelOverrides";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -136,7 +136,25 @@ export const PuzzleGame = () => {
   const lastRenderRef = useRef(0);
   const buildInFlightRef = useRef<Set<number>>(new Set());
 
-  const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex]);
+  const [overrideRevision, setOverrideRevision] = useState(0);
+
+  // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const bump = () => setOverrideRevision((v) => v + 1);
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key.startsWith("level_override_")) bump();
+    };
+    window.addEventListener(LEVEL_OVERRIDES_UPDATED_EVENT, bump as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(LEVEL_OVERRIDES_UPDATED_EVENT, bump as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex, overrideRevision]);
   const currentLevel = allLevels[currentLevelIndex];
 
   // Mobile portrait gate: require landscape so the whole board can be visible.

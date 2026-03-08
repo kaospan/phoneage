@@ -7,6 +7,8 @@ export interface CellReference {
     timestamp: number;
     gridPosition?: { row: number; col: number };
     sourceName?: string;
+    // When true, mass deletion in the mapper should not delete this reference.
+    locked?: boolean;
 }
 
 export const STORAGE_KEY = 'stone-age-cell-references';

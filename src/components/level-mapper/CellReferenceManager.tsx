@@ -4,26 +4,94 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TILE_TYPES } from '@/lib/levelgrid';
-import { X, Upload, Save, Trash2 } from 'lucide-react';
+import { X, Upload, Save, Trash2, Lock, Unlock } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { STORAGE_KEY, saveCellReferences, type CellReference } from '@/lib/spriteMatching';
+import { assessSingleCellReference } from './referenceQuality';
 
 export const CellReferenceManager: React.FC = () => {
     const [references, setReferences] = useState<CellReference[]>([]);
     const [selectedType, setSelectedType] = useState<number>(2); // Default to stone
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+    const [autoCleaned, setAutoCleaned] = useState<{ removed: number; kept: number } | null>(null);
 
     // Load references from localStorage
     useEffect(() => {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
             try {
-                setReferences(JSON.parse(stored));
+                const parsed = JSON.parse(stored) as CellReference[];
+                setReferences(parsed);
             } catch (e) {
                 console.error('Failed to load cell references:', e);
             }
         }
     }, []);
+
+    // Auto-clean obvious "bad" sprites (those that include a seam/border between cells).
+    // Conservative: only removes the most obvious cases.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!references.length) return;
+        if (autoCleaned) return;
+
+        let removed = 0;
+        let kept = 0;
+        const next: CellReference[] = [];
+
+        // Decode a small batch; keep UI responsive.
+        const run = async () => {
+            for (const ref of references) {
+                try {
+                    const img = new Image();
+                    const imageData: ImageData | null = await new Promise((resolve) => {
+                        img.onload = () => {
+                            try {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                const ctx = canvas.getContext('2d');
+                                if (!ctx) return resolve(null);
+                                ctx.imageSmoothingEnabled = false;
+                                ctx.drawImage(img, 0, 0);
+                                resolve(ctx.getImageData(0, 0, img.width, img.height));
+                            } catch {
+                                resolve(null);
+                            }
+                        };
+                        img.onerror = () => resolve(null);
+                        img.src = ref.imageData;
+                    });
+
+                    if (imageData) {
+                        const q = assessSingleCellReference(imageData);
+                        if (!q.ok && !ref.locked) {
+                            removed += 1;
+                            continue;
+                        }
+                    }
+
+                    kept += 1;
+                    next.push(ref);
+                } catch {
+                    kept += 1;
+                    next.push(ref);
+                }
+
+                if (removed + kept > 0 && (removed + kept) % 18 === 0) {
+                    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+                }
+            }
+
+            if (removed > 0) {
+                saveReferences(next);
+            }
+            setAutoCleaned({ removed, kept });
+        };
+
+        void run();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [references, autoCleaned]);
 
     // Save references to localStorage
     const saveReferences = (refs: CellReference[]) => {
@@ -47,12 +115,17 @@ export const CellReferenceManager: React.FC = () => {
     // Save uploaded image as reference
     const saveAsReference = () => {
         if (!uploadedImage) return;
+        if (selectedType === 5) {
+            alert('Void (5) cannot be saved as a reference sprite.');
+            return;
+        }
 
         const newRef: CellReference = {
             id: `ref-${Date.now()}`,
             tileType: selectedType,
             imageData: uploadedImage,
             timestamp: Date.now(),
+            locked: false,
         };
 
         saveReferences([...references, newRef]);
@@ -93,29 +166,44 @@ export const CellReferenceManager: React.FC = () => {
         return acc;
     }, {} as Record<number, CellReference[]>);
 
+    const lockedCount = references.filter((r) => r.locked).length;
+    const unlockedCount = references.length - lockedCount;
+
     return (
         <div className="space-y-4 p-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Cell Reference Sprites</h3>
                 <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{references.length} saved</span>
+                    <span className="text-sm text-muted-foreground">
+                        {references.length} saved{lockedCount ? ` (${lockedCount} locked)` : ''}
+                    </span>
                     <Button
                         variant="destructive"
                         size="sm"
                         onClick={() => {
-                            if (references.length === 0) return;
-                            const ok = window.confirm(`Delete all ${references.length} reference sprites? This cannot be undone.`);
+                            if (unlockedCount === 0) return;
+                            const ok = window.confirm(
+                                `Delete ${unlockedCount} unlocked reference sprite${unlockedCount === 1 ? '' : 's'}?\n\nLocked sprites will be kept.`
+                            );
                             if (!ok) return;
-                            saveReferences([]);
+                            saveReferences(references.filter((r) => r.locked));
                         }}
-                        disabled={references.length === 0}
-                        title="Delete all saved reference sprites"
+                        disabled={unlockedCount === 0}
+                        title="Delete all unlocked reference sprites (locked sprites are kept)"
                     >
                         <Trash2 className="h-4 w-4" />
-                        Delete all
+                        Delete unlocked
                     </Button>
                 </div>
             </div>
+
+            {autoCleaned?.removed ? (
+                <Alert className="border-amber-500/40 bg-amber-500/10">
+                    <AlertDescription>
+                        Removed {autoCleaned.removed} obviously bad sprite{autoCleaned.removed === 1 ? '' : 's'} (border bleed). Locked sprites are never auto-removed.
+                    </AlertDescription>
+                </Alert>
+            ) : null}
 
             <Alert>
                 <AlertDescription>
@@ -171,7 +259,7 @@ export const CellReferenceManager: React.FC = () => {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {TILE_TYPES.map((tile) => (
+                                    {TILE_TYPES.filter((tile) => tile.id !== 5).map((tile) => (
                                         <SelectItem key={tile.id} value={tile.id.toString()}>
                                             <div className="flex items-center gap-2">
                                                 <div
@@ -231,6 +319,16 @@ export const CellReferenceManager: React.FC = () => {
                                                     className="w-full h-full object-contain"
                                                 />
                                             </div>
+                                            <Button
+                                                variant={ref.locked ? 'secondary' : 'outline'}
+                                                size="icon"
+                                                className="absolute -top-2 -left-2 h-6 w-6"
+                                                onClick={() => updateReference(ref.id, { locked: !ref.locked })}
+                                                title={ref.locked ? 'Locked (kept on mass delete)' : 'Unlocked'}
+                                                aria-label={ref.locked ? 'Unlock reference' : 'Lock reference'}
+                                            >
+                                                {ref.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                                            </Button>
                                             <select
                                                 value={ref.tileType}
                                                 onChange={(e) => updateReference(ref.id, { tileType: parseInt(e.target.value, 10) })}
@@ -238,7 +336,7 @@ export const CellReferenceManager: React.FC = () => {
                                                 title="Change the tile type for this saved reference"
                                             >
                                                 {TILE_TYPES.map((tile) => (
-                                                    <option key={tile.id} value={tile.id}>
+                                                    <option key={tile.id} value={tile.id} disabled={tile.id === 5}>
                                                         {tile.name}
                                                     </option>
                                                 ))}
@@ -261,6 +359,8 @@ export const CellReferenceManager: React.FC = () => {
                                                 size="icon"
                                                 className="absolute -top-2 -right-2 h-6 w-6"
                                                 onClick={() => deleteReference(ref.id)}
+                                                disabled={Boolean(ref.locked)}
+                                                title={ref.locked ? 'Unlock to delete' : 'Delete reference'}
                                             >
                                                 <Trash2 className="w-3 h-3" />
                                             </Button>

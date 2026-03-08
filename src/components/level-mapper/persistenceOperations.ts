@@ -1,4 +1,5 @@
 import { getAllLevels, type ColorTheme } from '@/data/levels';
+import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
 
 /**
  * Persistence operations for level mapper
@@ -29,6 +30,7 @@ export const saveGridChanges = (
         const lvl = allLevels[importLevelIndex];
         if (lvl) {
             localStorage.setItem(`level_override_${lvl.id}`, JSON.stringify(dataToSave));
+            notifyLevelOverridesUpdated();
         }
     }
     

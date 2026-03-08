@@ -1,5 +1,12 @@
 import { getAllLevels, shouldAllowLevelOverride, type ColorTheme } from '@/data/levels';
 
+export const LEVEL_OVERRIDES_UPDATED_EVENT = 'stone-age-level-overrides-updated';
+
+export const notifyLevelOverridesUpdated = () => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(LEVEL_OVERRIDES_UPDATED_EVENT));
+};
+
 export const saveLevelOverride = (
   levelId: number,
   grid: number[][],
@@ -14,4 +21,5 @@ export const saveLevelOverride = (
   }
   const payload = { grid, playerStart, theme };
   localStorage.setItem(`level_override_${levelId}`, JSON.stringify(payload));
+  notifyLevelOverridesUpdated();
 };
