@@ -27,7 +27,39 @@ export const saveGridChanges = (
     override: 'saved' | 'cleared' | 'none';
     levelId: number | null;
 } => {
-    const dataToSave = { grid, playerStart, theme };
+    // If the player start was mistakenly painted as the goal cave (3), convert it to the non-goal
+    // start-marker cave (18) so reaching it does nothing and cavePos detection stays correct.
+    const gridToSave = (() => {
+        if (!playerStart) return grid;
+        const row = grid[playerStart.y];
+        if (!row) return grid;
+        const startCell = row[playerStart.x];
+        // If start is plain floor, store it as a start-marker cave for nostalgia (walkable, non-goal).
+        if (startCell === 0) {
+            const next = grid.map((r) => r.slice());
+            next[playerStart.y][playerStart.x] = 18;
+            return next;
+        }
+        if (startCell !== 3) return grid;
+
+        let hasOtherCave = false;
+        for (let y = 0; y < grid.length && !hasOtherCave; y += 1) {
+            for (let x = 0; x < (grid[y]?.length ?? 0); x += 1) {
+                if (x === playerStart.x && y === playerStart.y) continue;
+                if (grid[y][x] === 3) {
+                    hasOtherCave = true;
+                    break;
+                }
+            }
+        }
+        if (!hasOtherCave) return grid;
+
+        const next = grid.map((r) => r.slice());
+        next[playerStart.y][playerStart.x] = 18;
+        return next;
+    })();
+
+    const dataToSave = { grid: gridToSave, playerStart, theme };
     let override: 'saved' | 'cleared' | 'none' = 'none';
     let levelId: number | null = null;
     
@@ -39,7 +71,7 @@ export const saveGridChanges = (
 
             // Guardrail: don't accidentally override a real level with a placeholder/empty grid.
             // This is the most common root cause of "level N is all void" even though N.png exists.
-            const nextIsPlaceholder = isPlaceholderGrid(grid);
+            const nextIsPlaceholder = isPlaceholderGrid(gridToSave);
             const prevIsPlaceholder = isPlaceholderGrid(lvl.grid);
             const key = `level_override_${lvl.id}`;
             if (nextIsPlaceholder && !prevIsPlaceholder) {
@@ -55,7 +87,7 @@ export const saveGridChanges = (
     }
     
     // Always save to general mapper storage
-    localStorage.setItem('levelmapper_grid', JSON.stringify(grid));
+    localStorage.setItem('levelmapper_grid', JSON.stringify(gridToSave));
     if (playerStart) {
         localStorage.setItem('levelmapper_playerStart', JSON.stringify(playerStart));
     }
@@ -68,6 +100,7 @@ export const saveGridChanges = (
 };
 
 const LEVEL_LAYOUT_OVERRIDE_PREFIX = 'level_layout_override_';
+const LEVEL_IMAGE_SCALE_PREFIX = 'level_mapper_image_scale_';
 
 export const saveLevelLayoutOverride = (levelId: number, rows: number, cols: number): void => {
     if (typeof window === 'undefined') return;
@@ -93,6 +126,34 @@ export const loadLevelLayoutOverride = (levelId: number): { rows: number; cols: 
         return { rows, cols };
     } catch {
         return null;
+    }
+};
+
+export type LevelImageScale = { x: number; y: number; lock: boolean };
+
+export const loadLevelImageScale = (levelId: number): LevelImageScale | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(`${LEVEL_IMAGE_SCALE_PREFIX}${levelId}`);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const x = Number((parsed as any).x ?? 1);
+        const y = Number((parsed as any).y ?? 1);
+        const lock = Boolean((parsed as any).lock ?? true);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+        return { x, y, lock };
+    } catch {
+        return null;
+    }
+};
+
+export const saveLevelImageScale = (levelId: number, value: LevelImageScale): void => {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(`${LEVEL_IMAGE_SCALE_PREFIX}${levelId}`, JSON.stringify(value));
+    } catch {
+        // ignore
     }
 };
 

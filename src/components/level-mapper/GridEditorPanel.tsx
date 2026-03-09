@@ -14,6 +14,7 @@ export const GridEditorPanel: React.FC = () => {
         compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
         importLevelIndex,
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch,
+        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
         lastGridDetection,
         exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
@@ -33,9 +34,6 @@ export const GridEditorPanel: React.FC = () => {
     const [isDragMode, setIsDragMode] = React.useState(false);
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
-    const [imageScaleX, setImageScaleX] = React.useState(1);
-    const [imageScaleY, setImageScaleY] = React.useState(1);
-    const [lockImageAspect, setLockImageAspect] = React.useState(true);
     const [isResizingImageY, setIsResizingImageY] = React.useState(false);
     const resizeYStartRef = React.useRef<{ y: number; scaleY: number } | null>(null);
     // Track cells the user manually painted/confirmed so learning can use trusted labels only.
@@ -60,37 +58,6 @@ export const GridEditorPanel: React.FC = () => {
         if (importLevelIndex === null) return null;
         return allLevels[importLevelIndex]?.id ?? null;
     }, [importLevelIndex, allLevels]);
-
-    // Persist per-level overlay distortion (X/Y) so screenshots with non-square pixels can be aligned precisely.
-    React.useEffect(() => {
-        if (importedLevelId === null) return;
-        try {
-            const raw = localStorage.getItem(`level_mapper_image_scale_${importedLevelId}`);
-            if (!raw) return;
-            const parsed = JSON.parse(raw);
-            const x = Number(parsed?.x ?? 1);
-            const y = Number(parsed?.y ?? 1);
-            const lock = Boolean(parsed?.lock ?? true);
-            if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
-            if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
-            setLockImageAspect(lock);
-        } catch {
-            // ignore
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [importedLevelId]);
-
-    React.useEffect(() => {
-        if (importedLevelId === null) return;
-        try {
-            localStorage.setItem(
-                `level_mapper_image_scale_${importedLevelId}`,
-                JSON.stringify({ x: imageScaleX, y: imageScaleY, lock: lockImageAspect })
-            );
-        } catch {
-            // ignore
-        }
-    }, [importedLevelId, imageScaleX, imageScaleY, lockImageAspect]);
 
     // Load overlay image size once per URL (prevents resize jitter).
     React.useEffect(() => {

@@ -330,6 +330,7 @@ export function GameSprite2D({
                 tileType === 15 ? "rgba(60,210,120,0.70)" :
                 tileType === 16 ? "rgba(150,20,20,0.80)" :
                 tileType === 17 ? "rgba(20,110,35,0.80)" :
+                tileType === 18 ? "rgba(0,0,0,0.88)" :
                 "rgba(255,255,255,0.06)";
 
               return (

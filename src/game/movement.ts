@@ -36,8 +36,8 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
       return {};
     }
 
-    // Step priority (floor, cave, arrow, fresh breakable rock)
-    if (targetCell === 0 || targetCell === 3 || isArrowCell(targetCell) || isKeyCell(targetCell) || isLockCell(targetCell)) {
+    // Step priority (floor, cave, start-marker cave, arrow, fresh breakable rock)
+    if (targetCell === 0 || targetCell === 3 || targetCell === 18 || isArrowCell(targetCell) || isKeyCell(targetCell) || isLockCell(targetCell)) {
       const outcome: PlayerMoveOutcome = {
         newPlayerPos: { x: targetX, y: targetY },
         consumedMove: true
@@ -116,7 +116,7 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
   // Fire, water, void impassable
   if (targetCell === 1 || targetCell === 4 || targetCell === 5) return {};
 
-  // Floor/cave/arrow
+  // Floor/cave/start-marker cave/arrow
   const outcome: PlayerMoveOutcome = {
     newPlayerPos: { x: targetX, y: targetY },
     consumedMove: true

@@ -952,6 +952,37 @@ const Cave = ({
   );
 };
 
+// Non-goal start marker cave (black). Purely cosmetic, used at player start positions.
+const StartCave = ({ position }: { position: [number, number, number] }) => {
+  return (
+    <group position={position}>
+      {/* Subtle dark rim */}
+      <mesh position={[0, 0.011, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.22, 0.34, 32]} />
+        <meshStandardMaterial
+          color="#1f2937"
+          emissive="#0b1220"
+          emissiveIntensity={0.45}
+          roughness={0.95}
+          metalness={0}
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+      {/* Hole */}
+      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.21, 28]} />
+        <meshStandardMaterial
+          color="#050505"
+          emissive="#000000"
+          roughness={1}
+          metalness={0}
+        />
+      </mesh>
+    </group>
+  );
+};
+
 // Player (Detailed Green Dinosaur) with smooth movement
 const Player = ({
   position,
@@ -1743,6 +1774,7 @@ export const Game3D = ({
     const greenKeys: Array<[number, number, number]> = [];
     const redLocks: Array<[number, number, number]> = [];
     const greenLocks: Array<[number, number, number]> = [];
+    const startCaves: Array<[number, number, number]> = [];
     const arrows: Array<{ x: number; y: number; cell: number }> = [];
 
     for (let y = 0; y < grid.length; y += 1) {
@@ -1765,13 +1797,14 @@ export const Game3D = ({
         if (cell === 15) greenKeys.push([pos[0], 0, pos[2]]);
         if (cell === 16) redLocks.push([pos[0], 0, pos[2]]);
         if (cell === 17) greenLocks.push([pos[0], 0, pos[2]]);
+        if (cell === 18) startCaves.push([pos[0], 0.02, pos[2]]);
         if (isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13) {
           arrows.push({ x, y, cell });
         }
       }
     }
 
-    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, arrows };
+    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, arrows };
   }, [grid, offsetX, offsetZ]);
 
   const contentBounds = useMemo(() => {
@@ -2069,6 +2102,11 @@ export const Game3D = ({
             color="#1b5e20"
             glowColor="#b9f6ca"
           />
+        ))}
+
+        {/* Start marker caves (non-goal) */}
+        {tileData.startCaves.map((position, index) => (
+          <StartCave key={`start-cave-${index}-${position[0]}-${position[2]}`} position={position} />
         ))}
 
         {/* Arrows (interactive) */}

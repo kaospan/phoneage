@@ -10,7 +10,7 @@ import { themes, type ColorTheme } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
 import { detectGridLines } from './gridDetection';
 import { getAlignmentHints } from './alignmentProfile';
-import { loadLevelLayoutOverride } from './persistenceOperations';
+import { loadLevelImageScale, loadLevelLayoutOverride } from './persistenceOperations';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLevels';
 import { getLevelImageUrl, putLevelImage } from './levelImageStore';
@@ -43,6 +43,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         detectGrid, snapToLockedCounts, detectCells, detectGridAndCells,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
+        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
         theme, setTheme, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
@@ -226,6 +227,21 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         setGridFrameHeight(null);
         setZoom(1);
 
+        // Restore any saved per-level overlay image distortion for precise alignment.
+        const savedScale = loadLevelImageScale(lvl.id);
+        if (savedScale) {
+            const x = Number(savedScale.x);
+            const y = Number(savedScale.y);
+            const lock = Boolean(savedScale.lock);
+            if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
+            if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+            setLockImageAspect(lock);
+        } else {
+            setImageScaleX(1);
+            setImageScaleY(1);
+            setLockImageAspect(true);
+        }
+
         if (lvl.playerStart) {
             setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
         } else {
@@ -243,6 +259,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             overlayEnabled: Boolean(normalizedURL),
             overlayOpacity: 0.5,
             overlayStretch: true,
+            imageScaleX: savedScale?.x ?? 1,
+            imageScaleY: savedScale?.y ?? 1,
+            lockImageAspect: savedScale?.lock ?? true,
             zoom: 1,
             gridOffsetX: 0,
             gridOffsetY: 0,

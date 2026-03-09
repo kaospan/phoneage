@@ -376,9 +376,42 @@ export const getAllLevels = (): Level[] => {
       return l;
     });
 
+    // Normalize: if the player start cell was painted as a cave (3) while there is another cave,
+    // treat it as a non-goal start-marker cave (18) so cavePos detection remains correct.
+    const normalizedStartMarkers = withOverrides.map((l) => {
+      const ps = l.playerStart;
+      if (!ps) return l;
+      const row = l.grid?.[ps.y];
+      if (!row) return l;
+      const startCell = row[ps.x];
+      // If the start is plain floor, show it as a non-goal start-marker cave (18).
+      if (startCell === 0) {
+        const nextGrid = l.grid.map((r) => r.slice());
+        nextGrid[ps.y][ps.x] = 18;
+        return { ...l, grid: nextGrid };
+      }
+      if (startCell !== 3) return l;
+
+      let hasOtherCave = false;
+      for (let y = 0; y < l.grid.length && !hasOtherCave; y += 1) {
+        for (let x = 0; x < (l.grid[y]?.length ?? 0); x += 1) {
+          if (x === ps.x && y === ps.y) continue;
+          if (l.grid[y][x] === 3) {
+            hasOtherCave = true;
+            break;
+          }
+        }
+      }
+      if (!hasOtherCave) return l;
+
+      const nextGrid = l.grid.map((r) => r.slice());
+      nextGrid[ps.y][ps.x] = 18;
+      return { ...l, grid: nextGrid };
+    });
+
     console.log('🔍 Syncing cave positions...');
     // Ensure cavePos matches the location of tile id 3 in the grid when present
-    const result = withOverrides.map(l => {
+    const result = normalizedStartMarkers.map(l => {
       let caveX = l.cavePos.x;
       let caveY = l.cavePos.y;
       let found = false;

@@ -58,7 +58,10 @@ function buildBaseGrid(levelGrid: CellType[][]): CellType[][] {
         if (x > 0) adjacentCells.push(levelGrid[y][x - 1] as CellType);
         if (x < row.length - 1) adjacentCells.push(levelGrid[y][x + 1] as CellType);
 
-        const terrainTypes = adjacentCells.filter((c) => !isArrowCell(c));
+        // Do not let the start-marker cave (18) "bleed" into arrow base terrain.
+        const terrainTypes = adjacentCells
+          .filter((c) => !isArrowCell(c))
+          .map((c) => (c === 18 ? 0 : c));
         if (terrainTypes.length > 0) {
           const counts = new Map<number, number>();
           for (const t of terrainTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
@@ -157,10 +160,11 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
   if (isArrowCell(playerCell)) {
     if (targetLock && !inv[targetLock]) return null;
 
-    // Step priority (floor, cave, arrow, key/lock)
+    // Step priority (floor, cave (goal), start-marker cave, arrow, key/lock)
     if (
       targetCell === 0 ||
       targetCell === 3 ||
+      targetCell === 18 ||
       isArrowCell(targetCell) ||
       isKeyCell(targetCell) ||
       isLockCell(targetCell)

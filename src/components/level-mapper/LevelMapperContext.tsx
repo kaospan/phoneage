@@ -20,7 +20,9 @@ import {
     saveImportLevelIndex,
     clearImportLevel,
     loadLevelLayoutOverride,
-    saveLevelLayoutOverride
+    saveLevelLayoutOverride,
+    loadLevelImageScale,
+    saveLevelImageScale
 } from './persistenceOperations';
 import {
     useJsonSync,
@@ -142,6 +144,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [overlayEnabled, setOverlayEnabled] = useState(false);
         const [overlayOpacity, setOverlayOpacity] = useState(0.5);
         const [overlayStretch, setOverlayStretch] = useState(true);
+        const [imageScaleX, setImageScaleX] = useState(1);
+        const [imageScaleY, setImageScaleY] = useState(1);
+        const [lockImageAspect, setLockImageAspect] = useState(true);
         const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(false);
         const [lastGridDetection, setLastGridDetection] = useState<ReturnType<typeof detectGridLines> | null>(null);
         const loadedSnapshotRef = useRef<null | {
@@ -152,6 +157,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             overlayEnabled: boolean;
             overlayOpacity: number;
             overlayStretch: boolean;
+            imageScaleX: number;
+            imageScaleY: number;
+            lockImageAspect: boolean;
             zoom: number;
             gridOffsetX: number;
             gridOffsetY: number;
@@ -180,6 +188,35 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (!lvl) return;
             saveLevelLayoutOverride(lvl.id, rows, cols);
         }, [rows, cols, importLevelIndex, allLevels]);
+
+        // Persist per-level overlay image distortion (X/Y) so clipped/non-square screenshots can be aligned precisely.
+        useEffect(() => {
+            if (importLevelIndex === null) return;
+            const lvl = allLevels[importLevelIndex];
+            if (!lvl) return;
+            // Load saved tweak when switching levels.
+            const saved = loadLevelImageScale(lvl.id);
+            if (saved) {
+                const x = Number(saved.x);
+                const y = Number(saved.y);
+                const lock = Boolean(saved.lock);
+                if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
+                if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+                setLockImageAspect(lock);
+            } else {
+                setImageScaleX(1);
+                setImageScaleY(1);
+                setLockImageAspect(true);
+            }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [importLevelIndex]);
+
+        useEffect(() => {
+            if (importLevelIndex === null) return;
+            const lvl = allLevels[importLevelIndex];
+            if (!lvl) return;
+            saveLevelImageScale(lvl.id, { x: imageScaleX, y: imageScaleY, lock: lockImageAspect });
+        }, [importLevelIndex, allLevels, imageScaleX, imageScaleY, lockImageAspect]);
 
         // Auto-load level on startup if one was previously imported.
         // For placeholder auto-build levels, load the image and keep the editor responsive
@@ -213,25 +250,26 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setGrid(resolved.grid.map(row => [...row]));
                         if (storedUpload) {
                             setImageURL(storedUpload);
-                            setOverlayEnabled(true);
-                        } else if (resolved.image) {
-                            void normalizeMapperImage(resolved.image).then((normalizedURL) => {
-                                setImageURL(normalizedURL);
-                            });
-                            setOverlayEnabled(true);
-                        } else {
-                            setImageURL(null);
-                            setOverlayEnabled(false);
-                        }
-                        setGridOffsetX(0);
-                        setGridOffsetY(0);
-                        setGridFrameWidth(null);
-                        setGridFrameHeight(null);
-                        if (resolved.playerStart) {
-                            setPlayerStart({ x: resolved.playerStart.x, y: resolved.playerStart.y });
-                        }
-                        if (resolved.theme) {
-                            setTheme(resolved.theme);
+                        setOverlayEnabled(true);
+                    } else if (resolved.image) {
+                        void normalizeMapperImage(resolved.image).then((normalizedURL) => {
+                            setImageURL(normalizedURL);
+                        });
+                        setOverlayEnabled(true);
+                    } else {
+                        setImageURL(null);
+                        setOverlayEnabled(false);
+                    }
+                    setGridOffsetX(0);
+                    setGridOffsetY(0);
+                    setGridFrameWidth(null);
+                    setGridFrameHeight(null);
+                    // Per-level image distortion is loaded via the effect above.
+                    if (resolved.playerStart) {
+                        setPlayerStart({ x: resolved.playerStart.x, y: resolved.playerStart.y });
+                    }
+                    if (resolved.theme) {
+                        setTheme(resolved.theme);
                         }
                         console.log(`Auto-loaded Level ${resolved.id} from previous session`);
                     };
@@ -802,6 +840,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             overlayEnabled: boolean;
             overlayOpacity: number;
             overlayStretch: boolean;
+            imageScaleX: number;
+            imageScaleY: number;
+            lockImageAspect: boolean;
             zoom: number;
             gridOffsetX: number;
             gridOffsetY: number;
@@ -833,6 +874,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setOverlayEnabled(snapshot.overlayEnabled);
             setOverlayOpacity(snapshot.overlayOpacity);
             setOverlayStretch(snapshot.overlayStretch);
+            setImageScaleX(snapshot.imageScaleX);
+            setImageScaleY(snapshot.imageScaleY);
+            setLockImageAspect(snapshot.lockImageAspect);
             setZoom(snapshot.zoom);
             setGridOffsetX(snapshot.gridOffsetX);
             setGridOffsetY(snapshot.gridOffsetY);
@@ -875,7 +919,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         console.log('✓ Creating context value...');
-        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, snapToLockedCounts, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, lastGridDetection, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
+        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, snapToLockedCounts, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, lastGridDetection, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;

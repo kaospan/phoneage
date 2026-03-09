@@ -49,6 +49,14 @@ export interface LevelMapperContextValue {
   overlayStretch: boolean;
   setOverlayStretch: (b: boolean) => void;
 
+  // Overlay image distortion (independent X/Y scaling for non-square pixels)
+  imageScaleX: number;
+  setImageScaleX: (n: number) => void;
+  imageScaleY: number;
+  setImageScaleY: (n: number) => void;
+  lockImageAspect: boolean;
+  setLockImageAspect: (b: boolean) => void;
+
   // Levels compare/import
   allLevels: ReturnType<typeof getAllLevels>;
   setAllLevels: Dispatch<SetStateAction<ReturnType<typeof getAllLevels>>>;
@@ -109,6 +117,9 @@ export interface LevelMapperContextValue {
     overlayEnabled: boolean;
     overlayOpacity: number;
     overlayStretch: boolean;
+    imageScaleX: number;
+    imageScaleY: number;
+    lockImageAspect: boolean;
     zoom: number;
     gridOffsetX: number;
     gridOffsetY: number;
