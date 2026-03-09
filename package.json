@@ -11,11 +11,12 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
         "preview": "vite preview",
-    "report:levels": "node scripts/level-build-report.mjs",
-    "report:solutions": "node scripts/level-solution-report.mjs",
-    "ws:server": "node server/ws-server.mjs",
-    "asset-writer": "node server/asset-writer.mjs",
-    "dev:all": "concurrently -k -n \"front,ws\" -c \"cyan,magenta\" \"npm run dev\" \"npm run ws:server\""
+        "report:levels": "node scripts/level-build-report.mjs",
+        "report:solutions": "node scripts/level-solution-report.mjs",
+        "seed:hint": "node -e \"console.log('In the app console: const seed = exportLocalStorageSeed(); copy(JSON.stringify(seed,null,2))  -> save as solver-seed.json to make report:solutions match your overrides.')\"",
+        "ws:server": "node server/ws-server.mjs",
+        "asset-writer": "node server/asset-writer.mjs",
+        "dev:all": "concurrently -k -n \"front,ws\" -c \"cyan,magenta\" \"npm run dev\" \"npm run ws:server\""
     },
     "dependencies": {
         "@hookform/resolvers": "^3.10.0",

@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
@@ -33,7 +33,8 @@ jobs:
       - name: Build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
-          VITE_BUILD_ID: ${{ github.sha }}
+          # Ensure each deploy has a unique build id so clients refresh after a publish.
+          VITE_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
         run: npm run build
 
       - name: Configure Pages

@@ -17,6 +17,7 @@ const maxMsPerLevel = Number(argMap.get('--maxMsPerLevel') ?? 4000);
 const maxNodesPerLevel = Number(argMap.get('--maxNodesPerLevel') ?? 40000);
 const maxDepth = Number(argMap.get('--maxDepth') ?? 200);
 const seedPath = argMap.get('--seed');
+const seedDefaultPath = argMap.get('--seedDefault') ?? 'solver-seed.json';
 const tz = (argMap.get('--tz') && typeof argMap.get('--tz') === 'string')
   ? String(argMap.get('--tz'))
   : (Intl.DateTimeFormat().resolvedOptions().timeZone || undefined);
@@ -56,6 +57,18 @@ if (seedPath && typeof seedPath === 'string') {
   seed = JSON.parse(raw);
   const count = seed?.localStorage && typeof seed.localStorage === 'object' ? Object.keys(seed.localStorage).length : 0;
   console.log(`[seed] loaded ${count} localStorage entries from ${seedPath}`);
+} else {
+  // Convenience: if you export a seed once (from the app) into solver-seed.json, reports will automatically
+  // reflect your latest manual mapper edits (level_override_*) without needing to pass --seed every time.
+  try {
+    const fullSeedPath = path.isAbsolute(seedDefaultPath) ? seedDefaultPath : path.join(root, seedDefaultPath);
+    const raw = readFileSync(fullSeedPath, 'utf8');
+    seed = JSON.parse(raw);
+    const count = seed?.localStorage && typeof seed?.localStorage === 'object' ? Object.keys(seed.localStorage).length : 0;
+    console.log(`[seed] auto-loaded ${count} localStorage entries from ${seedDefaultPath}`);
+  } catch {
+    // no seed file; proceed with empty storage (built-in levels only)
+  }
 }
 
 if (!baseUrl) {

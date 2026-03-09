@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 reports
+reports_test*/
 
 # Editor directories and files
 .vscode/*
