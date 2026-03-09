@@ -104,6 +104,16 @@ export const PuzzleGame = () => {
   const [isPortrait, setIsPortrait] = useState(false);
   const shouldRotateGate = isMobile && isPortrait;
 
+  const [isFullscreenMode, setIsFullscreenMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("stone-age-fullscreen-mode") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const prevZoomIndexRef = useRef<number | null>(null);
+
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
   const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
@@ -965,10 +975,64 @@ export const PuzzleGame = () => {
       }
     }, [viewMode]);
 
-    const levelBackground = currentLevel?.image;
+  const levelBackground = currentLevel?.image;
+
+    useEffect(() => {
+      if (typeof window === "undefined") return;
+      try {
+        localStorage.setItem("stone-age-fullscreen-mode", isFullscreenMode ? "1" : "0");
+      } catch {
+        // ignore
+      }
+    }, [isFullscreenMode]);
+
+    useEffect(() => {
+      const doc = typeof document !== "undefined" ? document : null;
+      if (!doc) return;
+      const onChange = () => {
+        // If the user exits browser fullscreen manually, keep our UI mode but ensure state stays consistent.
+        // (Some mobile browsers don't support the Fullscreen API; in that case this is a no-op.)
+      };
+      doc.addEventListener("fullscreenchange", onChange);
+      return () => doc.removeEventListener("fullscreenchange", onChange);
+    }, []);
+
+    const toggleFullscreenMode = useCallback(async () => {
+      const next = !isFullscreenMode;
+      setIsFullscreenMode(next);
+
+      // Preserve/restore user zoom when toggling.
+      if (next) {
+        prevZoomIndexRef.current = cameraZoomIndex;
+        setCameraZoomIndex(1); // 100% baseline tends to fit width best on mobile landscape
+        setCameraOffset({ x: 0, z: 0 });
+        setSelectedArrow(null);
+      } else if (prevZoomIndexRef.current != null) {
+        setCameraZoomIndex(prevZoomIndexRef.current);
+        prevZoomIndexRef.current = null;
+      }
+
+      // Try to enter browser fullscreen if supported (best-effort).
+      if (typeof document === "undefined") return;
+      try {
+        const docAny = document as any;
+        const el: any = document.documentElement;
+        if (next) {
+          const req = el.requestFullscreen ?? el.webkitRequestFullscreen ?? el.msRequestFullscreen;
+          if (typeof req === "function") await req.call(el);
+        } else {
+          const exit = document.exitFullscreen ?? docAny.webkitExitFullscreen ?? docAny.msExitFullscreen;
+          if (typeof exit === "function") await exit.call(document);
+        }
+      } catch {
+        // ignore (e.g. iOS Safari)
+      }
+    }, [cameraZoomIndex, isFullscreenMode]);
+
+    const isMobileLandscape = isMobile && !shouldRotateGate;
 
     return (
-      <div className={`relative flex h-full w-full flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'}`}>
+      <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'}`}>
         {levelBackground && (
           <div
             className="absolute inset-0 opacity-30 bg-cover bg-center blur-[2px]"
@@ -1001,9 +1065,17 @@ export const PuzzleGame = () => {
         <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
         <div
           className="absolute left-0 right-0 z-50 flex justify-center"
-          style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+          style={{ top: isMobileLandscape ? 'calc(env(safe-area-inset-top) + 0.25rem)' : 'calc(env(safe-area-inset-top) + 0.5rem)' }}
         >
-          <div className="bg-card/95 backdrop-blur px-3 py-2 md:px-6 md:py-3 rounded-lg shadow-lg border border-border/50 flex flex-wrap items-center justify-center gap-2 md:gap-4 max-w-[calc(100vw-16px)]">
+          <div
+            className={[
+              "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50",
+              "flex items-center justify-center max-w-[calc(100vw-16px)]",
+              // Mobile landscape has plenty of width but limited height; keep header compact even if the width triggers md breakpoints.
+              isMobileLandscape ? "px-2 py-1.5 gap-1 flex-nowrap overflow-x-auto" : "px-6 py-3 gap-4 flex-wrap",
+              isFullscreenMode ? "bg-card/80" : "",
+            ].join(" ")}
+          >
             {/* Previous Level Button */}
             <Button
               onClick={() => {
@@ -1016,7 +1088,10 @@ export const PuzzleGame = () => {
               }}
               variant="ghost"
               size="default"
-              className="h-11 w-11 md:h-10 md:w-10 p-0 text-xl md:text-xl font-bold hover:bg-primary/20"
+              className={[
+                "p-0 font-bold hover:bg-primary/20",
+                isMobileLandscape ? "h-9 w-9 text-lg" : "h-10 w-10 text-xl",
+              ].join(" ")}
               disabled={currentLevelIndex === 0}
               aria-label="Previous level"
               title="Previous level (P)"
@@ -1025,27 +1100,39 @@ export const PuzzleGame = () => {
             </Button>
 
             {/* Level Info */}
-            <div className="flex items-center gap-2 md:gap-3 px-1 md:px-4">
-              <span className="text-primary font-bold text-xl md:text-2xl">Level {currentLevel.id}</span>
-              <span className="text-muted-foreground text-base md:text-xl">•</span>
-              <span className="text-foreground font-medium text-base md:text-lg">Moves: {moves}</span>
-              <span className="text-muted-foreground text-base md:text-xl">•</span>
-              <div className="flex items-center gap-2">
-                <span
-                  className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 px-2 py-1 text-sm md:text-xs font-black text-white"
-                  title="Red keys collected"
-                >
-                  <span aria-hidden>🗝</span>
-                  <span>{redKeyCount}</span>
-                </span>
-                <span
-                  className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 px-2 py-1 text-sm md:text-xs font-black text-white"
-                  title="Green keys collected"
-                >
-                  <span aria-hidden>🔑</span>
-                  <span>{greenKeyCount}</span>
-                </span>
-              </div>
+            <div className={["flex items-center px-1", isMobileLandscape ? "gap-2" : "gap-3 px-4"].join(" ")}>
+              <span className={["text-primary font-bold", isMobileLandscape ? "text-base" : "text-2xl"].join(" ")}>
+                {isFullscreenMode ? `L${currentLevel.id}` : `Level ${currentLevel.id}`}
+              </span>
+              {!isFullscreenMode && <span className={["text-muted-foreground", isMobileLandscape ? "text-sm" : "text-xl"].join(" ")}>•</span>}
+              <span className={["text-foreground font-medium", isMobileLandscape ? "text-sm" : "text-lg"].join(" ")}>
+                {isFullscreenMode ? `M:${moves}` : `Moves: ${moves}`}
+              </span>
+              {!isFullscreenMode && <span className={["text-muted-foreground", isMobileLandscape ? "text-sm" : "text-xl"].join(" ")}>•</span>}
+              {!isFullscreenMode && (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={
+                      "inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-xs font-black text-white " +
+                      (isMobileLandscape ? "px-1.5 py-0.5" : "px-2 py-1")
+                    }
+                    title="Red keys collected"
+                  >
+                    <span aria-hidden>🗝</span>
+                    <span>{redKeyCount}</span>
+                  </span>
+                  <span
+                    className={
+                      "inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-xs font-black text-white " +
+                      (isMobileLandscape ? "px-1.5 py-0.5" : "px-2 py-1")
+                    }
+                    title="Green keys collected"
+                  >
+                    <span aria-hidden>🔑</span>
+                    <span>{greenKeyCount}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Restart Button */}
@@ -1054,13 +1141,16 @@ export const PuzzleGame = () => {
               variant="outline"
               size="default"
               disabled={isComplete || localPlayer?.isGliding}
-              className="h-11 px-5 text-base font-semibold hover:bg-primary/20"
+              className={[
+                "font-semibold hover:bg-primary/20",
+                isMobileLandscape ? "h-9 px-3 text-sm" : "h-11 px-5 text-base",
+              ].join(" ")}
               title="Restart level (R)"
             >
-              Restart
+              {isFullscreenMode && isMobileLandscape ? "↻" : "Restart"}
             </Button>
 
-            <HowToPlayDialog disabled={shouldRotateGate} />
+            {!isFullscreenMode && <HowToPlayDialog disabled={shouldRotateGate} />}
 
             {/* Next Level Button */}
             <Button
@@ -1076,7 +1166,10 @@ export const PuzzleGame = () => {
               }}
               variant="ghost"
               size="default"
-              className="h-11 w-11 md:h-10 md:w-10 p-0 text-xl font-bold hover:bg-primary/20"
+              className={[
+                "p-0 font-bold hover:bg-primary/20",
+                isMobileLandscape ? "h-9 w-9 text-lg" : "h-10 w-10 text-xl",
+              ].join(" ")}
               aria-label="Next level"
               title="Next level (N)"
             >
@@ -1085,20 +1178,25 @@ export const PuzzleGame = () => {
 
             {/* View Mode Toggle & Reset View (right side) */}
             <div className="ml-2 pl-2 border-l border-border/50 flex items-center gap-2">
-              <Button
-                onClick={() => {
-                  const next = !showCoordsOverlay;
-                  setShowCoordsOverlay(next);
-                  setShowCoordsOverlayState(next);
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-10 px-2 text-xs font-black tracking-wide hover:bg-primary/20"
-                title="Toggle coordinate labels (shown in SPR view)"
-                aria-pressed={showCoordsOverlay}
-              >
-                XY
-              </Button>
+              {!isFullscreenMode && (
+                <Button
+                  onClick={() => {
+                    const next = !showCoordsOverlay;
+                    setShowCoordsOverlay(next);
+                    setShowCoordsOverlayState(next);
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className={[
+                    "px-2 text-xs font-black tracking-wide hover:bg-primary/20",
+                    isMobileLandscape ? "h-9" : "h-10",
+                  ].join(" ")}
+                  title="Toggle coordinate labels (shown in SPR view)"
+                  aria-pressed={showCoordsOverlay}
+                >
+                  XY
+                </Button>
+              )}
 
               <Button
                 onClick={() => {
@@ -1106,16 +1204,21 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
+                className={[
+                  "p-0 hover:bg-primary/20",
+                  isMobileLandscape ? "h-9 w-9 text-base" : "h-10 w-10 text-lg",
+                ].join(" ")}
                 title="Zoom out"
                 disabled={!canZoomOut}
               >
                 -
               </Button>
 
-              <div className="min-w-12 text-center text-sm md:text-xs font-semibold text-muted-foreground">
-                {Math.round((1 / cameraZoomFactor) * 100)}%
-              </div>
+              {!isFullscreenMode && (
+                <div className={["min-w-12 text-center font-semibold text-muted-foreground", isMobileLandscape ? "text-xs" : "text-sm"].join(" ")}>
+                  {Math.round((1 / cameraZoomFactor) * 100)}%
+                </div>
+              )}
 
               <Button
                 onClick={() => {
@@ -1123,7 +1226,10 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
+                className={[
+                  "p-0 hover:bg-primary/20",
+                  isMobileLandscape ? "h-9 w-9 text-base" : "h-10 w-10 text-lg",
+                ].join(" ")}
                 title="Zoom in"
                 disabled={!canZoomIn}
               >
@@ -1137,14 +1243,31 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className="h-10 px-3 text-sm md:text-xs font-bold tracking-wide hover:bg-primary/20"
+                className={[
+                  "px-3 font-bold tracking-wide hover:bg-primary/20",
+                  isMobileLandscape ? "h-9 text-xs" : "h-10 text-sm",
+                ].join(" ")}
                 title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
               >
                 {VIEW_MODE_LABELS[viewMode]}
               </Button>
 
+              <Button
+                onClick={() => void toggleFullscreenMode()}
+                variant="ghost"
+                size="sm"
+                className={[
+                  "px-2 font-bold hover:bg-primary/20",
+                  isMobileLandscape ? "h-9 text-base" : "h-10 text-lg",
+                ].join(" ")}
+                title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit width)"}
+                aria-pressed={isFullscreenMode}
+              >
+                ⛶
+              </Button>
+
               {/* Reset View Button - shows when camera is offset */}
-              {(cameraOffset.x !== 0 || cameraOffset.z !== 0) && (
+              {!isFullscreenMode && (cameraOffset.x !== 0 || cameraOffset.z !== 0) && (
                 <Button
                   onClick={() => {
                     setCameraOffset({ x: 0, z: 0 });
@@ -1152,7 +1275,10 @@ export const PuzzleGame = () => {
                   }}
                   variant="ghost"
                   size="sm"
-                  className="h-10 px-2 text-sm md:text-xs hover:bg-primary/20"
+                  className={[
+                    "px-2 hover:bg-primary/20",
+                    isMobileLandscape ? "h-9 text-xs" : "h-10 text-sm",
+                  ].join(" ")}
                   title="Reset camera view (double-click game area)"
                 >
                   ⟲
@@ -1187,6 +1313,7 @@ export const PuzzleGame = () => {
               players={renderPlayers}
               zoomFactor={cameraZoomFactor}
               showCoords={showCoordsOverlay}
+              fullBleed={isFullscreenMode}
               onArrowClick={(x, y) => {
                 if (localPlayer?.isGliding) return;
                 const cell = renderGrid[y]?.[x];

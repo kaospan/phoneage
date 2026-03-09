@@ -17,6 +17,7 @@ interface GameSprite2DProps {
   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
   zoomFactor?: number;
   showCoords?: boolean;
+  fullBleed?: boolean;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
@@ -51,6 +52,7 @@ export function GameSprite2D({
   players,
   zoomFactor = 1,
   showCoords = false,
+  fullBleed = false,
   onArrowClick,
   onCancelSelection,
 }: GameSprite2DProps) {
@@ -290,14 +292,22 @@ export function GameSprite2D({
       onClick={() => onCancelSelection?.()}
     >
       <div
-        className="rounded-xl border border-border/40 bg-transparent p-2 md:p-3 shadow-lg"
+        className={[
+          fullBleed ? "border-0 shadow-none p-0 rounded-none" : "rounded-xl border border-border/40 shadow-lg p-2 md:p-3",
+          "bg-transparent",
+        ].join(" ")}
         style={{ transform: `scale(${scale})`, transformOrigin: "center" }}
       >
         <div
-          className="grid gap-[2px] bg-transparent p-2 rounded-lg"
+          className={[
+            "grid gap-[2px] bg-transparent",
+            fullBleed ? "p-0 rounded-none" : "p-2 rounded-lg",
+          ].join(" ")}
           style={{
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-            width: "min(92vw, 980px)",
+            width: fullBleed
+              ? "calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right))"
+              : "min(92vw, 980px)",
             aspectRatio: cols > 0 && rows > 0 ? `${cols} / ${rows}` : undefined,
             imageRendering: "pixelated",
           }}
