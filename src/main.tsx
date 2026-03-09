@@ -4,8 +4,69 @@ import App from "./App.tsx";
 import "./index.css";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
 import { runBulkBuildAndDownload, runBulkBuildReport } from "@/lib/levelBulkBuilder";
+import { dumpLevel, runSolveAllLevels, runSolveLevel } from "@/lib/levelSolver";
 
 console.log('🚀 main.tsx starting...');
+
+type LocalStorageSeed = {
+  version: 1;
+  generatedAt: string;
+  localStorage: Record<string, string>;
+};
+
+const buildLocalStorageSeed = (): LocalStorageSeed => {
+  const prefixes = [
+    // Grid overrides saved by the mapper
+    'level_override_',
+    // Custom levels
+    'custom_level_def_',
+    'custom_level_ids_v1',
+    // Per-level rows/cols overrides
+    'level_layout_override_',
+    // Mapper overlay scale tweaks
+    'level_mapper_image_scale_',
+  ];
+
+  const out = {} as Record<string, string>;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (k === 'custom_level_ids_v1') {
+        const v = localStorage.getItem(k);
+        if (v != null) out[k] = v;
+        continue;
+      }
+      if (!prefixes.some((p) => k.startsWith(p))) continue;
+      const v = localStorage.getItem(k);
+      if (v == null) continue;
+      out[k] = v;
+    }
+  } catch {
+    // ignore; seed will just be empty if storage access fails
+  }
+
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    localStorage: out,
+  };
+};
+
+const applyLocalStorageSeed = (seed: any) => {
+  const entries = seed?.localStorage && typeof seed.localStorage === 'object' ? seed.localStorage : null;
+  if (!entries) return { applied: 0 };
+  let applied = 0;
+  for (const [k, v] of Object.entries(entries)) {
+    try {
+      localStorage.setItem(String(k), String(v));
+      applied += 1;
+    } catch {
+      // ignore
+    }
+  }
+  return { applied };
+};
 
 const maybeReloadOnceForNewBuild = () => {
   if (typeof window === 'undefined') return;
@@ -47,6 +108,15 @@ try {
   if (typeof window !== 'undefined') {
     (window as any).runBulkBuildAndDownload = runBulkBuildAndDownload;
     (window as any).runBulkBuildReport = runBulkBuildReport;
+    (window as any).runSolveAllLevels = runSolveAllLevels;
+    (window as any).runSolveLevel = runSolveLevel;
+    (window as any).dumpLevel = dumpLevel;
+
+    // Used to make Playwright reports match your current mapper edits/overrides.
+    // Example:
+    //   const seed = exportLocalStorageSeed(); copy(JSON.stringify(seed, null, 2));
+    (window as any).exportLocalStorageSeed = buildLocalStorageSeed;
+    (window as any).importLocalStorageSeed = applyLocalStorageSeed;
 
     const params = new URLSearchParams(window.location.search);
     if (params.has('bulkbuild') && sessionStorage.getItem('bulkbuild-ran') !== '1') {

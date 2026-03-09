@@ -12,6 +12,7 @@
     "lint": "eslint .",
         "preview": "vite preview",
     "report:levels": "node scripts/level-build-report.mjs",
+    "report:solutions": "node scripts/level-solution-report.mjs",
     "ws:server": "node server/ws-server.mjs",
     "asset-writer": "node server/asset-writer.mjs",
     "dev:all": "concurrently -k -n \"front,ws\" -c \"cyan,magenta\" \"npm run dev\" \"npm run ws:server\""

@@ -16,6 +16,7 @@ interface GameSprite2DProps {
   selectorPos?: { x: number; y: number } | null;
   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
   zoomFactor?: number;
+  showCoords?: boolean;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
@@ -49,6 +50,7 @@ export function GameSprite2D({
   selectorPos,
   players,
   zoomFactor = 1,
+  showCoords = false,
   onArrowClick,
   onCancelSelection,
 }: GameSprite2DProps) {
@@ -355,6 +357,22 @@ export function GameSprite2D({
                   }}
                   title={`(${y},${x}) = ${tileType}`}
                 >
+                  {showCoords && y === 0 && (
+                    <div
+                      className="pointer-events-none absolute top-[2px] left-0 right-0 text-center text-[9px] font-black text-white/70"
+                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+                    >
+                      {x}
+                    </div>
+                  )}
+                  {showCoords && x === 0 && (
+                    <div
+                      className="pointer-events-none absolute left-[2px] top-0 bottom-0 flex items-center text-[9px] font-black text-white/70"
+                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+                    >
+                      {y}
+                    </div>
+                  )}
                   {isPlayer && (
                     levelAtlas?.heroSprite ? (
                       <img

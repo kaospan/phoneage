@@ -26,7 +26,8 @@ export const assetByName: Record<string, string> = assets.reduce((acc, asset) =>
 
 const stagePrimary = assets
   .map((asset) => {
-    const match = asset.name.match(/^(\d{2})\.png$/);
+    // Support 1-3 digit ids: 7.png, 07.png, 82.png, 120.png, etc.
+    const match = asset.name.match(/^(\d{1,3})\.png$/);
     return match ? { id: parseInt(match[1], 10), url: asset.url } : null;
   })
   .filter((entry): entry is { id: number; url: string } => Boolean(entry))
@@ -35,7 +36,7 @@ const stagePrimary = assets
 const stageVariants = new Map<number, string[]>();
 
 assets.forEach((asset) => {
-  let match = asset.name.match(/^(\d{2})-(?:pre|1)\.png$/);
+  let match = asset.name.match(/^(\d{1,3})-(?:pre|1)\.png$/);
   if (match) {
     const id = parseInt(match[1], 10);
     const list = stageVariants.get(id) ?? [];
@@ -44,7 +45,7 @@ assets.forEach((asset) => {
     return;
   }
 
-  match = asset.name.match(/^level_(\d{2})\.png$/);
+  match = asset.name.match(/^level_(\d{1,3})\.png$/);
   if (match) {
     const id = parseInt(match[1], 10);
     const list = stageVariants.get(id) ?? [];

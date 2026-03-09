@@ -3,12 +3,12 @@ import { isArrowCell } from './arrows';
 
 // Cells blocking glide (stop before entering)
 const PLAYER_GLIDE_BLOCKERS = new Set<CellType>([0,1,2,3,6]); // floor, fire/wall, stone, cave, breakable rock
-const REMOTE_GLIDE_BLOCKERS = new Set<CellType>([0,2,3,6]); // remote: floor stops, stone, cave, breakable rock, arrows handled separately
+const REMOTE_GLIDE_BLOCKERS = new Set<CellType>([0,1,2,3,6]); // remote: floor stops, fire/wall, stone, cave, breakable rock, arrows handled separately
 
 // Cells over which player-carried arrow may glide
 const PLAYER_GLIDABLE = new Set<CellType>([4,5]); // water, void
-// Remote arrow can also glide over fire/lava (1)
-const REMOTE_GLIDABLE = new Set<CellType>([4,5,1]);
+// Remote arrow glides over water/void only (fire/wall behaves like stone)
+const REMOTE_GLIDABLE = new Set<CellType>([4,5]);
 
 export function computePlayerGlidePath(grid: CellType[][], start: Position, dx: number, dy: number, arrowType: CellType): PlayerGlideResult {
   const path: Position[] = [];

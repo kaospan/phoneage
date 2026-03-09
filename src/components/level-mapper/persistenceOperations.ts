@@ -1,4 +1,4 @@
-import { getAllLevels, type ColorTheme } from '@/data/levels';
+import { getAllLevels, isPlaceholderGrid, type ColorTheme } from '@/data/levels';
 import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
 
 /**
@@ -22,15 +22,35 @@ export const saveGridChanges = (
     theme: ColorTheme | undefined,
     importLevelIndex: number | null,
     allLevels: ReturnType<typeof getAllLevels>
-): ReturnType<typeof getAllLevels> => {
+): {
+    levels: ReturnType<typeof getAllLevels>;
+    override: 'saved' | 'cleared' | 'none';
+    levelId: number | null;
+} => {
     const dataToSave = { grid, playerStart, theme };
+    let override: 'saved' | 'cleared' | 'none' = 'none';
+    let levelId: number | null = null;
     
     // Save override for specific level if one is imported
     if (importLevelIndex !== null) {
         const lvl = allLevels[importLevelIndex];
         if (lvl) {
-            localStorage.setItem(`level_override_${lvl.id}`, JSON.stringify(dataToSave));
-            notifyLevelOverridesUpdated();
+            levelId = lvl.id;
+
+            // Guardrail: don't accidentally override a real level with a placeholder/empty grid.
+            // This is the most common root cause of "level N is all void" even though N.png exists.
+            const nextIsPlaceholder = isPlaceholderGrid(grid);
+            const prevIsPlaceholder = isPlaceholderGrid(lvl.grid);
+            const key = `level_override_${lvl.id}`;
+            if (nextIsPlaceholder && !prevIsPlaceholder) {
+                localStorage.removeItem(key);
+                override = 'cleared';
+                notifyLevelOverridesUpdated();
+            } else {
+                localStorage.setItem(key, JSON.stringify(dataToSave));
+                override = 'saved';
+                notifyLevelOverridesUpdated();
+            }
         }
     }
     
@@ -44,7 +64,7 @@ export const saveGridChanges = (
     }
     
     // Reload and return updated levels
-    return getAllLevels();
+    return { levels: getAllLevels(), override, levelId };
 };
 
 const LEVEL_LAYOUT_OVERRIDE_PREFIX = 'level_layout_override_';

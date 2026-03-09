@@ -14,6 +14,7 @@ import { loadLevelLayoutOverride } from './persistenceOperations';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLevels';
 import { getLevelImageUrl, putLevelImage } from './levelImageStore';
+import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT } from '@/lib/uiSettings';
 const isPlaceholderGrid = (levelGrid?: number[][]) => {
     if (!levelGrid || levelGrid.length === 0) return true;
     if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
@@ -55,6 +56,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [autoDetectStatus, setAutoDetectStatus] = useState<string>('');
     const [tileFitStatus, setTileFitStatus] = useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
     const [tileFit, setTileFit] = useState<null | { rows: number; cols: number; cellWidth: number; cellHeight: number }>(null);
+    const [showCoordsOverlay, setShowCoordsOverlayState] = useState(() => getShowCoordsOverlay());
 
     // Upload flow: choose an image, then decide which level id to apply it to.
     const [applyDialogOpen, setApplyDialogOpen] = useState(false);
@@ -73,6 +75,19 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         setActiveTab(value);
         localStorage.setItem('levelmapper-active-tab', value);
     };
+
+    useEffect(() => {
+        const refresh = () => setShowCoordsOverlayState(getShowCoordsOverlay());
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === 'show_coords_overlay_v1') refresh();
+        };
+        window.addEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
+        window.addEventListener('storage', onStorage);
+        return () => {
+            window.removeEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
+            window.removeEventListener('storage', onStorage);
+        };
+    }, []);
 
     const handleSpriteCapture = (cellData: {
         imageData: string;
@@ -594,6 +609,26 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         </summary>
                         <div className="mt-2 text-xs text-muted-foreground">
                             Auto-detect ignores locks and will update rows/cols. Use this tool to snap the frame/offset while keeping your current rows/cols.
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-2 rounded border border-border/50 bg-background/40 px-2 py-2">
+                            <div className="min-w-0">
+                                <div className="text-xs font-semibold text-foreground">In-game coordinates</div>
+                                <div className="text-[11px] leading-snug text-muted-foreground">
+                                    Show X labels (0..cols-1) across the top row and Y labels (0..rows-1) down the left column in <strong>SPR</strong> view.
+                                </div>
+                            </div>
+                            <label className="flex items-center gap-2 shrink-0 select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={showCoordsOverlay}
+                                    onChange={(e) => {
+                                        const next = e.target.checked;
+                                        setShowCoordsOverlay(next);
+                                        setShowCoordsOverlayState(next);
+                                    }}
+                                />
+                                <span className="text-xs text-foreground">Show</span>
+                            </label>
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                             <Button

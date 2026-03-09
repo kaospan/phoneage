@@ -1,0 +1,767 @@
+{
+  "generatedAt": "2026-03-09T13:12:10.166+02:00",
+  "options": {
+    "maxMsPerLevel": 1,
+    "maxNodesPerLevel": 200,
+    "maxDepth": 20
+  },
+  "results": [
+    {
+      "levelId": 1,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 1 nodes)",
+      "nodesExpanded": 1,
+      "ms": 1
+    },
+    {
+      "levelId": 2,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 6 nodes)",
+      "nodesExpanded": 6,
+      "ms": 1
+    },
+    {
+      "levelId": 3,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 9 nodes)",
+      "nodesExpanded": 9,
+      "ms": 1
+    },
+    {
+      "levelId": 4,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 15 nodes)",
+      "nodesExpanded": 15,
+      "ms": 1
+    },
+    {
+      "levelId": 5,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 5 nodes)",
+      "nodesExpanded": 5,
+      "ms": 1
+    },
+    {
+      "levelId": 6,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 5 nodes)",
+      "nodesExpanded": 5,
+      "ms": 1
+    },
+    {
+      "levelId": 7,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 7 nodes)",
+      "nodesExpanded": 7,
+      "ms": 1
+    },
+    {
+      "levelId": 8,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Timed out after 1ms (expanded 4 nodes)",
+      "nodesExpanded": 4,
+      "ms": 1
+    },
+    {
+      "levelId": 9,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 10,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 11,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 12,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 13,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 14,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 15,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 16,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 17,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 18,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 19,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 20,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 21,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 22,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 23,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 24,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 25,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 26,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 27,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 28,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 29,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 30,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 31,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 32,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 33,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 34,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 35,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 36,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 37,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 38,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 39,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 40,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 41,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 42,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 43,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 44,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 45,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 46,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 47,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 48,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 49,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 50,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 51,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 52,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 53,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 54,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 55,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 56,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 57,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 58,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 59,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 60,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 61,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 62,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 63,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 64,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 65,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 66,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 67,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 68,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 69,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 70,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 71,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 72,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 73,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 74,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 75,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 76,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 77,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 78,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 79,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 80,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 81,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 82,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 83,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    },
+    {
+      "levelId": 84,
+      "solved": false,
+      "moves": null,
+      "actions": [],
+      "reason": "Placeholder/empty grid",
+      "nodesExpanded": 0,
+      "ms": 0
+    }
+  ],
+  "text": "# Level Solutions (Minimum Moves)\nGenerated: 2026-03-09T13:12:10.153+02:00\nLimits: maxMsPerLevel=1, maxNodesPerLevel=200, maxDepth=20\n\nLevel 1: UNSOLVED (Timed out after 1ms (expanded 1 nodes))\n\nLevel 2: UNSOLVED (Timed out after 1ms (expanded 6 nodes))\n\nLevel 3: UNSOLVED (Timed out after 1ms (expanded 9 nodes))\n\nLevel 4: UNSOLVED (Timed out after 1ms (expanded 15 nodes))\n\nLevel 5: UNSOLVED (Timed out after 1ms (expanded 5 nodes))\n\nLevel 6: UNSOLVED (Timed out after 1ms (expanded 5 nodes))\n\nLevel 7: UNSOLVED (Timed out after 1ms (expanded 7 nodes))\n\nLevel 8: UNSOLVED (Timed out after 1ms (expanded 4 nodes))\n"
+}

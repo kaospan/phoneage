@@ -844,8 +844,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         const saveChanges = () => {
-            const updatedLevels = saveGridChanges(grid, playerStart, theme, importLevelIndex, allLevels);
-            setAllLevels(updatedLevels);
+            const res = saveGridChanges(grid, playerStart, theme, importLevelIndex, allLevels);
+            setAllLevels(res.levels);
             setIsSaved(true);
 
             // Force the compare level to update by triggering a re-render
@@ -853,7 +853,13 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setCompareLevelIndex(compareLevelIndex);
             }
 
-            alert('Changes saved!');
+            if (res.override === 'cleared' && res.levelId != null) {
+                alert(`Grid is empty. Cleared level ${res.levelId} override and reverted to its default map.`);
+            } else if (res.override === 'saved' && res.levelId != null) {
+                alert(`Changes saved for level ${res.levelId}.`);
+            } else {
+                alert('Changes saved!');
+            }
         };
 
         const pushUndo = () => { setUndoStack(s => [...s, grid.map(r => [...r])]); setRedoStack([]); setIsSaved(false); };

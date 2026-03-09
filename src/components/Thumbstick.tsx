@@ -96,35 +96,50 @@ export const Thumbstick = ({ onMove, disabled }: ThumbstickProps) => {
     // Touch events
     useEffect(() => {
         const handleTouchStart = (e: TouchEvent) => {
-            e.preventDefault();
+            if (disabled) return;
+            e.preventDefault(); // prevent page scroll while interacting with the stick
             const touch = e.touches[0];
             handleStart(touch.clientX, touch.clientY);
         };
 
+        const base = baseRef.current;
+        if (base) {
+            base.addEventListener("touchstart", handleTouchStart, { passive: false });
+
+            return () => {
+                base.removeEventListener("touchstart", handleTouchStart);
+            };
+        }
+    }, [handleStart, disabled]);
+
+    // While the stick is active, capture touch move/end globally. When inactive, do not
+    // intercept touchend events (otherwise header taps can be blocked on mobile).
+    useEffect(() => {
+        if (!active) return;
+
         const handleTouchMove = (e: TouchEvent) => {
+            if (disabled) return;
             e.preventDefault();
             const touch = e.touches[0];
             handleMove(touch.clientX, touch.clientY);
         };
 
         const handleTouchEnd = (e: TouchEvent) => {
+            if (disabled) return;
             e.preventDefault();
             handleEnd();
         };
 
-        const base = baseRef.current;
-        if (base) {
-            base.addEventListener("touchstart", handleTouchStart, { passive: false });
-            document.addEventListener("touchmove", handleTouchMove, { passive: false });
-            document.addEventListener("touchend", handleTouchEnd, { passive: false });
+        document.addEventListener("touchmove", handleTouchMove, { passive: false });
+        document.addEventListener("touchend", handleTouchEnd, { passive: false });
+        document.addEventListener("touchcancel", handleTouchEnd, { passive: false });
 
-            return () => {
-                base.removeEventListener("touchstart", handleTouchStart);
-                document.removeEventListener("touchmove", handleTouchMove);
-                document.removeEventListener("touchend", handleTouchEnd);
-            };
-        }
-    }, [handleStart, handleMove, handleEnd]);
+        return () => {
+            document.removeEventListener("touchmove", handleTouchMove);
+            document.removeEventListener("touchend", handleTouchEnd);
+            document.removeEventListener("touchcancel", handleTouchEnd);
+        };
+    }, [active, disabled, handleMove, handleEnd]);
 
     // Mouse events
     useEffect(() => {

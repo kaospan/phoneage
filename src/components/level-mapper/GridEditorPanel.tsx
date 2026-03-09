@@ -36,6 +36,8 @@ export const GridEditorPanel: React.FC = () => {
     const [imageScaleX, setImageScaleX] = React.useState(1);
     const [imageScaleY, setImageScaleY] = React.useState(1);
     const [lockImageAspect, setLockImageAspect] = React.useState(true);
+    const [isResizingImageY, setIsResizingImageY] = React.useState(false);
+    const resizeYStartRef = React.useRef<{ y: number; scaleY: number } | null>(null);
     // Track cells the user manually painted/confirmed so learning can use trusted labels only.
     const trustedCellsRef = React.useRef<Set<string>>(new Set());
     const [showAlignmentGuide, setShowAlignmentGuide] = React.useState(true);
@@ -53,6 +55,42 @@ export const GridEditorPanel: React.FC = () => {
     const [cellHeight, setCellHeight] = React.useState(32);
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
     const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
+
+    const importedLevelId = React.useMemo(() => {
+        if (importLevelIndex === null) return null;
+        return allLevels[importLevelIndex]?.id ?? null;
+    }, [importLevelIndex, allLevels]);
+
+    // Persist per-level overlay distortion (X/Y) so screenshots with non-square pixels can be aligned precisely.
+    React.useEffect(() => {
+        if (importedLevelId === null) return;
+        try {
+            const raw = localStorage.getItem(`level_mapper_image_scale_${importedLevelId}`);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            const x = Number(parsed?.x ?? 1);
+            const y = Number(parsed?.y ?? 1);
+            const lock = Boolean(parsed?.lock ?? true);
+            if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
+            if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+            setLockImageAspect(lock);
+        } catch {
+            // ignore
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [importedLevelId]);
+
+    React.useEffect(() => {
+        if (importedLevelId === null) return;
+        try {
+            localStorage.setItem(
+                `level_mapper_image_scale_${importedLevelId}`,
+                JSON.stringify({ x: imageScaleX, y: imageScaleY, lock: lockImageAspect })
+            );
+        } catch {
+            // ignore
+        }
+    }, [importedLevelId, imageScaleX, imageScaleY, lockImageAspect]);
 
     // Load overlay image size once per URL (prevents resize jitter).
     React.useEffect(() => {
@@ -227,6 +265,40 @@ export const GridEditorPanel: React.FC = () => {
         cellWidth,
         cellHeight,
     ]);
+
+    const autoFitImageScaleY = React.useCallback(() => {
+        if (!guideGrid || !imageNaturalSize) return;
+        // Find scaleY that makes the detected tile height line up with the grid's cellHeight.
+        // cellHeight is already based on the screenshot's detected frame; this just compensates for mild vertical distortion.
+        const baseOverlayScaleY = displaySize.height / imageNaturalSize.height;
+        if (!Number.isFinite(baseOverlayScaleY) || baseOverlayScaleY <= 0) return;
+        const wantedOverlayScaleY = cellHeight / guideGrid.cellHeight;
+        if (!Number.isFinite(wantedOverlayScaleY) || wantedOverlayScaleY <= 0) return;
+        const next = Math.max(0.85, Math.min(1.15, wantedOverlayScaleY / baseOverlayScaleY));
+        setLockImageAspect(false);
+        setImageScaleY(Number(next.toFixed(3)));
+    }, [guideGrid, imageNaturalSize, displaySize.height, cellHeight]);
+
+    const beginResizeImageY = React.useCallback((clientY: number) => {
+        setLockImageAspect(false);
+        resizeYStartRef.current = { y: clientY, scaleY: imageScaleY };
+        setIsResizingImageY(true);
+    }, [imageScaleY]);
+
+    const moveResizeImageY = React.useCallback((clientY: number) => {
+        const start = resizeYStartRef.current;
+        if (!start) return;
+        const dy = clientY - start.y;
+        const denom = Math.max(1, scaledDisplayHeight);
+        const next = start.scaleY * (1 + dy / denom);
+        const clamped = Math.max(0.85, Math.min(1.15, next));
+        setImageScaleY(Number(clamped.toFixed(3)));
+    }, [scaledDisplayHeight]);
+
+    const endResizeImageY = React.useCallback(() => {
+        resizeYStartRef.current = null;
+        setIsResizingImageY(false);
+    }, []);
 
     // The stretched/uniform toggle is removed; keep the grid cell sized from the screenshot tiles.
     React.useEffect(() => {
@@ -684,6 +756,14 @@ export const GridEditorPanel: React.FC = () => {
                                 <>
                                     <ArrowDownUp className="h-4 w-4 text-muted-foreground" />
                                     <Button
+                                        variant="outline"
+                                        className="h-8 px-2"
+                                        onClick={autoFitImageScaleY}
+                                        title="Auto-fit vertical overlay scale to the detected tile grid"
+                                    >
+                                        Fit Y
+                                    </Button>
+                                    <Button
                                         size="icon"
                                         variant="outline"
                                         className="h-8 w-8"
@@ -1012,6 +1092,47 @@ export const GridEditorPanel: React.FC = () => {
                                             zIndex: 15
                                         }}
                                     />
+                                )}
+                                {overlayEnabled && imageURL && (
+                                    <div
+                                        className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
+                                        style={{
+                                            left: `${Math.max(0, scaledDisplayWidth / 2)}px`,
+                                            top: `${Math.max(0, scaledDisplayHeight)}px`,
+                                            transform: "translate(-50%, -50%)",
+                                            width: 22,
+                                            height: 22,
+                                            zIndex: 30,
+                                            cursor: "ns-resize",
+                                            touchAction: "none",
+                                        }}
+                                        title="Drag to stretch/compress the overlay image vertically (grid stays fixed)."
+                                        onPointerDown={(e) => {
+                                            e.preventDefault();
+                                            e.currentTarget.setPointerCapture(e.pointerId);
+                                            beginResizeImageY(e.clientY);
+                                        }}
+                                        onPointerMove={(e) => {
+                                            if (!isResizingImageY) return;
+                                            e.preventDefault();
+                                            moveResizeImageY(e.clientY);
+                                        }}
+                                        onPointerUp={(e) => {
+                                            e.preventDefault();
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageY();
+                                        }}
+                                        onPointerCancel={(e) => {
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageY();
+                                        }}
+                                    >
+                                        <ArrowDownUp className="h-4 w-4 text-muted-foreground" />
+                                    </div>
                                 )}
                                 {overlayEnabled && imageURL && showAlignmentGuide && alignment && (
                                     <svg

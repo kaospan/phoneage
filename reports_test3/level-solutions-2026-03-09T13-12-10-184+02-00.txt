@@ -1,0 +1,22 @@
+# Local Time: 2026-03-09T13:12:10.189+02:00
+# Timezone: Asia/Jerusalem
+
+# Level Solutions (Minimum Moves)
+Generated: 2026-03-09T13:12:10.153+02:00
+Limits: maxMsPerLevel=1, maxNodesPerLevel=200, maxDepth=20
+
+Level 1: UNSOLVED (Timed out after 1ms (expanded 1 nodes))
+
+Level 2: UNSOLVED (Timed out after 1ms (expanded 6 nodes))
+
+Level 3: UNSOLVED (Timed out after 1ms (expanded 9 nodes))
+
+Level 4: UNSOLVED (Timed out after 1ms (expanded 15 nodes))
+
+Level 5: UNSOLVED (Timed out after 1ms (expanded 5 nodes))
+
+Level 6: UNSOLVED (Timed out after 1ms (expanded 5 nodes))
+
+Level 7: UNSOLVED (Timed out after 1ms (expanded 7 nodes))
+
+Level 8: UNSOLVED (Timed out after 1ms (expanded 4 nodes))

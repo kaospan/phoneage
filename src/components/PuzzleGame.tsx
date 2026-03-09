@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
+import { UI_SETTINGS_UPDATED_EVENT, getShowCoordsOverlay, setShowCoordsOverlay } from "@/lib/uiSettings";
 import { TouchControls } from "./TouchControls";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
@@ -138,6 +139,7 @@ export const PuzzleGame = () => {
   const buildInFlightRef = useRef<Set<number>>(new Set());
 
   const [overrideRevision, setOverrideRevision] = useState(0);
+  const [showCoordsOverlay, setShowCoordsOverlayState] = useState(() => getShowCoordsOverlay());
 
   // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
   useEffect(() => {
@@ -151,6 +153,20 @@ export const PuzzleGame = () => {
     window.addEventListener("storage", onStorage);
     return () => {
       window.removeEventListener(LEVEL_OVERRIDES_UPDATED_EVENT, bump as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refresh = () => setShowCoordsOverlayState(getShowCoordsOverlay());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'show_coords_overlay_v1') refresh();
+    };
+    window.addEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
       window.removeEventListener("storage", onStorage);
     };
   }, []);
@@ -1071,6 +1087,21 @@ export const PuzzleGame = () => {
             <div className="ml-2 pl-2 border-l border-border/50 flex items-center gap-2">
               <Button
                 onClick={() => {
+                  const next = !showCoordsOverlay;
+                  setShowCoordsOverlay(next);
+                  setShowCoordsOverlayState(next);
+                }}
+                variant="ghost"
+                size="sm"
+                className="h-10 px-2 text-xs font-black tracking-wide hover:bg-primary/20"
+                title="Toggle coordinate labels (shown in SPR view)"
+                aria-pressed={showCoordsOverlay}
+              >
+                XY
+              </Button>
+
+              <Button
+                onClick={() => {
                   setCameraZoomIndex((i) => Math.max(0, i - 1));
                 }}
                 variant="ghost"
@@ -1155,6 +1186,7 @@ export const PuzzleGame = () => {
               selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
               players={renderPlayers}
               zoomFactor={cameraZoomFactor}
+              showCoords={showCoordsOverlay}
               onArrowClick={(x, y) => {
                 if (localPlayer?.isGliding) return;
                 const cell = renderGrid[y]?.[x];
