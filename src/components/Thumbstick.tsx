@@ -148,10 +148,13 @@ export const Thumbstick = ({ onMove, disabled }: ThumbstickProps) => {
     }, [active, handleMove, handleEnd]);
 
     return (
-        <div className="fixed bottom-6 left-6 z-50 md:hidden">
+        <div
+            className="fixed left-4 z-50 md:hidden"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+        >
             <div
                 ref={baseRef}
-                className="relative w-32 h-32 rounded-full bg-muted/50 backdrop-blur border-2 border-border shadow-lg"
+                className="relative w-28 h-28 rounded-full bg-muted/50 backdrop-blur border-2 border-border shadow-lg"
                 onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
                 style={{ touchAction: 'none' }}
             >
@@ -166,7 +169,7 @@ export const Thumbstick = ({ onMove, disabled }: ThumbstickProps) => {
 
                 {/* Thumbstick */}
                 <div
-                    className="absolute top-1/2 left-1/2 w-12 h-12 rounded-full bg-primary shadow-lg transition-transform"
+                    className="absolute top-1/2 left-1/2 w-11 h-11 rounded-full bg-primary shadow-lg transition-transform"
                     style={{
                         transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
                         opacity: disabled ? 0.5 : 1,

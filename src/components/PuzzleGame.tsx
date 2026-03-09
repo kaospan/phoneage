@@ -983,8 +983,11 @@ export const PuzzleGame = () => {
         )}
         <TouchControls onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
         <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
-        <div className="absolute top-2 left-0 right-0 z-50 flex justify-center">
-          <div className="bg-card/95 backdrop-blur px-3 py-2 md:px-6 md:py-3 rounded-lg shadow-lg border border-border/50 flex items-center gap-2 md:gap-4">
+        <div
+          className="absolute left-0 right-0 z-50 flex justify-center"
+          style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+        >
+          <div className="bg-card/95 backdrop-blur px-3 py-2 md:px-6 md:py-3 rounded-lg shadow-lg border border-border/50 flex flex-wrap items-center justify-center gap-2 md:gap-4 max-w-[calc(100vw-16px)]">
             {/* Previous Level Button */}
             <Button
               onClick={() => {
@@ -997,7 +1000,7 @@ export const PuzzleGame = () => {
               }}
               variant="ghost"
               size="default"
-              className="h-9 w-9 md:h-10 md:w-10 p-0 text-lg md:text-xl font-bold hover:bg-primary/20"
+              className="h-11 w-11 md:h-10 md:w-10 p-0 text-xl md:text-xl font-bold hover:bg-primary/20"
               disabled={currentLevelIndex === 0}
               aria-label="Previous level"
               title="Previous level (P)"
@@ -1006,21 +1009,21 @@ export const PuzzleGame = () => {
             </Button>
 
             {/* Level Info */}
-            <div className="flex items-center gap-2 md:gap-3 px-2 md:px-4">
-              <span className="text-primary font-bold text-lg md:text-2xl">Level {currentLevel.id}</span>
+            <div className="flex items-center gap-2 md:gap-3 px-1 md:px-4">
+              <span className="text-primary font-bold text-xl md:text-2xl">Level {currentLevel.id}</span>
               <span className="text-muted-foreground text-base md:text-xl">•</span>
-              <span className="text-foreground font-medium text-sm md:text-lg">Moves: {moves}</span>
+              <span className="text-foreground font-medium text-base md:text-lg">Moves: {moves}</span>
               <span className="text-muted-foreground text-base md:text-xl">•</span>
               <div className="flex items-center gap-2">
                 <span
-                  className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 px-2 py-1 text-xs font-black text-white"
+                  className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 px-2 py-1 text-sm md:text-xs font-black text-white"
                   title="Red keys collected"
                 >
                   <span aria-hidden>🗝</span>
                   <span>{redKeyCount}</span>
                 </span>
                 <span
-                  className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 px-2 py-1 text-xs font-black text-white"
+                  className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 px-2 py-1 text-sm md:text-xs font-black text-white"
                   title="Green keys collected"
                 >
                   <span aria-hidden>🔑</span>
@@ -1035,7 +1038,7 @@ export const PuzzleGame = () => {
               variant="outline"
               size="default"
               disabled={isComplete || localPlayer?.isGliding}
-              className="h-10 px-4 text-base font-semibold hover:bg-primary/20"
+              className="h-11 px-5 text-base font-semibold hover:bg-primary/20"
               title="Restart level (R)"
             >
               Restart
@@ -1057,7 +1060,7 @@ export const PuzzleGame = () => {
               }}
               variant="ghost"
               size="default"
-              className="h-10 w-10 p-0 text-xl font-bold hover:bg-primary/20"
+              className="h-11 w-11 md:h-10 md:w-10 p-0 text-xl font-bold hover:bg-primary/20"
               aria-label="Next level"
               title="Next level (N)"
             >
@@ -1072,14 +1075,14 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-base hover:bg-primary/20"
+                className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
                 title="Zoom out"
                 disabled={!canZoomOut}
               >
                 -
               </Button>
 
-              <div className="min-w-12 text-center text-xs font-semibold text-muted-foreground">
+              <div className="min-w-12 text-center text-sm md:text-xs font-semibold text-muted-foreground">
                 {Math.round((1 / cameraZoomFactor) * 100)}%
               </div>
 
@@ -1089,7 +1092,7 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-base hover:bg-primary/20"
+                className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
                 title="Zoom in"
                 disabled={!canZoomIn}
               >
@@ -1103,7 +1106,7 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className="h-8 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
+                className="h-10 px-3 text-sm md:text-xs font-bold tracking-wide hover:bg-primary/20"
                 title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
               >
                 {VIEW_MODE_LABELS[viewMode]}
@@ -1118,7 +1121,7 @@ export const PuzzleGame = () => {
                   }}
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-xs hover:bg-primary/20"
+                  className="h-10 px-2 text-sm md:text-xs hover:bg-primary/20"
                   title="Reset camera view (double-click game area)"
                 >
                   ⟲
@@ -1228,13 +1231,16 @@ export const PuzzleGame = () => {
             />
           )}
         </div>
-        <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
+        <div
+          className="absolute left-1/2 transform -translate-x-1/2 z-50 md:hidden"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.35rem)' }}
+        >
           <div className="bg-card/95 backdrop-blur border border-border/50 px-2 py-1 rounded shadow-md">
             <div className="grid grid-cols-4 gap-1">
-              <Button onClick={() => queueMove(0, -1)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">↑</Button>
-              <Button onClick={() => queueMove(0, 1)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">↓</Button>
-              <Button onClick={() => queueMove(-1, 0)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">←</Button>
-              <Button onClick={() => queueMove(1, 0)} className="h-8 w-8 p-0 text-xs" variant="secondary" size="sm">→</Button>
+              <Button onClick={() => queueMove(0, -1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↑</Button>
+              <Button onClick={() => queueMove(0, 1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↓</Button>
+              <Button onClick={() => queueMove(-1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">←</Button>
+              <Button onClick={() => queueMove(1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">→</Button>
             </div>
           </div>
         </div>
