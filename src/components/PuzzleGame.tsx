@@ -990,8 +990,15 @@ export const PuzzleGame = () => {
       const doc = typeof document !== "undefined" ? document : null;
       if (!doc) return;
       const onChange = () => {
-        // If the user exits browser fullscreen manually, keep our UI mode but ensure state stays consistent.
+        // If the user exits browser fullscreen manually, exit our immersive layout too.
         // (Some mobile browsers don't support the Fullscreen API; in that case this is a no-op.)
+        if (!doc.fullscreenElement) {
+          setIsFullscreenMode(false);
+          if (prevZoomIndexRef.current != null) {
+            setCameraZoomIndex(prevZoomIndexRef.current);
+            prevZoomIndexRef.current = null;
+          }
+        }
       };
       doc.addEventListener("fullscreenchange", onChange);
       return () => doc.removeEventListener("fullscreenchange", onChange);
