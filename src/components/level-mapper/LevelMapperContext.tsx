@@ -33,6 +33,7 @@ import {
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { normalizeMapperImage } from './imageNormalization';
 import { getAlignmentHints } from './alignmentProfile';
+import { getLevelImageUrl } from './levelImageStore';
 console.log('📦 LevelMapperContext.tsx loading...');
 
 // Sample interior pixels to avoid gridlines/adjacent cell bleed when matching sprites.
@@ -184,7 +185,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         // For placeholder auto-build levels, load the image and keep the editor responsive
         // instead of running a heavy full image-to-grid build during mount.
         useEffect(() => {
-            if (importLevelIndex !== null) {
+                    if (importLevelIndex !== null) {
                 const lvl = allLevels[importLevelIndex];
                 if (lvl?.grid) {
                     const loadLevelIntoMapper = async () => {
@@ -198,8 +199,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                             };
                         }
 
+                        const storedUpload = await getLevelImageUrl(resolved.id);
                         const hasNonVoidCells = resolved.grid.some(row => row.some(cell => cell !== 5));
-                        if (!hasNonVoidCells && !resolved.image) {
+                        if (!hasNonVoidCells && !resolved.image && !storedUpload) {
                             console.log(`Skipped auto-loading Level ${resolved.id} (empty/void grid)`);
                             clearImportLevel();
                             setImportLevelIndex(null);
@@ -209,14 +211,18 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setRows(resolved.grid.length);
                         setCols(resolved.grid[0]?.length || 0);
                         setGrid(resolved.grid.map(row => [...row]));
-                        if (resolved.image) {
+                        if (storedUpload) {
+                            setImageURL(storedUpload);
+                            setOverlayEnabled(true);
+                        } else if (resolved.image) {
                             void normalizeMapperImage(resolved.image).then((normalizedURL) => {
                                 setImageURL(normalizedURL);
                             });
+                            setOverlayEnabled(true);
                         } else {
                             setImageURL(null);
+                            setOverlayEnabled(false);
                         }
-                        setOverlayEnabled(Boolean(resolved.image));
                         setGridOffsetX(0);
                         setGridOffsetY(0);
                         setGridFrameWidth(null);

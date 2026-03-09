@@ -14,6 +14,7 @@ import { buildLevelFromSources } from "@/lib/levelImageDetection";
 import { LEVEL_OVERRIDES_UPDATED_EVENT, saveLevelOverride } from "@/lib/levelOverrides";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { HowToPlayDialog } from "./HowToPlayDialog";
 
 console.log('📦 PuzzleGame.tsx loading...');
 
@@ -1039,6 +1040,8 @@ export const PuzzleGame = () => {
             >
               Restart
             </Button>
+
+            <HowToPlayDialog disabled={shouldRotateGate} />
 
             {/* Next Level Button */}
             <Button

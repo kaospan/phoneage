@@ -432,6 +432,21 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                     const blob = await fetch(normalizedUrl).then((r) => r.blob());
                                     await putLevelImage(levelId, blob, file.name, pendingUploadAllowOverwrite);
 
+                                    // Optional: in local dev, also write into `src/assets/NN.png` via the asset-writer helper.
+                                    // This cannot work on GitHub Pages (static hosting), but it makes the "upload -> assets folder"
+                                    // workflow possible locally when `npm run asset-writer` is running.
+                                    if (import.meta.env.DEV) {
+                                        const writerBase = (import.meta.env.VITE_ASSET_WRITER_URL as string | undefined) ?? 'http://localhost:8787/write-level-image';
+                                        try {
+                                            await fetch(`${writerBase}?id=${levelId}&overwrite=${pendingUploadAllowOverwrite ? 1 : 0}`, {
+                                                method: 'POST',
+                                                body: blob,
+                                            });
+                                        } catch (err) {
+                                            console.warn('asset-writer not available (skipping):', err);
+                                        }
+                                    }
+
                                     // Create a new custom level definition only when the level id does not exist yet.
                                     // This never overwrites built-in levels.
                                     let nextLevels = allLevels;
