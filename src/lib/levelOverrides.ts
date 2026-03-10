@@ -11,7 +11,8 @@ export const saveLevelOverride = (
   levelId: number,
   grid: number[][],
   playerStart: { x: number; y: number },
-  theme?: ColorTheme
+  theme?: ColorTheme,
+  timeLimitSeconds?: number | null
 ) => {
   if (typeof window === 'undefined') return;
   const level = getAllLevels().find((entry) => entry.id === levelId);
@@ -19,7 +20,26 @@ export const saveLevelOverride = (
     console.log(`Skipping local override for level ${levelId}; code default is authoritative.`);
     return;
   }
-  const payload = { grid, playerStart, theme };
-  localStorage.setItem(`level_override_${levelId}`, JSON.stringify(payload));
+  const key = `level_override_${levelId}`;
+  let prev: unknown = null;
+  try {
+    prev = JSON.parse(localStorage.getItem(key) ?? 'null');
+  } catch {
+    prev = null;
+  }
+  const prevObj =
+    prev && typeof prev === 'object' && !Array.isArray(prev) ? (prev as Record<string, unknown>) : null;
+
+  // Preserve unknown fields in existing overrides so incremental writes (e.g. auto-build)
+  // don't accidentally erase mapper-authored settings like per-level timers.
+  const payload: Record<string, unknown> = {
+    ...(prevObj ?? {}),
+    grid,
+    playerStart,
+    ...(theme !== undefined ? { theme } : {}),
+    ...(timeLimitSeconds !== undefined ? { timeLimitSeconds } : {}),
+  };
+
+  localStorage.setItem(key, JSON.stringify(payload));
   notifyLevelOverridesUpdated();
 };

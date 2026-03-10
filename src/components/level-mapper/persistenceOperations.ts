@@ -12,6 +12,7 @@ import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
  * @param grid - The current grid state
  * @param playerStart - The player starting position (if any)
  * @param theme - The color theme for the level (if any)
+ * @param timeLimitSeconds - Optional per-level countdown timer in seconds (null disables)
  * @param importLevelIndex - Index of the imported level (if any)
  * @param allLevels - Array of all available levels
  * @returns Updated levels array after save
@@ -20,6 +21,7 @@ export const saveGridChanges = (
     grid: number[][],
     playerStart: { x: number; y: number } | null,
     theme: ColorTheme | undefined,
+    timeLimitSeconds: number | null,
     importLevelIndex: number | null,
     allLevels: ReturnType<typeof getAllLevels>
 ): {
@@ -59,7 +61,31 @@ export const saveGridChanges = (
         return next;
     })();
 
-    const dataToSave = { grid: gridToSave, playerStart, theme };
+    // Merge with any existing override payload to avoid erasing newer fields added over time.
+    const existingOverrideForLevel = (levelId: number): Record<string, unknown> | null => {
+        try {
+            const raw = localStorage.getItem(`level_override_${levelId}`);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as unknown;
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+            return parsed as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+    };
+
+    const dataToSaveForLevel = (levelId: number) => {
+        const prev = existingOverrideForLevel(levelId);
+        return {
+            ...(prev ?? {}),
+            grid: gridToSave,
+            playerStart,
+            ...(theme !== undefined ? { theme } : {}),
+            // Preserve semantics: null means "no timer".
+            timeLimitSeconds,
+        };
+    };
+
     let override: 'saved' | 'cleared' | 'none' = 'none';
     let levelId: number | null = null;
     
@@ -79,7 +105,7 @@ export const saveGridChanges = (
                 override = 'cleared';
                 notifyLevelOverridesUpdated();
             } else {
-                localStorage.setItem(key, JSON.stringify(dataToSave));
+                localStorage.setItem(key, JSON.stringify(dataToSaveForLevel(lvl.id)));
                 override = 'saved';
                 notifyLevelOverridesUpdated();
             }
@@ -93,6 +119,11 @@ export const saveGridChanges = (
     }
     if (theme) {
         localStorage.setItem('levelmapper_theme', theme);
+    }
+    if (timeLimitSeconds != null && Number.isFinite(timeLimitSeconds)) {
+        localStorage.setItem('levelmapper_timeLimitSeconds', String(Math.max(0, Math.round(timeLimitSeconds))));
+    } else {
+        localStorage.removeItem('levelmapper_timeLimitSeconds');
     }
     
     // Reload and return updated levels

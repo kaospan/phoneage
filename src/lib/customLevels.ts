@@ -8,7 +8,7 @@ import type { ColorTheme, Level } from '@/data/levels';
 
 export type CustomLevelDefinition = Pick<
   Level,
-  'id' | 'grid' | 'playerStart' | 'cavePos' | 'theme'
+  'id' | 'grid' | 'playerStart' | 'cavePos' | 'theme' | 'timeLimitSeconds'
 > & {
   createdAt?: number;
   updatedAt?: number;
@@ -75,4 +75,3 @@ export const guessThemeForLevelId = (levelId: number): ColorTheme => {
   const themeCycle: ColorTheme[] = ['default', 'ocean', 'forest', 'sunset', 'lava', 'crystal', 'neon'];
   return themeCycle[(Math.max(1, levelId) - 1) % themeCycle.length];
 };
-

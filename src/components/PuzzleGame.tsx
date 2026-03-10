@@ -216,6 +216,40 @@ export const PuzzleGame = () => {
   const [buildStatus, setBuildStatus] = useState<string>('');
   const [networkStatus, setNetworkStatus] = useState<'offline' | 'connecting' | 'online'>('offline');
 
+  // Per-level countdown timer (configured in the mapper).
+  const [levelTimeLimitSeconds, setLevelTimeLimitSeconds] = useState<number | null>(null);
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number | null>(null);
+  const [isTimeUp, setIsTimeUp] = useState(false);
+  const timerRemainingMsRef = useRef(0);
+  const timerEndAtMsRef = useRef<number | null>(null);
+  const timerIntervalRef = useRef<number | null>(null);
+
+  const clearTimerInterval = useCallback(() => {
+    if (timerIntervalRef.current != null) {
+      window.clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+  }, []);
+
+  const resetLevelTimer = useCallback((limitSeconds: number | undefined) => {
+    clearTimerInterval();
+    timerEndAtMsRef.current = null;
+    timerRemainingMsRef.current = 0;
+    setIsTimeUp(false);
+
+    const n = Number(limitSeconds);
+    if (!Number.isFinite(n) || n <= 0) {
+      setLevelTimeLimitSeconds(null);
+      setTimeLeftSeconds(null);
+      return;
+    }
+
+    const sec = Math.min(86400, Math.round(n));
+    setLevelTimeLimitSeconds(sec);
+    setTimeLeftSeconds(sec);
+    timerRemainingMsRef.current = sec * 1000;
+  }, [clearTimerInterval]);
+
   const simRef = useRef<SimulationState | null>(null);
   const inputQueueRef = useRef<Map<PlayerId, InputCommand[]>>(new Map());
   const localPlayerIdRef = useRef<PlayerId>('local');
@@ -410,7 +444,8 @@ export const PuzzleGame = () => {
       setIsSelectorActive(false);
       setCameraOffset({ x: 0, z: 0 });
       setActiveLevel(level);
-    }, [buildBaseGrid]);
+      resetLevelTimer(level.timeLimitSeconds);
+    }, [buildBaseGrid, resetLevelTimer]);
 
     // Initialize or auto-build level
     useEffect(() => {
@@ -503,6 +538,66 @@ export const PuzzleGame = () => {
       };
     }, [currentLevelIndex, applyLevelState, isPlaceholderGrid]);
 
+    // Countdown timer tick (mapper-configurable per level).
+    useEffect(() => {
+      if (!levelTimeLimitSeconds) {
+        clearTimerInterval();
+        timerEndAtMsRef.current = null;
+        timerRemainingMsRef.current = 0;
+        setTimeLeftSeconds(null);
+        setIsTimeUp(false);
+        return;
+      }
+
+      if (shouldRotateGate || isComplete || isTimeUp) {
+        clearTimerInterval();
+        timerEndAtMsRef.current = null;
+        return;
+      }
+
+      if (isBuilding) {
+        // Pause countdown while the level is building/loading.
+        if (timerEndAtMsRef.current != null) {
+          const remaining = Math.max(0, timerEndAtMsRef.current - Date.now());
+          timerRemainingMsRef.current = remaining;
+          timerEndAtMsRef.current = null;
+          const sec = Math.ceil(remaining / 1000);
+          setTimeLeftSeconds((prev) => (prev === sec ? prev : sec));
+        }
+        clearTimerInterval();
+        return;
+      }
+
+      // Resume (or start) using the last known remaining time.
+      if (timerEndAtMsRef.current == null) {
+        timerEndAtMsRef.current = Date.now() + timerRemainingMsRef.current;
+      }
+
+      const tick = () => {
+        const endAt = timerEndAtMsRef.current;
+        if (endAt == null) return;
+        const remaining = Math.max(0, endAt - Date.now());
+        timerRemainingMsRef.current = remaining;
+
+        const sec = Math.ceil(remaining / 1000);
+        setTimeLeftSeconds((prev) => (prev === sec ? prev : sec));
+
+        if (remaining <= 0) {
+          setIsTimeUp(true);
+          timerEndAtMsRef.current = null;
+          clearTimerInterval();
+        }
+      };
+
+      tick();
+      const id = window.setInterval(tick, 250);
+      timerIntervalRef.current = id;
+      return () => {
+        window.clearInterval(id);
+        if (timerIntervalRef.current === id) timerIntervalRef.current = null;
+      };
+    }, [clearTimerInterval, isBuilding, isComplete, isTimeUp, levelTimeLimitSeconds, shouldRotateGate, currentLevelIndex]);
+
     // Show drag hint on first load
     useEffect(() => {
       const hasSeenHint = sessionStorage.getItem('dragHintSeen');
@@ -544,9 +639,9 @@ export const PuzzleGame = () => {
     }, []);
 
     const queueMove = useCallback((dx: number, dy: number) => {
-      if (isComplete || isBuilding) return;
+      if (isComplete || isBuilding || isTimeUp || shouldRotateGate) return;
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, shouldRotateGate]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -864,6 +959,15 @@ export const PuzzleGame = () => {
     const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
     const redKeyCount = localPlayer?.keys.red ? 1 : 0;
     const greenKeyCount = localPlayer?.keys.green ? 1 : 0;
+    const timeLeftText = timeLeftSeconds == null
+      ? null
+      : (() => {
+        const sec = Math.max(0, Math.round(timeLeftSeconds));
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${m}:${String(s).padStart(2, '0')}`;
+      })();
+    const isTimerUrgent = timeLeftSeconds != null && timeLeftSeconds <= 10;
 
     const resetSelectorToPlayer = useCallback(() => {
       setIsSelectorActive(false);
@@ -1199,13 +1303,20 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
+        {isTimeUp && levelTimeLimitSeconds && (
+          <div className="absolute inset-0 z-[70] pointer-events-none flex items-start justify-center">
+            <div className="mt-24 rounded-2xl border border-red-200/60 bg-red-700/90 px-6 py-3 text-center text-white shadow-2xl">
+              <div className="text-lg font-black tracking-[0.18em]">TIME'S UP!</div>
+            </div>
+          </div>
+        )}
         <TouchControls
           onMove={queueMove}
-          disabled={isComplete || isBuilding || shouldRotateGate}
+          disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate}
           targetRef={gestureSurfaceRef}
         />
         {isMobile && !shouldRotateGate && (
-          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
+          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate} />
         )}
 
         {useSplitHud ? (
@@ -1234,16 +1345,30 @@ export const PuzzleGame = () => {
                 ←
               </Button>
 
-              <div className="flex items-center gap-2 px-1 whitespace-nowrap">
-                <span className="text-primary font-bold text-base">
-                  {`L${currentLevel.id}`}
-                </span>
-                <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
-                <div className="flex items-center gap-1">
-                  <span
-                    className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[11px] font-black text-white px-1.5 py-0.5"
-                    title="Red keys collected"
-                  >
+               <div className="flex items-center gap-2 px-1 whitespace-nowrap">
+                 <span className="text-primary font-bold text-base">
+                   {`L${currentLevel.id}`}
+                 </span>
+                 <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
+                 {timeLeftText && (
+                   <span
+                     className={[
+                       "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-black",
+                       isTimerUrgent
+                         ? "border-red-300/80 bg-red-700 text-white"
+                         : "border-border/60 bg-background/60 text-foreground",
+                     ].join(" ")}
+                     title="Time left"
+                   >
+                     <span aria-hidden>⏱</span>
+                     <span>{timeLeftText}</span>
+                   </span>
+                 )}
+                 <div className="flex items-center gap-1">
+                   <span
+                     className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[11px] font-black text-white px-1.5 py-0.5"
+                     title="Red keys collected"
+                   >
                     <span aria-hidden>🗝</span>
                     <span>{redKeyCount}</span>
                   </span>
@@ -1436,7 +1561,25 @@ export const PuzzleGame = () => {
                 </span>
                 <span className="text-muted-foreground text-xl">•</span>
                 <span className="text-foreground font-medium text-lg">{`Moves: ${moves}`}</span>
-                <span className="text-muted-foreground text-xl">•</span>
+                {timeLeftText ? (
+                  <>
+                    <span className="text-muted-foreground text-xl">•</span>
+                    <span
+                      className={[
+                        "inline-flex items-center gap-2 rounded-md border px-2 py-1 text-sm font-black",
+                        isTimerUrgent
+                          ? "border-red-300/80 bg-red-700 text-white"
+                          : "border-border/60 bg-background/60 text-foreground",
+                      ].join(" ")}
+                      title="Time left"
+                    >
+                      <span aria-hidden>⏱</span>
+                      <span>{timeLeftText}</span>
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground text-xl">•</span>
+                )}
                 <div className="flex items-center gap-2">
                   <span
                     className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-xs font-black text-white px-2 py-1"

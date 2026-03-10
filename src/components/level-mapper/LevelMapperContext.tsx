@@ -115,6 +115,18 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [grid, setGrid] = useState<number[][]>(() => emptyGrid(12, 20));
         const [playerStart, setPlayerStart] = useState<{ x: number; y: number } | null>(null);
         const [theme, setTheme] = useState<ColorTheme | undefined>(undefined);
+        const [timeLimitSeconds, setTimeLimitSeconds] = useState<number | null>(() => {
+            if (typeof window === 'undefined') return null;
+            try {
+                const raw = localStorage.getItem('levelmapper_timeLimitSeconds');
+                if (!raw) return null;
+                const n = Number(raw);
+                if (!Number.isFinite(n)) return null;
+                return Math.max(0, Math.round(n));
+            } catch {
+                return null;
+            }
+        });
         console.log('✓ Grid state initialized');
 
         const [allLevels, setAllLevels] = useState(() => {
@@ -153,6 +165,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             grid: number[][];
             playerStart: { x: number; y: number } | null;
             theme: ColorTheme | undefined;
+            timeLimitSeconds: number | null;
             imageURL: string | null;
             overlayEnabled: boolean;
             overlayOpacity: number;
@@ -836,6 +849,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             grid: number[][];
             playerStart: { x: number; y: number } | null;
             theme: ColorTheme | undefined;
+            timeLimitSeconds: number | null;
             imageURL: string | null;
             overlayEnabled: boolean;
             overlayOpacity: number;
@@ -870,6 +884,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setGrid(snapshot.grid.map((row) => [...row]));
             setPlayerStart(snapshot.playerStart ? { ...snapshot.playerStart } : null);
             setTheme(snapshot.theme);
+            setTimeLimitSeconds(snapshot.timeLimitSeconds ?? null);
             setImageURL(snapshot.imageURL);
             setOverlayEnabled(snapshot.overlayEnabled);
             setOverlayOpacity(snapshot.overlayOpacity);
@@ -888,7 +903,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         const saveChanges = () => {
-            const res = saveGridChanges(grid, playerStart, theme, importLevelIndex, allLevels);
+            const res = saveGridChanges(grid, playerStart, theme, timeLimitSeconds, importLevelIndex, allLevels);
             setAllLevels(res.levels);
             setIsSaved(true);
 
@@ -919,7 +934,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         console.log('✓ Creating context value...');
-        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, snapToLockedCounts, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, lastGridDetection, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
+        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, snapToLockedCounts, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, lastGridDetection, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;

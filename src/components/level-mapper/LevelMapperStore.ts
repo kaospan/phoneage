@@ -24,6 +24,10 @@ export interface LevelMapperContextValue {
   theme: ColorTheme | undefined;
   setTheme: (theme: ColorTheme | undefined) => void;
 
+  // Optional per-level countdown timer (seconds). null = no timer.
+  timeLimitSeconds: number | null;
+  setTimeLimitSeconds: (n: number | null) => void;
+
   // Image & canvas
   imageURL: string | null;
   setImageURL: (url: string | null) => void;
@@ -113,6 +117,7 @@ export interface LevelMapperContextValue {
     grid: number[][];
     playerStart: { x: number; y: number } | null;
     theme: ColorTheme | undefined;
+    timeLimitSeconds: number | null;
     imageURL: string | null;
     overlayEnabled: boolean;
     overlayOpacity: number;

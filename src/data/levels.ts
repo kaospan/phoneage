@@ -112,6 +112,11 @@ export interface Level {
   playerStart: { x: number; y: number };
   cavePos: { x: number; y: number };
   theme?: ColorTheme;
+  /**
+   * Optional per-level countdown timer (in seconds). When set to a positive number,
+   * gameplay will display a countdown and show a "TIME'S UP!" banner at 0.
+   */
+  timeLimitSeconds?: number;
   image?: string;
   sources?: string[];
   autoBuild?: boolean;
@@ -357,20 +362,36 @@ export const getAllLevels = (): Level[] => {
       const key = `level_override_${l.id}`;
       const raw = localStorage.getItem(key);
       if (!raw) return l;
-      try {
-        const parsed = JSON.parse(raw);
-        // Handle new format: { grid, playerStart }
-        if (parsed && typeof parsed === 'object' && parsed.grid) {
-          console.log(`✓ Override found for level ${l.id} (new format)`);
-          const result = { ...l, grid: parsed.grid as number[][] };
-          if (parsed.playerStart) {
-            result.playerStart = parsed.playerStart;
-          }
-          return result;
-        }
-        // Handle old format: just the grid array
-        if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
-          console.log(`✓ Override found for level ${l.id} (old format)`);
+     try {
+         const parsed = JSON.parse(raw);
+         // Handle new format: { grid, playerStart }
+         if (parsed && typeof parsed === 'object' && parsed.grid) {
+           console.log(`✓ Override found for level ${l.id} (new format)`);
+           const result = { ...l, grid: parsed.grid as number[][] };
+           if (parsed.playerStart) {
+             result.playerStart = parsed.playerStart;
+           }
+           if (parsed.theme) {
+             // Theme is optional; only accept known theme keys.
+             const t = String(parsed.theme);
+             if (Object.prototype.hasOwnProperty.call(themes, t)) {
+               result.theme = t as ColorTheme;
+             }
+           }
+           if (parsed.timeLimitSeconds !== undefined) {
+             const n = Number(parsed.timeLimitSeconds);
+             if (Number.isFinite(n) && n > 0) {
+               result.timeLimitSeconds = Math.min(86400, Math.round(n));
+             } else {
+               // Treat 0/null/invalid as "no timer"
+               delete (result as any).timeLimitSeconds;
+             }
+           }
+           return result;
+         }
+         // Handle old format: just the grid array
+         if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
+           console.log(`✓ Override found for level ${l.id} (old format)`);
           return { ...l, grid: parsed as number[][] };
         }
       } catch (err) {

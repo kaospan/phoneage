@@ -45,7 +45,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
-        theme, setTheme, setIsSaved,
+        theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
         setLoadedSnapshot, resetToLoadedSnapshot
@@ -250,11 +250,20 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         if (lvl.theme) {
             setTheme(lvl.theme);
         }
+        if (typeof lvl.timeLimitSeconds === 'number' && Number.isFinite(lvl.timeLimitSeconds)) {
+            const n = Math.max(0, Math.round(Number(lvl.timeLimitSeconds)));
+            setTimeLimitSeconds(n > 0 ? n : null);
+        } else {
+            setTimeLimitSeconds(null);
+        }
 
         setLoadedSnapshot({
             grid: editable,
             playerStart: lvl.playerStart ? { x: lvl.playerStart.x, y: lvl.playerStart.y } : null,
             theme: lvl.theme,
+            timeLimitSeconds: (typeof lvl.timeLimitSeconds === 'number' && Number.isFinite(lvl.timeLimitSeconds) && Number(lvl.timeLimitSeconds) > 0)
+                ? Math.round(Number(lvl.timeLimitSeconds))
+                : null,
             imageURL: normalizedURL,
             overlayEnabled: Boolean(normalizedURL),
             overlayOpacity: 0.5,
@@ -726,6 +735,33 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 title={`${theme} theme preview`}
                             />
                         )}
+                    </div>
+
+                    {/* Per-level timer */}
+                    <div className="flex items-center gap-2 flex-wrap mt-2 p-2 border rounded bg-muted/30">
+                        <label className="text-xs font-semibold text-foreground whitespace-nowrap">Timer:</label>
+                        <input
+                            className="w-28 px-3 py-1.5 rounded border bg-background text-foreground text-sm [color-scheme:dark]"
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            step={1}
+                            placeholder="0"
+                            value={timeLimitSeconds ?? ''}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === '') {
+                                    setTimeLimitSeconds(null);
+                                    setIsSaved(false);
+                                    return;
+                                }
+                                const n = Math.max(0, Math.round(Number(raw)));
+                                setTimeLimitSeconds(n > 0 ? n : null);
+                                setIsSaved(false);
+                            }}
+                            title="Seconds countdown per level (0 disables)"
+                        />
+                        <div className="text-[11px] text-muted-foreground">sec (0 = off)</div>
                     </div>
                     <div className="mt-2 relative">
                         {imageURL ? (
