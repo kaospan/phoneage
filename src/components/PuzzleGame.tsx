@@ -1,12 +1,11 @@
 /* @refresh reset */
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { UI_SETTINGS_UPDATED_EVENT, getShowCoordsOverlay, setShowCoordsOverlay } from "@/lib/uiSettings";
-import { TouchControls } from "./TouchControls";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";

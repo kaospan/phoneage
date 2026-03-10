@@ -164,7 +164,7 @@ export const Thumbstick = ({ onMove, disabled }: ThumbstickProps) => {
 
     return (
         <div
-            className="fixed left-4 z-50 md:hidden"
+            className="fixed left-4 z-50"
             style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
         >
             <div
