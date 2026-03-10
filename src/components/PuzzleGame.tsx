@@ -15,6 +15,7 @@ import { LEVEL_OVERRIDES_UPDATED_EVENT, saveLevelOverride } from "@/lib/levelOve
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HowToPlayDialog } from "./HowToPlayDialog";
+import { TouchControls } from "./TouchControls";
 
 console.log('📦 PuzzleGame.tsx loading...');
 

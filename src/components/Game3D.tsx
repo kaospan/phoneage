@@ -1673,66 +1673,110 @@ export const Game3D = ({
 
   const breakableTexture = useMemo(() => {
     if (typeof document === 'undefined') return null;
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
+
+    // Build a pixel-art-ish cracked rock that reads like the original sprite tiles.
+    // We draw at low-res then scale up with nearest-neighbor for crisp pixels.
+    const outSize = 128;
+    const srcSize = 32;
+
+    const src = document.createElement('canvas');
+    src.width = srcSize;
+    src.height = srcSize;
+    const ctx = src.getContext('2d');
     if (!ctx) return null;
 
-    // Base stone fill
-    ctx.fillStyle = '#8f8a7a';
-    ctx.fillRect(0, 0, size, size);
+    const wall = new THREE.Color(themeColors.wall);
+    const stone = new THREE.Color(themeColors.stone);
+    const floor = new THREE.Color(themeColors.floor);
+    const base = wall.clone().lerp(stone, 0.55);
 
-    // Grain/noise
-    const img = ctx.getImageData(0, 0, size, size);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const n = (Math.random() - 0.5) * 26;
-      img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
-      img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n));
-      img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n));
+    ctx.fillStyle = `#${base.getHexString()}`;
+    ctx.fillRect(0, 0, srcSize, srcSize);
+
+    // Bevel border like DOS tiles (top/left highlight, bottom/right shadow).
+    const highlight = floor.clone().lerp(new THREE.Color('#ffffff'), 0.15);
+    const shadow = stone.clone().lerp(new THREE.Color('#000000'), 0.35);
+    ctx.fillStyle = `#${highlight.getHexString()}`;
+    ctx.fillRect(0, 0, srcSize, 1);
+    ctx.fillRect(0, 0, 1, srcSize);
+    ctx.fillStyle = `#${shadow.getHexString()}`;
+    ctx.fillRect(0, srcSize - 1, srcSize, 1);
+    ctx.fillRect(srcSize - 1, 0, 1, srcSize);
+
+    // Speckle noise (deterministic-ish per theme because the base colors change).
+    for (let i = 0; i < 110; i += 1) {
+      const x = Math.floor(Math.random() * srcSize);
+      const y = Math.floor(Math.random() * srcSize);
+      const isLight = Math.random() > 0.55;
+      const c = base
+        .clone()
+        .lerp(isLight ? highlight : shadow, isLight ? 0.22 : 0.18)
+        .lerp(floor, isLight ? 0.05 : 0.0);
+      ctx.fillStyle = `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},0.8)`;
+      ctx.fillRect(x, y, 1, 1);
     }
-    ctx.putImageData(img, 0, 0);
 
-    // Subtle vignette
-    const grad = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.1, size * 0.5, size * 0.5, size * 0.72);
-    grad.addColorStop(0, 'rgba(255,255,255,0.10)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.20)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
+    // Cracks: dark core + small light rim to emulate the sprite's etched look.
+    const crackCore = shadow.clone().lerp(new THREE.Color('#000000'), 0.25);
+    const crackRim = highlight.clone().lerp(floor, 0.35);
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
 
-    // Cracks
-    const drawCrack = (seedX: number, seedY: number, color: string, width: number) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(seedX, seedY);
+    const drawCrack = (seedX: number, seedY: number) => {
+      const pts: Array<[number, number]> = [];
       let x = seedX;
       let y = seedY;
-      for (let i = 0; i < 10; i += 1) {
-        x += (Math.random() - 0.5) * 22;
-        y += (Math.random() - 0.5) * 22;
-        x = Math.max(10, Math.min(size - 10, x));
-        y = Math.max(10, Math.min(size - 10, y));
-        ctx.lineTo(x, y);
+      pts.push([x, y]);
+
+      for (let i = 0; i < 8; i += 1) {
+        x += (Math.random() - 0.5) * 6;
+        y += (Math.random() - 0.5) * 6;
+        x = Math.max(2, Math.min(srcSize - 3, x));
+        y = Math.max(2, Math.min(srcSize - 3, y));
+        pts.push([x, y]);
       }
-      ctx.stroke();
+
+      const strokePath = (dx: number, dy: number, stroke: string) => {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0] + dx, pts[0][1] + dy);
+        for (let i = 1; i < pts.length; i += 1) {
+          ctx.lineTo(pts[i][0] + dx, pts[i][1] + dy);
+        }
+        ctx.stroke();
+      };
+
+      // Dark crack core + rim highlight offset by 1px (sprite-like).
+      strokePath(0, 0, `#${crackCore.getHexString()}`);
+      strokePath(
+        1,
+        0,
+        `rgba(${Math.round(crackRim.r * 255)},${Math.round(crackRim.g * 255)},${Math.round(crackRim.b * 255)},0.55)`
+      );
     };
 
-    for (let i = 0; i < 6; i += 1) {
-      const sx = 20 + Math.random() * (size - 40);
-      const sy = 20 + Math.random() * (size - 40);
-      // dark core + light edge to read as a crack
-      drawCrack(sx, sy, 'rgba(25,25,25,0.65)', 3);
-      drawCrack(sx + 1.2, sy - 1.2, 'rgba(245,233,168,0.35)', 1.2);
+    for (let i = 0; i < 5; i += 1) {
+      drawCrack(6 + Math.random() * (srcSize - 12), 6 + Math.random() * (srcSize - 12));
     }
 
-    const texture = new THREE.CanvasTexture(canvas);
+    // Scale up to output size with nearest-neighbor.
+    const out = document.createElement('canvas');
+    out.width = outSize;
+    out.height = outSize;
+    const outCtx = out.getContext('2d');
+    if (!outCtx) return null;
+    outCtx.imageSmoothingEnabled = false;
+    outCtx.drawImage(src, 0, 0, outSize, outSize);
+
+    const texture = new THREE.CanvasTexture(out);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.anisotropy = 1;
     texture.needsUpdate = true;
     return texture;
-  }, []);
+  }, [themeColors.floor, themeColors.stone, themeColors.wall]);
 
   const environmentMap = useMemo(() => {
     if (typeof document === 'undefined') return null;
@@ -1931,7 +1975,6 @@ export const Game3D = ({
     stoneMaterial.envMapIntensity = 0.45;
     stoneMaterial.needsUpdate = true;
 
-    breakableMaterial.color = new THREE.Color(themeColors.breakable);
     breakableMaterial.map = breakableTexture ?? null;
     breakableMaterial.color = new THREE.Color('#ffffff');
     breakableMaterial.emissive = new THREE.Color('#111111');
