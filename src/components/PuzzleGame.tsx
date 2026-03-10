@@ -74,6 +74,67 @@ const DEFAULT_CAMERA_ZOOM_INDEX = 4; // 0.93 => ~108%
   };
 const EMPTY_KEYS: KeyInventory = { red: false, green: false };
 
+type GridContentSize = { width: number; height: number };
+
+const computeNonVoidContentSize = (grid: number[][] | undefined): GridContentSize => {
+  const rows = grid?.length ?? 0;
+  const cols = grid?.[0]?.length ?? 0;
+  if (!grid || rows <= 0 || cols <= 0) return { width: 1, height: 1 };
+
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < (grid[y]?.length ?? 0); x += 1) {
+      if (grid[y][x] === 5) continue;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return { width: cols, height: rows };
+  return {
+    width: Math.max(1, maxX - minX + 1),
+    height: Math.max(1, maxY - minY + 1),
+  };
+};
+
+const pickBestZoomIndexForContent = ({
+  content,
+  aspect,
+  viewMode,
+}: {
+  content: GridContentSize;
+  aspect: number;
+  viewMode: "3d" | "2d";
+}) => {
+  // Mirrors the camera's own "view size" approximation (see Game3D.tsx):
+  // viewHeight = 2 * tan(fov/2) * cameraHeight
+  // cameraHeight = baseCameraHeight * zoomFactor
+  const fov = viewMode === "2d" ? 42 : 50;
+  const baseCameraHeight = viewMode === "2d" ? 24 : 18;
+  const fovRad = fov * (Math.PI / 180);
+  const k = 2 * Math.tan(fovRad / 2) * baseCameraHeight;
+
+  // Small margin so tiles don't sit flush against the edges.
+  const needW = content.width * 1.08;
+  const needH = content.height * 1.08;
+
+  // Choose the most zoomed-in option that still fits the content.
+  for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i -= 1) {
+    const z = CAMERA_ZOOM_LEVELS[i];
+    const viewH = k * z;
+    const viewW = viewH * Math.max(0.1, aspect);
+    if (viewW >= needW && viewH >= needH) return i;
+  }
+
+  return 0;
+};
+
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
   if (dx < 0) return "left";
@@ -105,6 +166,7 @@ export const PuzzleGame = () => {
   const isMobile = useIsMobile();
   const [isPortrait, setIsPortrait] = useState(false);
   const shouldRotateGate = isMobile && isPortrait;
+  const isMobileLandscape = isMobile && !shouldRotateGate;
 
   const [isFullscreenMode, setIsFullscreenMode] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -125,6 +187,8 @@ export const PuzzleGame = () => {
   });
   const prevZoomIndexRef = useRef<number | null>(null);
   const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const [userZoomTouched, setUserZoomTouched] = useState(false);
+  const [fitRevision, setFitRevision] = useState(0);
 
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
@@ -215,13 +279,56 @@ export const PuzzleGame = () => {
     };
   }, []);
 
-  // On mobile landscape, bias toward zoom-out so the full board is on screen.
   useEffect(() => {
-    if (!isMobile) return;
+    if (typeof window === "undefined") return;
+    const onResize = () => setFitRevision((v) => v + 1);
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize as EventListener);
+  }, []);
+
+  // Auto-fit zoom on mobile landscape + fullscreen layout so the board uses the available viewport.
+  useLayoutEffect(() => {
     if (shouldRotateGate) return;
-    setCameraOffset({ x: 0, z: 0 });
-    setCameraZoomIndex(0);
-  }, [isMobile, shouldRotateGate, currentLevelIndex]);
+    if (isBuilding) return;
+    if (!(isMobileLandscape || isFullscreenMode)) return;
+    if (viewMode === "fps") return;
+    if (userZoomTouched) return;
+
+    const el = gestureSurfaceRef.current;
+    if (!el) return;
+
+    const raf = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 40 || rect.height < 40) return;
+      const aspect = rect.width / Math.max(1, rect.height);
+      const content = computeNonVoidContentSize(currentLevel?.grid);
+      const nextIndex = pickBestZoomIndexForContent({
+        content,
+        aspect,
+        viewMode: viewMode === "2d" ? "2d" : "3d",
+      });
+      if (nextIndex !== cameraZoomIndex) setCameraZoomIndex(nextIndex);
+      if (!selectedArrow) setCameraOffset({ x: 0, z: 0 });
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [
+    cameraZoomIndex,
+    currentLevel?.grid,
+    fitRevision,
+    isBuilding,
+    isFullscreenMode,
+    isMobileLandscape,
+    selectedArrow,
+    shouldRotateGate,
+    userZoomTouched,
+    viewMode,
+  ]);
+
+  useEffect(() => {
+    // New level: allow auto-fit again (but don't override manual zoom within the same level).
+    setUserZoomTouched(false);
+  }, [currentLevelIndex]);
 
     const isPlaceholderGrid = useCallback((levelGrid?: number[][]) => {
       if (!levelGrid || levelGrid.length === 0) return true;
@@ -1032,12 +1139,14 @@ export const PuzzleGame = () => {
       // Preserve/restore user zoom when toggling.
       if (next) {
         prevZoomIndexRef.current = cameraZoomIndex;
-        setCameraZoomIndex(1); // 100% baseline tends to fit width best on mobile landscape
+        setUserZoomTouched(false);
         setCameraOffset({ x: 0, z: 0 });
         setSelectedArrow(null);
       } else if (prevZoomIndexRef.current != null) {
         setCameraZoomIndex(prevZoomIndexRef.current);
         prevZoomIndexRef.current = null;
+        // Leaving fullscreen: treat the restored zoom as user-chosen so auto-fit doesn't instantly override it.
+        setUserZoomTouched(true);
       }
 
       // Try to enter browser fullscreen if supported (best-effort).
@@ -1057,8 +1166,7 @@ export const PuzzleGame = () => {
       }
     }, [cameraZoomIndex, isFullscreenMode]);
 
-    const isMobileLandscape = isMobile && !shouldRotateGate;
-    const useSplitHud = isMobileLandscape || isFullscreenMode;
+    const useSplitHud = isMobileLandscape || isFullscreenMode || viewMode === "sprite";
 
     return (
       <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'}`}>
@@ -1201,13 +1309,14 @@ export const PuzzleGame = () => {
                 </Button>
               )}
 
-              <Button
-                onClick={() => {
-                  setCameraZoomIndex((i) => Math.max(0, i - 1));
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 p-0 text-base hover:bg-primary/20"
+                <Button
+                  onClick={() => {
+                    setUserZoomTouched(true);
+                    setCameraZoomIndex((i) => Math.max(0, i - 1));
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 text-base hover:bg-primary/20"
                 title="Zoom out"
                 disabled={!canZoomOut}
               >
@@ -1218,37 +1327,39 @@ export const PuzzleGame = () => {
                 {Math.round((1 / cameraZoomFactor) * 100)}%
               </div>
 
-              <Button
-                onClick={() => {
-                  setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 p-0 text-base hover:bg-primary/20"
+                <Button
+                  onClick={() => {
+                    setUserZoomTouched(true);
+                    setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 text-base hover:bg-primary/20"
                 title="Zoom in"
                 disabled={!canZoomIn}
               >
                 +
               </Button>
 
-              <Button
-                onClick={() => {
-                  setViewMode(nextViewMode);
-                  setCameraOffset({ x: 0, z: 0 });
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
+                <Button
+                  onClick={() => {
+                    setViewMode(nextViewMode);
+                    setUserZoomTouched(false);
+                    setCameraOffset({ x: 0, z: 0 });
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
                 title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
               >
                 {VIEW_MODE_LABELS[viewMode]}
               </Button>
 
-              <Button
-                onClick={() => void toggleFullscreenMode()}
-                variant="ghost"
-                size="sm"
-                className="h-9 px-2 text-base font-bold hover:bg-primary/20"
+                <Button
+                  onClick={() => void toggleFullscreenMode()}
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2 text-base font-bold hover:bg-primary/20"
                 title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
                 aria-pressed={isFullscreenMode}
               >
@@ -1396,6 +1507,7 @@ export const PuzzleGame = () => {
 
                 <Button
                   onClick={() => {
+                    setUserZoomTouched(true);
                     setCameraZoomIndex((i) => Math.max(0, i - 1));
                   }}
                   variant="ghost"
@@ -1413,6 +1525,7 @@ export const PuzzleGame = () => {
 
                 <Button
                   onClick={() => {
+                    setUserZoomTouched(true);
                     setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
                   }}
                   variant="ghost"
@@ -1427,6 +1540,7 @@ export const PuzzleGame = () => {
                 <Button
                   onClick={() => {
                     setViewMode(nextViewMode);
+                    setUserZoomTouched(false);
                     setCameraOffset({ x: 0, z: 0 });
                   }}
                   variant="ghost"
@@ -1465,7 +1579,8 @@ export const PuzzleGame = () => {
           onDoubleClick={handleDoubleClick}
           style={{
             cursor: viewMode === 'fps' || viewMode === 'sprite' ? 'default' : isDragging ? 'grabbing' : 'grab',
-            touchAction: viewMode === 'fps' || viewMode === 'sprite' ? 'auto' : 'none',
+            // Prevent the browser from stealing swipe gestures (mobile), even in SPR view.
+            touchAction: shouldRotateGate ? 'auto' : 'none',
           }}
         >
           {viewMode === "sprite" ? (
