@@ -329,14 +329,47 @@ export const GridEditorPanel: React.FC = () => {
 
     const beginPaint = (r: number, c: number) => {
         if (isDragMode) return;
+
+        const applyStartCaveAt = (row: number, col: number) => {
+            if (!didPushUndoRef.current) { pushUndo(); didPushUndoRef.current = true; }
+            setPlayerStart({ x: col, y: row });
+            setGrid((g) => {
+                const ng = g.map((rr) => [...rr]);
+
+                // Ensure only one start marker exists.
+                for (let y = 0; y < ng.length; y += 1) {
+                    for (let x = 0; x < (ng[y]?.length ?? 0); x += 1) {
+                        if (y === row && x === col) continue;
+                        if (ng[y][x] === 18) ng[y][x] = 0;
+                    }
+                }
+
+                if (ng[row] && ng[row][col] !== undefined) ng[row][col] = 18;
+                return ng;
+            });
+            trustedCellsRef.current.add(`${row},${col}`);
+        };
+
         if (isSettingPlayerStart) {
-            setPlayerStart({ x: c, y: r });
+            applyStartCaveAt(r, c);
             setIsSettingPlayerStart(false);
-            trustedCellsRef.current.add(`${r},${c}`);
             return;
         }
+
+        // Painting a START CAVE tile is equivalent to setting player start.
+        if (activeTile === 18) {
+            applyStartCaveAt(r, c);
+            return;
+        }
+
         isPaintingRef.current = true;
         if (!didPushUndoRef.current) { pushUndo(); didPushUndoRef.current = true; }
+
+        // If the user paints over the current player start, clear the marker to avoid a later save overwriting it back to 18.
+        if (playerStart?.x === c && playerStart?.y === r) {
+            setPlayerStart(null);
+        }
+
         setGrid(g => {
             const ng = g.map(row => [...row]);
             if (ng[r] && ng[r][c] !== undefined) ng[r][c] = activeTile;
@@ -348,6 +381,11 @@ export const GridEditorPanel: React.FC = () => {
         if (isDragMode) return;
         if (isSettingPlayerStart) return;
         if (!isPaintingRef.current) return;
+
+        if (activeTile !== 18 && playerStart?.x === c && playerStart?.y === r) {
+            setPlayerStart(null);
+        }
+
         setGrid(g => {
             const ng = g.map(row => [...row]);
             if (ng[r] && ng[r][c] !== undefined) ng[r][c] = activeTile;

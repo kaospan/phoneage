@@ -291,8 +291,9 @@ export const PuzzleGame = () => {
     if (shouldRotateGate) return;
     if (isBuilding) return;
     if (!(isMobileLandscape || isFullscreenMode)) return;
-    if (viewMode === "fps") return;
+    if (viewMode === "fps" || viewMode === "sprite") return;
     if (userZoomTouched) return;
+    if (selectedArrow) return;
 
     const el = gestureSurfaceRef.current;
     if (!el) return;
@@ -308,7 +309,7 @@ export const PuzzleGame = () => {
         viewMode: viewMode === "2d" ? "2d" : "3d",
       });
       if (nextIndex !== cameraZoomIndex) setCameraZoomIndex(nextIndex);
-      if (!selectedArrow) setCameraOffset({ x: 0, z: 0 });
+      setCameraOffset({ x: 0, z: 0 });
     });
 
     return () => cancelAnimationFrame(raf);

@@ -288,7 +288,11 @@ export function GameSprite2D({
 
   return (
     <div
-      className="w-full h-full flex items-center justify-center overflow-hidden touch-none select-none"
+      className={[
+        "w-full h-full flex overflow-hidden touch-none select-none",
+        // In fullscreen mode, keep the board visually lower so the HUD never occludes rows.
+        fullBleed ? "items-end justify-center" : "items-center justify-center",
+      ].join(" ")}
       onClick={() => onCancelSelection?.()}
     >
       <div
