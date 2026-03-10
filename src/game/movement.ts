@@ -1,6 +1,7 @@
 import { CellType, GameState, Position } from './types';
 import { isArrowCell, getArrowDirections } from './arrows';
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from './glide';
+import { getPairedTeleport, TELEPORT_CELL } from './teleport';
 
 const isKeyCell = (cell: CellType) => cell === 14 || cell === 15;
 const isLockCell = (cell: CellType) => cell === 16 || cell === 17;
@@ -37,7 +38,7 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     }
 
     // Step priority (floor, cave, start-marker cave, arrow, fresh breakable rock)
-    if (targetCell === 0 || targetCell === 3 || targetCell === 18 || isArrowCell(targetCell) || isKeyCell(targetCell) || isLockCell(targetCell)) {
+    if (targetCell === 0 || targetCell === 3 || targetCell === 18 || targetCell === TELEPORT_CELL || isArrowCell(targetCell) || isKeyCell(targetCell) || isLockCell(targetCell)) {
       const outcome: PlayerMoveOutcome = {
         newPlayerPos: { x: targetX, y: targetY },
         consumedMove: true
@@ -53,6 +54,10 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
         newGrid[targetY][targetX] = 0;
         baseGrid[targetY][targetX] = 0;
         outcome.newGrid = newGrid;
+      }
+      if (targetCell === TELEPORT_CELL) {
+        const dest = getPairedTeleport(outcome.newGrid ?? grid, { x: targetX, y: targetY });
+        if (dest) outcome.newPlayerPos = dest;
       }
       return outcome;
     }
@@ -138,6 +143,10 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     newGrid[playerPos.y][playerPos.x] = 5; // becomes void
     outcome.newGrid = newGrid;
     outcome.brokeRock = true;
+  }
+  if (targetCell === TELEPORT_CELL) {
+    const dest = getPairedTeleport(outcome.newGrid ?? grid, { x: targetX, y: targetY });
+    if (dest) outcome.newPlayerPos = dest;
   }
   return outcome;
 }

@@ -349,7 +349,7 @@ export const PuzzleGame = () => {
 
             const terrainTypes = adjacentCells.filter(c =>
               c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13
-            ).map((c) => (c === 18 ? 0 : c));
+            ).map((c) => (c === 18 || c === 19 ? 0 : c));
 
             if (terrainTypes.length > 0) {
               const counts = terrainTypes.reduce((acc, type) => {

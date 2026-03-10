@@ -286,6 +286,64 @@ export function GameSprite2D({
     return Math.max(0.75, Math.min(1.35, 1 / Math.max(0.01, zoomFactor)));
   }, [zoomFactor]);
 
+  const teleportFallbackUrl = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    const size = 32;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, size, size);
+    const cx = size / 2;
+    const cy = size / 2;
+    const r = size * 0.46;
+
+    // CD disc body (cool cyan metallic gradient).
+    const grad = ctx.createRadialGradient(cx - r * 0.18, cy - r * 0.18, r * 0.12, cx, cy, r);
+    grad.addColorStop(0, "rgba(255,255,255,0.95)");
+    grad.addColorStop(0.22, "rgba(190,245,255,0.88)");
+    grad.addColorStop(0.55, "rgba(110,220,255,0.78)");
+    grad.addColorStop(1, "rgba(10,70,90,0.62)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Outer rim.
+    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Inner ring + hole.
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Shine wedge.
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.35);
+    ctx.fillStyle = "rgba(255,255,255,0.22)";
+    ctx.beginPath();
+    ctx.arc(0, 0, r, -0.18, 0.18);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    return canvas.toDataURL("image/png");
+  }, []);
+
   return (
     <div
       className={[
@@ -331,7 +389,11 @@ export function GameSprite2D({
               // - Void must be visually empty (transparent) so the game background shows through.
               // - Do not use atlas/ref sprites for void even if present.
               const backgroundImage =
-                tileType === 5 ? undefined : atlasSprite ? `url(${atlasSprite})` : refSprite ? `url(${refSprite})` : undefined;
+                tileType === 5 ? undefined :
+                atlasSprite ? `url(${atlasSprite})` :
+                refSprite ? `url(${refSprite})` :
+                tileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
+                undefined;
 
               const fallback =
                 tileType === 5 ? "transparent" :

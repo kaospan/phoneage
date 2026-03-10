@@ -1,6 +1,7 @@
 import { getAllLevels, isPlaceholderGrid } from "@/data/levels";
 import { getArrowDirections, isArrowCell } from "@/game/arrows";
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from "@/game/glide";
+import { getPairedTeleport, TELEPORT_CELL } from "@/game/teleport";
 import type { CellType, KeyInventory, Position } from "@/game/types";
 
 type DirKey = "U" | "R" | "D" | "L";
@@ -58,10 +59,10 @@ function buildBaseGrid(levelGrid: CellType[][]): CellType[][] {
         if (x > 0) adjacentCells.push(levelGrid[y][x - 1] as CellType);
         if (x < row.length - 1) adjacentCells.push(levelGrid[y][x + 1] as CellType);
 
-        // Do not let the start-marker cave (18) "bleed" into arrow base terrain.
+        // Do not let the start-marker cave (18) or teleport (19) "bleed" into arrow base terrain.
         const terrainTypes = adjacentCells
           .filter((c) => !isArrowCell(c))
-          .map((c) => (c === 18 ? 0 : c));
+          .map((c) => (c === 18 || c === TELEPORT_CELL ? 0 : c));
         if (terrainTypes.length > 0) {
           const counts = new Map<number, number>();
           for (const t of terrainTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
@@ -165,6 +166,7 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
       targetCell === 0 ||
       targetCell === 3 ||
       targetCell === 18 ||
+      targetCell === TELEPORT_CELL ||
       isArrowCell(targetCell) ||
       isKeyCell(targetCell) ||
       isLockCell(targetCell)
@@ -179,6 +181,10 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
         // Key/lock tile becomes floor (underlying terrain) for both grid+base.
         next.grid[ty][tx] = 0;
         next.baseGrid[ty][tx] = 0;
+      }
+      if (targetCell === TELEPORT_CELL) {
+        const dest = getPairedTeleport(next.grid, { x: tx, y: ty });
+        if (dest) next.playerPos = dest;
       }
       return next;
     }
@@ -252,6 +258,10 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
   }
   if (willBreakRock) {
     next.grid[py][px] = 5;
+  }
+  if (targetCell === TELEPORT_CELL) {
+    const dest = getPairedTeleport(next.grid, { x: tx, y: ty });
+    if (dest) next.playerPos = dest;
   }
   return next;
 }

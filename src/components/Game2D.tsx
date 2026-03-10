@@ -16,6 +16,7 @@ interface Game2DProps {
         case 1: return "🔥"; // fire wall
         case 2: return "🪨"; // stone
         case 18: return "⬤"; // start cave marker
+        case 19: return "💿"; // teleport
         case 14: return "🗝️"; // red key
         case 15: return "🔑"; // green key
         case 16: return "🔒"; // red lock
@@ -40,6 +41,7 @@ interface Game2DProps {
         case 1: return "bg-red-500"; // fire wall
         case 2: return "bg-stone-500"; // stone
         case 18: return "bg-neutral-900"; // start cave marker
+        case 19: return "bg-cyan-200"; // teleport
         case 14: return "bg-red-600"; // red key
         case 15: return "bg-green-600"; // green key
         case 16: return "bg-red-900"; // red lock

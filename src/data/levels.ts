@@ -6,6 +6,9 @@ import { loadCustomLevelDefinition, loadCustomLevelIds } from '@/lib/customLevel
 // 0 = floor, 1 = wall/fire, 2 = stone, 3 = cave entrance, 4 = water, 5 = void/air, 6 = breakable rock
 // 7 = arrow up, 8 = arrow right, 9 = arrow down, 10 = arrow left
 // 11 = up-down arrow, 12 = left-right arrow, 13 = omnidirectional arrow (all 4 directions)
+// 14 = red key, 15 = green key
+// 16 = red lock, 17 = green lock
+// 18 = start cave marker (non-goal), 19 = teleport pad (paired in reading order)
 
 export type ArrowDirection = 'up' | 'right' | 'down' | 'left';
 

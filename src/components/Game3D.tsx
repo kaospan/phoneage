@@ -983,6 +983,65 @@ const StartCave = ({ position }: { position: [number, number, number] }) => {
   );
 };
 
+// Teleport pad (CD disc-like) - stepping on a pad teleports to its paired pad.
+const TeleportTile = ({ position }: { position: [number, number, number] }) => {
+  const groupRef = useRef<THREE.Group | null>(null);
+  const shineRef = useRef<THREE.Mesh | null>(null);
+
+  useFrame((state) => {
+    const g = groupRef.current;
+    if (!g) return;
+    const t = state.clock.getElapsedTime();
+    g.rotation.y = t * 0.6;
+    if (shineRef.current) {
+      shineRef.current.rotation.z = t * 0.9;
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={position}>
+      {/* Disc base */}
+      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <circleGeometry args={[0.44, 48]} />
+        <meshStandardMaterial
+          color="#d7f6ff"
+          emissive="#69e6ff"
+          emissiveIntensity={0.18}
+          roughness={0.22}
+          metalness={0.95}
+        />
+      </mesh>
+
+      {/* Inner ring + hole */}
+      <mesh position={[0, 0.013, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.14, 0.22, 48]} />
+        <meshStandardMaterial color="#0b1220" emissive="#0b1220" emissiveIntensity={0.25} roughness={1} metalness={0} />
+      </mesh>
+      <mesh position={[0, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.06, 24]} />
+        <meshStandardMaterial color="#050505" emissive="#000000" emissiveIntensity={0.0} roughness={1} metalness={0} />
+      </mesh>
+
+      {/* Shine sweep (sector) */}
+      <mesh
+        ref={shineRef}
+        position={[0, 0.016, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        renderOrder={10}
+      >
+        <circleGeometry args={[0.44, 48, Math.PI * 0.12, Math.PI * 0.22]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.2} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
+        <ringGeometry args={[0.3, 0.44, 48, 1, Math.PI * 1.1, Math.PI * 0.18]} />
+        <meshBasicMaterial color="#b6f3ff" transparent opacity={0.24} depthWrite={false} toneMapped={false} />
+      </mesh>
+
+      <pointLight position={[0, 0.28, 0]} intensity={0.45} color="#69e6ff" distance={2.4} />
+    </group>
+  );
+};
+
 // Player (Detailed Green Dinosaur) with smooth movement
 const Player = ({
   position,
@@ -1819,6 +1878,7 @@ export const Game3D = ({
     const redLocks: Array<[number, number, number]> = [];
     const greenLocks: Array<[number, number, number]> = [];
     const startCaves: Array<[number, number, number]> = [];
+    const teleports: Array<[number, number, number]> = [];
     const arrows: Array<{ x: number; y: number; cell: number }> = [];
 
     for (let y = 0; y < grid.length; y += 1) {
@@ -1842,13 +1902,14 @@ export const Game3D = ({
         if (cell === 16) redLocks.push([pos[0], 0, pos[2]]);
         if (cell === 17) greenLocks.push([pos[0], 0, pos[2]]);
         if (cell === 18) startCaves.push([pos[0], 0.02, pos[2]]);
+        if (cell === 19) teleports.push([pos[0], 0.02, pos[2]]);
         if (isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13) {
           arrows.push({ x, y, cell });
         }
       }
     }
 
-    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, arrows };
+    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, arrows };
   }, [grid, offsetX, offsetZ]);
 
   const contentBounds = useMemo(() => {
@@ -2150,6 +2211,11 @@ export const Game3D = ({
         {/* Start marker caves (non-goal) */}
         {tileData.startCaves.map((position, index) => (
           <StartCave key={`start-cave-${index}-${position[0]}-${position[2]}`} position={position} />
+        ))}
+
+        {/* Teleports */}
+        {tileData.teleports.map((position, index) => (
+          <TeleportTile key={`teleport-${index}-${position[0]}-${position[2]}`} position={position} />
         ))}
 
         {/* Arrows (interactive) */}
