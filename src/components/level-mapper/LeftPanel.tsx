@@ -556,9 +556,29 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
 
                     <div className="flex items-center gap-2 flex-wrap">
                         <label className="text-xs text-muted-foreground">Rows</label>
-                        <input className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]" type="number" min={1} value={rows} onChange={(e) => setRows(parseInt(e.target.value || '1', 10))} />
+                        <input
+                            className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]"
+                            type="number"
+                            min={1}
+                            value={rows}
+                            onChange={(e) => {
+                                const next = Math.max(1, parseInt(e.target.value || '1', 10));
+                                if (Number.isFinite(next) && next !== rows) setIsSaved(false);
+                                setRows(next);
+                            }}
+                        />
                         <label className="text-xs text-muted-foreground">Cols</label>
-                        <input className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]" type="number" min={1} value={cols} onChange={(e) => setCols(parseInt(e.target.value || '1', 10))} />
+                        <input
+                            className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]"
+                            type="number"
+                            min={1}
+                            value={cols}
+                            onChange={(e) => {
+                                const next = Math.max(1, parseInt(e.target.value || '1', 10));
+                                if (Number.isFinite(next) && next !== cols) setIsSaved(false);
+                                setCols(next);
+                            }}
+                        />
                         <div className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
                             <span className="text-xs text-muted-foreground">Rows</span>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowTop} title="Add a void row at the top">+Top</Button>

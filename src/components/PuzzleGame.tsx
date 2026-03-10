@@ -371,6 +371,29 @@ export const PuzzleGame = () => {
       return levelGrid.every(row => row.every(cell => cell === 5));
     }, []);
 
+    // If a user manually saved a level override in the mapper, we should treat that as authoritative and
+    // never kick off the expensive image analysis/build step for that level.
+    const hasReadableLevelOverride = useCallback((levelId: number) => {
+      if (typeof window === "undefined") return false;
+      const raw = localStorage.getItem(`level_override_${levelId}`);
+      if (!raw) return false;
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+
+        // Old format: the override itself is the 2D grid.
+        if (Array.isArray(parsed) && Array.isArray(parsed[0])) return true;
+
+        // New format: { grid, playerStart, theme, ... }
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const grid = (parsed as any).grid as unknown;
+          if (Array.isArray(grid) && Array.isArray(grid[0])) return true;
+        }
+      } catch {
+        return false;
+      }
+      return false;
+    }, []);
+
     const buildBaseGrid = useCallback((levelGrid: CellType[][]) => {
       return levelGrid.map((row, y) =>
         row.map((cell, x) => {
@@ -452,8 +475,13 @@ export const PuzzleGame = () => {
       if (!currentLevel) return;
       let cancelled = false;
 
-      const needsBuild = isPlaceholderGrid(currentLevel.grid);
+      const hasOverride = hasReadableLevelOverride(currentLevel.id);
+      const needsBuild = Boolean(currentLevel.autoBuild) && isPlaceholderGrid(currentLevel.grid) && !hasOverride;
       if (!needsBuild) {
+        // If the user saved a manual override (or this level already has a real grid), don't leave the UI
+        // stuck in "Analyzing level image..." from a previously-cancelled build run.
+        setIsBuilding(false);
+        setBuildStatus('');
         applyLevelState(currentLevel);
         return;
       }
@@ -536,7 +564,7 @@ export const PuzzleGame = () => {
       return () => {
         cancelled = true;
       };
-    }, [currentLevelIndex, applyLevelState, isPlaceholderGrid]);
+    }, [currentLevelIndex, overrideRevision, applyLevelState, hasReadableLevelOverride, isPlaceholderGrid]);
 
     // Countdown timer tick (mapper-configurable per level).
     useEffect(() => {

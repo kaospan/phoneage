@@ -16,7 +16,7 @@ export const GridEditorPanel: React.FC = () => {
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
         lastGridDetection,
-        exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved,
+        exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
         pushUndo,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
@@ -53,6 +53,8 @@ export const GridEditorPanel: React.FC = () => {
     const [cellHeight, setCellHeight] = React.useState(32);
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
     const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
+
+    const markUnsaved = React.useCallback(() => setIsSaved(false), [setIsSaved]);
 
     const importedLevelId = React.useMemo(() => {
         if (importLevelIndex === null) return null;
@@ -242,15 +244,17 @@ export const GridEditorPanel: React.FC = () => {
         const wantedOverlayScaleY = cellHeight / guideGrid.cellHeight;
         if (!Number.isFinite(wantedOverlayScaleY) || wantedOverlayScaleY <= 0) return;
         const next = Math.max(0.85, Math.min(1.15, wantedOverlayScaleY / baseOverlayScaleY));
+        markUnsaved();
         setLockImageAspect(false);
         setImageScaleY(Number(next.toFixed(3)));
-    }, [guideGrid, imageNaturalSize, displaySize.height, cellHeight]);
+    }, [guideGrid, imageNaturalSize, displaySize.height, cellHeight, markUnsaved]);
 
     const beginResizeImageY = React.useCallback((clientY: number) => {
+        markUnsaved();
         setLockImageAspect(false);
         resizeYStartRef.current = { y: clientY, scaleY: imageScaleY };
         setIsResizingImageY(true);
-    }, [imageScaleY]);
+    }, [imageScaleY, markUnsaved]);
 
     const moveResizeImageY = React.useCallback((clientY: number) => {
         const start = resizeYStartRef.current;
@@ -431,6 +435,7 @@ export const GridEditorPanel: React.FC = () => {
 
         // Fine-tune overlay image scale without changing the grid.
         if (e.altKey) {
+            markUnsaved();
             // Default: tiny increments. If you want bigger jumps, hold Alt+Meta (Mac) or Alt+Ctrl (Win/Linux) while NOT stretching an axis.
             const step = 0.002;
             const delta = e.deltaY > 0 ? -step : step;
@@ -694,6 +699,7 @@ export const GridEditorPanel: React.FC = () => {
                                 variant={lockImageAspect ? "secondary" : "outline"}
                                 className="h-8 w-8"
                                 onClick={() => {
+                                    markUnsaved();
                                     setLockImageAspect((v) => {
                                         const next = !v;
                                         if (next) {
@@ -717,6 +723,7 @@ export const GridEditorPanel: React.FC = () => {
                                 variant="outline"
                                 className="h-8 w-8"
                                 onClick={() => {
+                                    markUnsaved();
                                     setImageScaleX((s) => {
                                         const next = Math.max(0.85, Number((s - 0.005).toFixed(3)));
                                         if (lockImageAspect) setImageScaleY(next);
@@ -734,6 +741,7 @@ export const GridEditorPanel: React.FC = () => {
                                 step={0.001}
                                 value={imageScaleX}
                                 onChange={(e) => {
+                                    markUnsaved();
                                     const next = Number(e.target.value);
                                     setImageScaleX(next);
                                     if (lockImageAspect) setImageScaleY(next);
@@ -745,6 +753,7 @@ export const GridEditorPanel: React.FC = () => {
                                 variant="outline"
                                 className="h-8 w-8"
                                 onClick={() => {
+                                    markUnsaved();
                                     setImageScaleX((s) => {
                                         const next = Math.min(1.15, Number((s + 0.005).toFixed(3)));
                                         if (lockImageAspect) setImageScaleY(next);
@@ -772,7 +781,10 @@ export const GridEditorPanel: React.FC = () => {
                                         size="icon"
                                         variant="outline"
                                         className="h-8 w-8"
-                                        onClick={() => setImageScaleY((s) => Math.max(0.85, Number((s - 0.005).toFixed(3))))}
+                                        onClick={() => {
+                                            markUnsaved();
+                                            setImageScaleY((s) => Math.max(0.85, Number((s - 0.005).toFixed(3))));
+                                        }}
                                         aria-label="Decrease image scale Y"
                                     >
                                         <ZoomOut />
@@ -783,14 +795,20 @@ export const GridEditorPanel: React.FC = () => {
                                         max={1.15}
                                         step={0.001}
                                         value={imageScaleY}
-                                        onChange={(e) => setImageScaleY(Number(e.target.value))}
+                                        onChange={(e) => {
+                                            markUnsaved();
+                                            setImageScaleY(Number(e.target.value));
+                                        }}
                                         aria-label="Image scale Y"
                                     />
                                     <Button
                                         size="icon"
                                         variant="outline"
                                         className="h-8 w-8"
-                                        onClick={() => setImageScaleY((s) => Math.min(1.15, Number((s + 0.005).toFixed(3))))}
+                                        onClick={() => {
+                                            markUnsaved();
+                                            setImageScaleY((s) => Math.min(1.15, Number((s + 0.005).toFixed(3))));
+                                        }}
                                         aria-label="Increase image scale Y"
                                     >
                                         <ZoomIn />
@@ -804,6 +822,7 @@ export const GridEditorPanel: React.FC = () => {
                                 variant="outline"
                                 className="h-8 w-8"
                                 onClick={() => {
+                                    markUnsaved();
                                     setImageScaleX(1);
                                     setImageScaleY(1);
                                     setLockImageAspect(true);

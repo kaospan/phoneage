@@ -907,6 +907,28 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setAllLevels(res.levels);
             setIsSaved(true);
 
+            // Promote the current editor state (including rows/cols + overlay stretch tweaks) to be the new
+            // "default" for this level's Reset Layout. This is what you want when you manually correct
+            // the grid height/shape and then save.
+            setLoadedSnapshot({
+                grid,
+                playerStart,
+                theme,
+                timeLimitSeconds,
+                imageURL,
+                overlayEnabled,
+                overlayOpacity,
+                overlayStretch,
+                imageScaleX,
+                imageScaleY,
+                lockImageAspect,
+                zoom,
+                gridOffsetX,
+                gridOffsetY,
+                gridFrameWidth,
+                gridFrameHeight,
+            });
+
             // Force the compare level to update by triggering a re-render
             if (compareLevelIndex !== null) {
                 setCompareLevelIndex(compareLevelIndex);
