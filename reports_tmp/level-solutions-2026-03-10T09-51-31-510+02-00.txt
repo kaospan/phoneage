@@ -1,0 +1,26 @@
+# Local Time: 2026-03-10T09:51:31.513+02:00
+# Timezone: Asia/Jerusalem
+
+# Level Solutions (Minimum Moves)
+Generated: 2026-03-10T09:51:29.820+02:00
+Limits: maxMsPerLevel=500, maxNodesPerLevel=2000, maxDepth=50
+
+Level 1: 11 moves (expanded 56, 3ms)
+P:L P:D P:L P:D P:L P:L P:L P:D P:L P:L P:L
+
+Level 2: 6 moves (expanded 48, 2ms)
+P:U P:U A(3,1):R P:U P:R P:R
+
+Level 3: 13 moves (expanded 203, 7ms)
+P:U P:U P:U A(14,8):U P:R P:D P:D P:D P:R P:R P:U P:U P:U
+
+Level 4: 8 moves (expanded 23, 1ms)
+P:U P:U P:R P:U P:L P:U P:R P:U
+
+Level 5: UNSOLVED (Timed out after 550ms (expanded 1500 nodes))
+
+Level 6: UNSOLVED (Timed out after 507ms (expanded 1500 nodes))
+
+Level 7: UNSOLVED (No solution found (search exhausted))
+
+Level 8: UNSOLVED (Timed out after 591ms (expanded 1500 nodes))

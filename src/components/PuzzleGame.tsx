@@ -60,8 +60,10 @@ interface SimulationState {
   tick: number;
 }
 
-const CAMERA_ZOOM_LEVELS = [1.08, 1, 0.93, 0.86] as const;
-const DEFAULT_CAMERA_ZOOM_INDEX = 2;
+// Camera zoom values (multipliers). Lower = closer / larger board. Higher = farther / smaller board.
+// The HUD shows percent as `Math.round((1 / zoomFactor) * 100)` to match existing semantics.
+const CAMERA_ZOOM_LEVELS = [1.16, 1.08, 1.0, 0.97, 0.93, 0.9, 0.86, 0.82] as const;
+const DEFAULT_CAMERA_ZOOM_INDEX = 4; // 0.93 => ~108%
   const VIEW_MODES = ["3d", "fps", "2d", "sprite"] as const;
   type ViewMode = (typeof VIEW_MODES)[number];
   const VIEW_MODE_LABELS: Record<ViewMode, string> = {
@@ -112,7 +114,17 @@ export const PuzzleGame = () => {
       return false;
     }
   });
+  const [showDpad, setShowDpad] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      // Default to ON; user can hide it via the in-game toggle (mobile only).
+      return localStorage.getItem("stone-age-show-dpad") !== "0";
+    } catch {
+      return true;
+    }
+  });
   const prevZoomIndexRef = useRef<number | null>(null);
+  const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
@@ -977,14 +989,23 @@ export const PuzzleGame = () => {
 
   const levelBackground = currentLevel?.image;
 
-    useEffect(() => {
-      if (typeof window === "undefined") return;
-      try {
-        localStorage.setItem("stone-age-fullscreen-mode", isFullscreenMode ? "1" : "0");
-      } catch {
-        // ignore
-      }
-    }, [isFullscreenMode]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("stone-age-fullscreen-mode", isFullscreenMode ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [isFullscreenMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("stone-age-show-dpad", showDpad ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [showDpad]);
 
     useEffect(() => {
       const doc = typeof document !== "undefined" ? document : null;
@@ -1037,6 +1058,7 @@ export const PuzzleGame = () => {
     }, [cameraZoomIndex, isFullscreenMode]);
 
     const isMobileLandscape = isMobile && !shouldRotateGate;
+    const useSplitHud = isMobileLandscape || isFullscreenMode;
 
     return (
       <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'}`}>
@@ -1068,123 +1090,100 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        <TouchControls onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
-        <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
-        <div
-          className="absolute left-0 right-0 z-50 flex justify-center"
-          style={{ top: isMobileLandscape ? 'calc(env(safe-area-inset-top) + 0.25rem)' : 'calc(env(safe-area-inset-top) + 0.5rem)' }}
-        >
-          <div
-            className={[
-              "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50",
-              "flex items-center justify-center max-w-[calc(100vw-16px)]",
-              // Mobile landscape has plenty of width but limited height; keep header compact even if the width triggers md breakpoints.
-              isMobileLandscape ? "px-2 py-1.5 gap-1 flex-nowrap overflow-x-auto" : "px-6 py-3 gap-4 flex-wrap",
-              isFullscreenMode ? "bg-card/80" : "",
-            ].join(" ")}
-          >
-            {/* Previous Level Button */}
-            <Button
-              onClick={() => {
-                if (currentLevelIndex > 0) {
-                  setSelectedArrow(null);
-                  setCameraOffset({ x: 0, z: 0 });
-                  setCurrentLevelIndex(i => i - 1);
-                  toast.info("Previous Level");
-                }
-              }}
-              variant="ghost"
-              size="default"
-              className={[
-                "p-0 font-bold hover:bg-primary/20",
-                isMobileLandscape ? "h-9 w-9 text-lg" : "h-10 w-10 text-xl",
-              ].join(" ")}
-              disabled={currentLevelIndex === 0}
-              aria-label="Previous level"
-              title="Previous level (P)"
-            >
-              ←
-            </Button>
+        <TouchControls
+          onMove={queueMove}
+          disabled={isComplete || isBuilding || shouldRotateGate}
+          targetRef={gestureSurfaceRef}
+        />
+        {isMobile && !shouldRotateGate && (
+          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || shouldRotateGate} />
+        )}
 
-            {/* Level Info */}
-            <div className={["flex items-center px-1", isMobileLandscape ? "gap-2" : "gap-3 px-4"].join(" ")}>
-              <span className={["text-primary font-bold", isMobileLandscape ? "text-base" : "text-2xl"].join(" ")}>
-                {isFullscreenMode ? `L${currentLevel.id}` : `Level ${currentLevel.id}`}
-              </span>
-              {!isFullscreenMode && <span className={["text-muted-foreground", isMobileLandscape ? "text-sm" : "text-xl"].join(" ")}>•</span>}
-              <span className={["text-foreground font-medium", isMobileLandscape ? "text-sm" : "text-lg"].join(" ")}>
-                {isFullscreenMode ? `M:${moves}` : `Moves: ${moves}`}
-              </span>
-              {!isFullscreenMode && <span className={["text-muted-foreground", isMobileLandscape ? "text-sm" : "text-xl"].join(" ")}>•</span>}
-              {!isFullscreenMode && (
-                <div className="flex items-center gap-2">
+        {useSplitHud ? (
+          <div
+            className="relative z-50 flex w-full items-start justify-between px-2"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)' }}
+          >
+            {/* Left HUD cluster */}
+            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
+              <Button
+                onClick={() => {
+                  if (currentLevelIndex > 0) {
+                    setSelectedArrow(null);
+                    setCameraOffset({ x: 0, z: 0 });
+                    setCurrentLevelIndex(i => i - 1);
+                    toast.info("Previous Level");
+                  }
+                }}
+                variant="ghost"
+                size="default"
+                className="h-9 w-9 p-0 text-lg font-bold hover:bg-primary/20"
+                disabled={currentLevelIndex === 0}
+                aria-label="Previous level"
+                title="Previous level (P)"
+              >
+                ←
+              </Button>
+
+              <div className="flex items-center gap-2 px-1 whitespace-nowrap">
+                <span className="text-primary font-bold text-base">
+                  {`L${currentLevel.id}`}
+                </span>
+                <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
+                <div className="flex items-center gap-1">
                   <span
-                    className={
-                      "inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-xs font-black text-white " +
-                      (isMobileLandscape ? "px-1.5 py-0.5" : "px-2 py-1")
-                    }
+                    className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[11px] font-black text-white px-1.5 py-0.5"
                     title="Red keys collected"
                   >
                     <span aria-hidden>🗝</span>
                     <span>{redKeyCount}</span>
                   </span>
                   <span
-                    className={
-                      "inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-xs font-black text-white " +
-                      (isMobileLandscape ? "px-1.5 py-0.5" : "px-2 py-1")
-                    }
+                    className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-[11px] font-black text-white px-1.5 py-0.5"
                     title="Green keys collected"
                   >
                     <span aria-hidden>🔑</span>
                     <span>{greenKeyCount}</span>
                   </span>
                 </div>
-              )}
+              </div>
+
+              <Button
+                onClick={() => {
+                  if (currentLevelIndex < allLevels.length - 1) {
+                    setSelectedArrow(null);
+                    setCameraOffset({ x: 0, z: 0 });
+                    setCurrentLevelIndex(i => i + 1);
+                    toast.info("Next Level");
+                  } else {
+                    toast.info("No more levels");
+                  }
+                }}
+                variant="ghost"
+                size="default"
+                className="h-9 w-9 p-0 text-lg font-bold hover:bg-primary/20"
+                aria-label="Next level"
+                title="Next level (N)"
+              >
+                →
+              </Button>
             </div>
 
-            {/* Restart Button */}
-            <Button
-              onClick={resetLevel}
-              variant="outline"
-              size="default"
-              disabled={isComplete || localPlayer?.isGliding}
-              className={[
-                "font-semibold hover:bg-primary/20",
-                isMobileLandscape ? "h-9 px-3 text-sm" : "h-11 px-5 text-base",
-              ].join(" ")}
-              title="Restart level (R)"
-            >
-              {isFullscreenMode && isMobileLandscape ? "↻" : "Restart"}
-            </Button>
+            {/* Right HUD cluster */}
+            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-2 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
+              <Button
+                onClick={resetLevel}
+                variant="outline"
+                size="default"
+                disabled={isComplete || localPlayer?.isGliding}
+                className="h-9 px-3 text-sm font-semibold hover:bg-primary/20"
+                title="Restart level (R)"
+              >
+                {isFullscreenMode ? "↻" : "Restart"}
+              </Button>
 
-            {!isFullscreenMode && <HowToPlayDialog disabled={shouldRotateGate} />}
+              {!isFullscreenMode && <HowToPlayDialog disabled={shouldRotateGate} />}
 
-            {/* Next Level Button */}
-            <Button
-              onClick={() => {
-                if (currentLevelIndex < allLevels.length - 1) {
-                  setSelectedArrow(null);
-                  setCameraOffset({ x: 0, z: 0 });
-                  setCurrentLevelIndex(i => i + 1);
-                  toast.info("Next Level");
-                } else {
-                  toast.info("No more levels");
-                }
-              }}
-              variant="ghost"
-              size="default"
-              className={[
-                "p-0 font-bold hover:bg-primary/20",
-                isMobileLandscape ? "h-9 w-9 text-lg" : "h-10 w-10 text-xl",
-              ].join(" ")}
-              aria-label="Next level"
-              title="Next level (N)"
-            >
-              →
-            </Button>
-
-            {/* View Mode Toggle & Reset View (right side) */}
-            <div className="ml-2 pl-2 border-l border-border/50 flex items-center gap-2">
               {!isFullscreenMode && (
                 <Button
                   onClick={() => {
@@ -1194,10 +1193,7 @@ export const PuzzleGame = () => {
                   }}
                   variant="ghost"
                   size="sm"
-                  className={[
-                    "px-2 text-xs font-black tracking-wide hover:bg-primary/20",
-                    isMobileLandscape ? "h-9" : "h-10",
-                  ].join(" ")}
+                  className="h-9 px-2 text-xs font-black tracking-wide hover:bg-primary/20"
                   title="Toggle coordinate labels (shown in SPR view)"
                   aria-pressed={showCoordsOverlay}
                 >
@@ -1211,21 +1207,16 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className={[
-                  "p-0 hover:bg-primary/20",
-                  isMobileLandscape ? "h-9 w-9 text-base" : "h-10 w-10 text-lg",
-                ].join(" ")}
+                className="h-9 w-9 p-0 text-base hover:bg-primary/20"
                 title="Zoom out"
                 disabled={!canZoomOut}
               >
                 -
               </Button>
 
-              {!isFullscreenMode && (
-                <div className={["min-w-12 text-center font-semibold text-muted-foreground", isMobileLandscape ? "text-xs" : "text-sm"].join(" ")}>
-                  {Math.round((1 / cameraZoomFactor) * 100)}%
-                </div>
-              )}
+              <div className="min-w-10 text-center font-semibold text-muted-foreground text-xs whitespace-nowrap">
+                {Math.round((1 / cameraZoomFactor) * 100)}%
+              </div>
 
               <Button
                 onClick={() => {
@@ -1233,10 +1224,7 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className={[
-                  "p-0 hover:bg-primary/20",
-                  isMobileLandscape ? "h-9 w-9 text-base" : "h-10 w-10 text-lg",
-                ].join(" ")}
+                className="h-9 w-9 p-0 text-base hover:bg-primary/20"
                 title="Zoom in"
                 disabled={!canZoomIn}
               >
@@ -1250,10 +1238,7 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="sm"
-                className={[
-                  "px-3 font-bold tracking-wide hover:bg-primary/20",
-                  isMobileLandscape ? "h-9 text-xs" : "h-10 text-sm",
-                ].join(" ")}
+                className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
                 title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
               >
                 {VIEW_MODE_LABELS[viewMode]}
@@ -1263,17 +1248,26 @@ export const PuzzleGame = () => {
                 onClick={() => void toggleFullscreenMode()}
                 variant="ghost"
                 size="sm"
-                className={[
-                  "px-2 font-bold hover:bg-primary/20",
-                  isMobileLandscape ? "h-9 text-base" : "h-10 text-lg",
-                ].join(" ")}
-                title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit width)"}
+                className="h-9 px-2 text-base font-bold hover:bg-primary/20"
+                title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
                 aria-pressed={isFullscreenMode}
               >
                 ⛶
               </Button>
 
-              {/* Reset View Button - shows when camera is offset */}
+              {isMobile && (
+                <Button
+                  onClick={() => setShowDpad(v => !v)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 text-base font-bold hover:bg-primary/20"
+                  title={showDpad ? "Hide D-pad" : "Show D-pad"}
+                  aria-pressed={showDpad}
+                >
+                  ⊞
+                </Button>
+              )}
+
               {!isFullscreenMode && (cameraOffset.x !== 0 || cameraOffset.z !== 0) && (
                 <Button
                   onClick={() => {
@@ -1282,10 +1276,7 @@ export const PuzzleGame = () => {
                   }}
                   variant="ghost"
                   size="sm"
-                  className={[
-                    "px-2 hover:bg-primary/20",
-                    isMobileLandscape ? "h-9 text-xs" : "h-10 text-sm",
-                  ].join(" ")}
+                  className="h-9 px-2 text-xs hover:bg-primary/20"
                   title="Reset camera view (double-click game area)"
                 >
                   ⟲
@@ -1293,8 +1284,176 @@ export const PuzzleGame = () => {
               )}
             </div>
           </div>
-        </div>
+        ) : (
+          <div
+            className="absolute left-0 right-0 z-50 flex justify-center"
+            style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+          >
+            <div
+              className={[
+                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50",
+                "flex items-center justify-center max-w-[calc(100vw-16px)]",
+                "px-6 py-3 gap-4 flex-wrap",
+                isFullscreenMode ? "bg-card/80" : "",
+              ].join(" ")}
+            >
+              {/* Previous Level Button */}
+              <Button
+                onClick={() => {
+                  if (currentLevelIndex > 0) {
+                    setSelectedArrow(null);
+                    setCameraOffset({ x: 0, z: 0 });
+                    setCurrentLevelIndex(i => i - 1);
+                    toast.info("Previous Level");
+                  }
+                }}
+                variant="ghost"
+                size="default"
+                className="h-10 w-10 p-0 text-xl font-bold hover:bg-primary/20"
+                disabled={currentLevelIndex === 0}
+                aria-label="Previous level"
+                title="Previous level (P)"
+              >
+                ←
+              </Button>
+
+              {/* Level Info */}
+              <div className="flex items-center gap-3 px-4">
+                <span className="text-primary font-bold text-2xl">
+                  {`Level ${currentLevel.id}`}
+                </span>
+                <span className="text-muted-foreground text-xl">•</span>
+                <span className="text-foreground font-medium text-lg">{`Moves: ${moves}`}</span>
+                <span className="text-muted-foreground text-xl">•</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-xs font-black text-white px-2 py-1"
+                    title="Red keys collected"
+                  >
+                    <span aria-hidden>🗝</span>
+                    <span>{redKeyCount}</span>
+                  </span>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-xs font-black text-white px-2 py-1"
+                    title="Green keys collected"
+                  >
+                    <span aria-hidden>🔑</span>
+                    <span>{greenKeyCount}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Restart Button */}
+              <Button
+                onClick={resetLevel}
+                variant="outline"
+                size="default"
+                disabled={isComplete || localPlayer?.isGliding}
+                className="h-11 px-5 text-base font-semibold hover:bg-primary/20"
+                title="Restart level (R)"
+              >
+                Restart
+              </Button>
+
+              <HowToPlayDialog disabled={shouldRotateGate} />
+
+              {/* Next Level Button */}
+              <Button
+                onClick={() => {
+                  if (currentLevelIndex < allLevels.length - 1) {
+                    setSelectedArrow(null);
+                    setCameraOffset({ x: 0, z: 0 });
+                    setCurrentLevelIndex(i => i + 1);
+                    toast.info("Next Level");
+                  } else {
+                    toast.info("No more levels");
+                  }
+                }}
+                variant="ghost"
+                size="default"
+                className="h-10 w-10 p-0 text-xl font-bold hover:bg-primary/20"
+                aria-label="Next level"
+                title="Next level (N)"
+              >
+                →
+              </Button>
+
+              <div className="ml-2 pl-2 border-l border-border/50 flex items-center gap-2">
+                <Button
+                  onClick={() => {
+                    const next = !showCoordsOverlay;
+                    setShowCoordsOverlay(next);
+                    setShowCoordsOverlayState(next);
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 px-2 text-xs font-black tracking-wide hover:bg-primary/20"
+                  title="Toggle coordinate labels (shown in SPR view)"
+                  aria-pressed={showCoordsOverlay}
+                >
+                  XY
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    setCameraZoomIndex((i) => Math.max(0, i - 1));
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
+                  title="Zoom out"
+                  disabled={!canZoomOut}
+                >
+                  -
+                </Button>
+
+                <div className="min-w-12 text-center font-semibold text-muted-foreground text-sm">
+                  {Math.round((1 / cameraZoomFactor) * 100)}%
+                </div>
+
+                <Button
+                  onClick={() => {
+                    setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
+                  title="Zoom in"
+                  disabled={!canZoomIn}
+                >
+                  +
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    setViewMode(nextViewMode);
+                    setCameraOffset({ x: 0, z: 0 });
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 px-3 text-sm font-bold tracking-wide hover:bg-primary/20"
+                  title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
+                >
+                  {VIEW_MODE_LABELS[viewMode]}
+                </Button>
+
+                <Button
+                  onClick={() => void toggleFullscreenMode()}
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 px-2 text-lg font-bold hover:bg-primary/20"
+                  title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
+                  aria-pressed={isFullscreenMode}
+                >
+                  ⛶
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         <div
+          ref={gestureSurfaceRef}
+          data-touch-controls-target
           className="relative z-20 w-full min-h-0 flex-1"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -1397,19 +1556,21 @@ export const PuzzleGame = () => {
             />
           )}
         </div>
-        <div
-          className="absolute left-1/2 transform -translate-x-1/2 z-50 md:hidden"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.35rem)' }}
-        >
-          <div className="bg-card/95 backdrop-blur border border-border/50 px-2 py-1 rounded shadow-md">
-            <div className="grid grid-cols-4 gap-1">
-              <Button onClick={() => queueMove(0, -1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↑</Button>
-              <Button onClick={() => queueMove(0, 1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↓</Button>
-              <Button onClick={() => queueMove(-1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">←</Button>
-              <Button onClick={() => queueMove(1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">→</Button>
+        {isMobile && !shouldRotateGate && showDpad && (
+          <div
+            className="absolute left-1/2 transform -translate-x-1/2 z-50"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.35rem)' }}
+          >
+            <div className="bg-card/95 backdrop-blur border border-border/50 px-2 py-1 rounded shadow-md">
+              <div className="grid grid-cols-4 gap-1">
+                <Button onClick={() => queueMove(0, -1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↑</Button>
+                <Button onClick={() => queueMove(0, 1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↓</Button>
+                <Button onClick={() => queueMove(-1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">←</Button>
+                <Button onClick={() => queueMove(1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">→</Button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
         {selectedArrow && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
         )}
