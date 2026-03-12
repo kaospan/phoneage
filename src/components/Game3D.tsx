@@ -2062,6 +2062,32 @@ export const Game3D = ({
     };
   }, [grid, gridHeight, gridWidth, offsetX, offsetZ]);
 
+  // Full grid frame (rows×cols): draw a rectangular perimeter so the board boundary is obvious
+  // even when the level has lots of void around the playable islands.
+  const gridFrame = useMemo(() => {
+    const thickness = 0.12;
+    const height = 0.12;
+    const y = 0.07;
+
+    // Grid extents in world units (tile centers are integer coords, tiles span +/-0.5).
+    const minX = offsetX - 0.5;
+    const maxX = offsetX + gridWidth - 0.5;
+    const minZ = offsetZ - 0.5;
+    const maxZ = offsetZ + gridHeight - 0.5;
+
+    return {
+      thickness,
+      height,
+      y,
+      minX,
+      maxX,
+      minZ,
+      maxZ,
+      centerX: (minX + maxX) / 2,
+      centerZ: (minZ + maxZ) / 2,
+    };
+  }, [gridHeight, gridWidth, offsetX, offsetZ]);
+
   // Render floor as a slightly smaller plane on top of a dark border plane, so tiles read clearly.
   const floorGeometry = useMemo(() => new THREE.PlaneGeometry(0.97, 0.97, 8, 8), []);
   const floorBorderGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 1, 1), []);
@@ -2271,6 +2297,32 @@ export const Game3D = ({
           castShadow={false}
           receiveShadow
         />
+
+        {/* Full grid frame (always rows×cols, e.g. 12×20) */}
+        {gridWidth > 0 && gridHeight > 0 && (
+          <group raycast={() => null}>
+            {/* Top */}
+            <mesh position={[gridFrame.centerX, gridFrame.y, gridFrame.minZ - gridFrame.thickness / 2]}>
+              <boxGeometry args={[gridWidth + gridFrame.thickness * 2, gridFrame.height, gridFrame.thickness]} />
+              <primitive object={edgeRailMaterial} attach="material" />
+            </mesh>
+            {/* Bottom */}
+            <mesh position={[gridFrame.centerX, gridFrame.y, gridFrame.maxZ + gridFrame.thickness / 2]}>
+              <boxGeometry args={[gridWidth + gridFrame.thickness * 2, gridFrame.height, gridFrame.thickness]} />
+              <primitive object={edgeRailMaterial} attach="material" />
+            </mesh>
+            {/* Left */}
+            <mesh position={[gridFrame.minX - gridFrame.thickness / 2, gridFrame.y, gridFrame.centerZ]}>
+              <boxGeometry args={[gridFrame.thickness, gridFrame.height, gridHeight + gridFrame.thickness * 2]} />
+              <primitive object={edgeRailMaterial} attach="material" />
+            </mesh>
+            {/* Right */}
+            <mesh position={[gridFrame.maxX + gridFrame.thickness / 2, gridFrame.y, gridFrame.centerZ]}>
+              <boxGeometry args={[gridFrame.thickness, gridFrame.height, gridHeight + gridFrame.thickness * 2]} />
+              <primitive object={edgeRailMaterial} attach="material" />
+            </mesh>
+          </group>
+        )}
         <InstancedMeshSet
           positions={tileData.wallBase}
           geometry={wallGeometry}

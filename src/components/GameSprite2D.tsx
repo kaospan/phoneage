@@ -364,6 +364,10 @@ export function GameSprite2D({
               : "min(92vw, 980px)",
             aspectRatio: cols > 0 && rows > 0 ? `${cols} / ${rows}` : undefined,
             imageRendering: "pixelated",
+            // Full grid frame (rows×cols): inner black border + subtle outer highlight
+            // so the whole board reads as a bounded rectangle even on black outside.
+            boxShadow:
+              "inset 0 0 0 3px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.08)",
           }}
         >
           {grid.map((row, y) =>
