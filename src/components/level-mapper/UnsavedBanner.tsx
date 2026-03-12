@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Button } from "@/components/ui/button";
 
@@ -5,7 +6,7 @@ type Props = {
     visible: boolean;
     onSave: () => void;
 };
-
+                                                                                                                                                                               
 export const UnsavedBanner: React.FC<Props> = ({ visible, onSave }) => {
     if (!visible) return null;
     return (

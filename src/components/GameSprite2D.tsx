@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
-import { createClockIconDataUrl } from "@/lib/canvasIcons";
+import { createClockIconDataUrl, createKeyIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
 import { detectGridLines } from "@/components/level-mapper/gridDetection";
 import { getAlignmentHints } from "@/components/level-mapper/alignmentProfile";
@@ -75,6 +75,33 @@ export function GameSprite2D({
   const cols = grid[0]?.length ?? 0;
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
   const atlasGrid = useMemo(() => grid.map((r) => [...r]), [levelImageUrl]);
+
+  // Mark board edges (modern + readable): a cell is on the edge if it is non-void and
+  // at least one 4-neighbor is void or out-of-bounds.
+  const edgeMasks = useMemo(() => {
+    if (rows <= 0 || cols <= 0) return [];
+
+    const isVoidAt = (x: number, y: number) => {
+      if (y < 0 || y >= rows) return true;
+      if (x < 0 || x >= cols) return true;
+      // Cave is always treated as non-void for edge purposes.
+      if (cavePos.x === x && cavePos.y === y) return false;
+      return grid[y]?.[x] === 5;
+    };
+
+    return grid.map((row, y) =>
+      row.map((cell, x) => {
+        const tileType = cavePos.x === x && cavePos.y === y ? 3 : cell;
+        if (tileType === 5) return null;
+        const top = isVoidAt(x, y - 1);
+        const right = isVoidAt(x + 1, y);
+        const bottom = isVoidAt(x, y + 1);
+        const left = isVoidAt(x - 1, y);
+        const any = top || right || bottom || left;
+        return { top, right, bottom, left, any };
+      })
+    );
+  }, [grid, rows, cols, cavePos.x, cavePos.y]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,67 +315,21 @@ export function GameSprite2D({
   }, [zoomFactor]);
 
   const teleportFallbackUrl = useMemo(() => {
-    if (typeof document === "undefined") return null;
-    const size = 32;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
+    return createVortexIconDataUrl(32);
+  }, []);
 
-    ctx.clearRect(0, 0, size, size);
-    const cx = size / 2;
-    const cy = size / 2;
-    const r = size * 0.46;
+  const redKeyFallbackUrl = useMemo(() => {
+    return createKeyIconDataUrl(32, {
+      accent: "rgba(239,68,68,0.98)",
+      glow: "rgba(239,68,68,0.18)",
+    });
+  }, []);
 
-    // Wormhole/vortex: cyan -> purple swirl with dark core.
-    const grad = ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
-    grad.addColorStop(0, "rgba(0,0,0,0.95)");
-    grad.addColorStop(0.28, "rgba(12,24,50,0.92)");
-    grad.addColorStop(0.55, "rgba(0,210,255,0.88)");
-    grad.addColorStop(0.82, "rgba(160,70,255,0.82)");
-    grad.addColorStop(1, "rgba(0,0,0,0.0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Outer rim.
-    ctx.strokeStyle = "rgba(210,245,255,0.25)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 0.7, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Spiral arms.
-    ctx.save();
-    ctx.translate(cx, cy);
-    const arms = 3;
-    const turns = 3.2;
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
-    ctx.lineWidth = 1;
-    for (let a = 0; a < arms; a += 1) {
-      const phase = (a * Math.PI * 2) / arms;
-      ctx.beginPath();
-      for (let t = 0; t <= 1.001; t += 1 / 110) {
-        const rr = t * r * 0.92;
-        const ang = t * Math.PI * 2 * turns + phase;
-        const x = Math.cos(ang) * rr;
-        const y = Math.sin(ang) * rr;
-        if (t === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Dark core (hole).
-    ctx.fillStyle = "rgba(0,0,0,0.92)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-
-    return canvas.toDataURL("image/png");
+  const greenKeyFallbackUrl = useMemo(() => {
+    return createKeyIconDataUrl(32, {
+      accent: "rgba(34,197,94,0.98)",
+      glow: "rgba(34,197,94,0.18)",
+    });
   }, []);
 
   const bonusTimeFallbackUrl = useMemo(() => {
@@ -358,7 +339,7 @@ export function GameSprite2D({
   return (
     <div
       className={[
-        "w-full h-full flex overflow-hidden touch-none select-none",
+        "w-full h-full flex overflow-hidden touch-none select-none bg-black",
         // In fullscreen mode, keep the board visually lower so the HUD never occludes rows.
         fullBleed ? "items-end justify-center" : "items-center justify-center",
       ].join(" ")}
@@ -393,6 +374,7 @@ export function GameSprite2D({
               const isArrow = isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13;
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
+              const edge = edgeMasks?.[y]?.[x] ?? null;
 
               const atlasSprite = levelAtlas?.tileSprites?.[tileType];
               const refSprite = latestByType.get(tileType)?.imageData;
@@ -403,6 +385,8 @@ export function GameSprite2D({
                  tileType === 5 ? undefined :
                  atlasSprite ? `url(${atlasSprite})` :
                  refSprite ? `url(${refSprite})` :
+                 tileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
+                 tileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
                  tileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
                  tileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
                  undefined;
@@ -447,6 +431,19 @@ export function GameSprite2D({
                   }}
                   title={`(${y},${x}) = ${tileType}`}
                 >
+                  {edge?.any && (
+                    <div
+                      className="pointer-events-none absolute inset-0"
+                      style={{
+                        borderTop: edge.top ? "2px solid rgba(15,23,42,0.55)" : undefined,
+                        borderRight: edge.right ? "2px solid rgba(15,23,42,0.55)" : undefined,
+                        borderBottom: edge.bottom ? "2px solid rgba(15,23,42,0.55)" : undefined,
+                        borderLeft: edge.left ? "2px solid rgba(15,23,42,0.55)" : undefined,
+                        boxShadow: "0 0 0 1px rgba(15,23,42,0.18)",
+                        borderRadius: 6,
+                      }}
+                    />
+                  )}
                   {showCoords && y === 0 && (
                     <div
                       className="pointer-events-none absolute top-[2px] left-0 right-0 text-center text-[9px] font-black text-white/70"

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { themes, type ColorTheme } from '@/data/levels';
 import { isArrowCell } from '@/game/arrows';
-import { createClockIconCanvas } from '@/lib/canvasIcons';
+import { createClockIconCanvas, createKeyIconCanvas, createVortexIconCanvas } from '@/lib/canvasIcons';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
@@ -121,14 +121,41 @@ const darkenHexColor = (hex: string, amount = 0.35) => {
   return `#${mix(normalized.slice(0, 2))}${mix(normalized.slice(2, 4))}${mix(normalized.slice(4, 6))}`;
 };
 
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r},${g},${b},${a})`;
+};
+
 const KeyTile = ({
   position,
   glowColor,
+  accentColor,
 }: {
   position: [number, number, number];
   glowColor: string;
+  accentColor: string;
 }) => {
   const groupRef = useRef<THREE.Group | null>(null);
+
+  const iconTexture = useMemo(() => {
+    const canvas = createKeyIconCanvas(256, {
+      accent: accentColor,
+      glow: hexToRgba(glowColor, 0.22),
+    });
+    if (!canvas) return null;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.anisotropy = 1;
+    texture.needsUpdate = true;
+    return texture;
+  }, [accentColor, glowColor]);
 
   useFrame((state) => {
     const g = groupRef.current;
@@ -140,14 +167,20 @@ const KeyTile = ({
 
   return (
     <group ref={groupRef} position={position} scale={1.25}>
-      {/* Key marker: gold ring + colored glow (distinct from lock) */}
-      <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
-        <ringGeometry args={[0.3, 0.42, 40]} />
-        <meshBasicMaterial color="#fff1bf" transparent opacity={0.95} depthWrite={false} toneMapped={false} />
-      </mesh>
+      {/* Top-down decal so "key" reads clearly even from high/top cameras. */}
       <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
-        <circleGeometry args={[0.3, 40]} />
-        <meshBasicMaterial color={glowColor} transparent opacity={0.22} depthWrite={false} toneMapped={false} />
+        <circleGeometry args={[0.34, 40]} />
+        <meshBasicMaterial color={glowColor} transparent opacity={0.14} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+        <planeGeometry args={[0.82, 0.82]} />
+        <meshBasicMaterial
+          map={iconTexture ?? undefined}
+          transparent
+          opacity={0.98}
+          depthWrite={false}
+          toneMapped={false}
+        />
       </mesh>
 
       <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
@@ -1046,66 +1079,10 @@ const TeleportTile = ({ position }: { position: [number, number, number] }) => {
   const lightRef = useRef<THREE.PointLight | null>(null);
 
   const vortexTexture = useMemo(() => {
-    if (typeof document === 'undefined') return null;
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    ctx.clearRect(0, 0, size, size);
-    const cx = size / 2;
-    const cy = size / 2;
-    const r = size * 0.48;
-
-    // Base glow (cyan -> purple), dark core for depth.
-    const grad = ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
-    grad.addColorStop(0, 'rgba(0,0,0,0.95)');
-    grad.addColorStop(0.28, 'rgba(10,20,45,0.92)');
-    grad.addColorStop(0.55, 'rgba(0,210,255,0.88)');
-    grad.addColorStop(0.82, 'rgba(150,60,255,0.82)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Spiral arms.
-    ctx.save();
-    ctx.translate(cx, cy);
-    const arms = 3;
-    const turns = 3.2;
-    for (let a = 0; a < arms; a += 1) {
-      const phase = (a * Math.PI * 2) / arms;
-      ctx.beginPath();
-      for (let t = 0; t <= 1.001; t += 1 / 260) {
-        const rr = t * r * 0.92;
-        const ang = t * Math.PI * 2 * turns + phase;
-        const x = Math.cos(ang) * rr;
-        const y = Math.sin(ang) * rr;
-        if (t === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Outer rim.
-    ctx.strokeStyle = 'rgba(210,245,255,0.25)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Dark core (hole).
-    ctx.fillStyle = 'rgba(0,0,0,0.92)';
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-
+    const canvas = createVortexIconCanvas(256, {
+      glow: "rgba(16,185,129,0.20)",
+    });
+    if (!canvas) return null;
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.magFilter = THREE.LinearFilter;
@@ -1119,32 +1096,18 @@ const TeleportTile = ({ position }: { position: [number, number, number] }) => {
     const t = state.clock.getElapsedTime();
     if (vortexRef.current) vortexRef.current.rotation.z = t * 0.75;
     if (shimmerRef.current) shimmerRef.current.rotation.z = -t * 1.05;
-    if (lightRef.current) lightRef.current.intensity = 0.42 + Math.sin(t * 2.4) * 0.06;
+    if (lightRef.current) lightRef.current.intensity = 0.38 + Math.sin(t * 2.4) * 0.06;
   });
 
   return (
     <group position={position}>
-      {/* Outer ring */}
-      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <ringGeometry args={[0.32, 0.46, 56]} />
-        <meshStandardMaterial
-          color="#22d3ee"
-          emissive="#67e8f9"
-          emissiveIntensity={0.28}
-          roughness={0.55}
-          metalness={0.15}
-          transparent
-          opacity={0.95}
-        />
-      </mesh>
-
       {/* Vortex surface */}
       <mesh ref={vortexRef} position={[0, 0.013, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
-        <circleGeometry args={[0.34, 56]} />
+        <circleGeometry args={[0.38, 64]} />
         <meshBasicMaterial
           map={vortexTexture ?? undefined}
           transparent
-          opacity={0.95}
+          opacity={0.98}
           depthWrite={false}
           toneMapped={false}
         />
@@ -1152,17 +1115,11 @@ const TeleportTile = ({ position }: { position: [number, number, number] }) => {
 
       {/* Shimmer sweep */}
       <mesh ref={shimmerRef} position={[0, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={11}>
-        <ringGeometry args={[0.14, 0.34, 56, 1, Math.PI * 0.9, Math.PI * 0.22]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.12} depthWrite={false} toneMapped={false} />
+        <ringGeometry args={[0.16, 0.38, 64, 1, Math.PI * 0.95, Math.PI * 0.2]} />
+        <meshBasicMaterial color="#eafff5" transparent opacity={0.10} depthWrite={false} toneMapped={false} />
       </mesh>
 
-      {/* Core hole */}
-      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
-        <circleGeometry args={[0.1, 28]} />
-        <meshStandardMaterial color="#050505" emissive="#000000" roughness={1} metalness={0} />
-      </mesh>
-
-      <pointLight ref={lightRef} position={[0, 0.28, 0]} intensity={0.42} color="#67e8f9" distance={2.6} />
+      <pointLight ref={lightRef} position={[0, 0.28, 0]} intensity={0.38} color="#34d399" distance={2.6} />
     </group>
   );
 };
@@ -1555,9 +1512,9 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]}>
         <planeGeometry args={[gridWidth + 40, gridHeight + 40]} />
         <meshStandardMaterial
-          color="#5da7e6"
-          emissive="#2e6fb2"
-          emissiveIntensity={0.35}
+          color="#000000"
+          emissive="#000000"
+          emissiveIntensity={0}
           roughness={0.9}
         />
       </mesh>
@@ -2006,7 +1963,18 @@ export const Game3D = ({
     const startCaves: Array<[number, number, number]> = [];
     const teleports: Array<[number, number, number]> = [];
     const bonusTime: Array<[number, number, number]> = [];
+    // Edge rails: thin blocks rendered along boundaries between non-void tiles and void/out-of-bounds.
+    const edgeRailsH: Array<[number, number, number]> = []; // horizontal (along X), positioned at Z boundaries
+    const edgeRailsV: Array<[number, number, number]> = []; // vertical (along Z), positioned at X boundaries
     const arrows: Array<{ x: number; y: number; cell: number }> = [];
+
+    const isVoidAt = (x: number, y: number) => {
+      if (y < 0 || y >= grid.length) return true;
+      const row = grid[y];
+      if (!row) return true;
+      if (x < 0 || x >= row.length) return true;
+      return row[x] === 5;
+    };
 
     for (let y = 0; y < grid.length; y += 1) {
       for (let x = 0; x < grid[y].length; x += 1) {
@@ -2034,10 +2002,18 @@ export const Game3D = ({
         if (isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13) {
           arrows.push({ x, y, cell });
         }
+
+        // Boundary rails (modern edge indicator): detect transitions to void/out-of-bounds.
+        // We place a thin block centered on the tile edge.
+        const edgeY = 0.06;
+        if (isVoidAt(x, y - 1)) edgeRailsH.push([pos[0], edgeY, pos[2] - 0.5]); // top
+        if (isVoidAt(x, y + 1)) edgeRailsH.push([pos[0], edgeY, pos[2] + 0.5]); // bottom
+        if (isVoidAt(x - 1, y)) edgeRailsV.push([pos[0] - 0.5, edgeY, pos[2]]); // left
+        if (isVoidAt(x + 1, y)) edgeRailsV.push([pos[0] + 0.5, edgeY, pos[2]]); // right
       }
     }
 
-    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, bonusTime, arrows };
+    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, bonusTime, edgeRailsH, edgeRailsV, arrows };
   }, [grid, offsetX, offsetZ]);
 
   const contentBounds = useMemo(() => {
@@ -2090,6 +2066,8 @@ export const Game3D = ({
   const floorGeometry = useMemo(() => new THREE.PlaneGeometry(0.97, 0.97, 8, 8), []);
   const floorBorderGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 1, 1), []);
   const waterGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
+  const edgeRailHGeometry = useMemo(() => new THREE.BoxGeometry(1.03, 0.08, 0.06), []);
+  const edgeRailVGeometry = useMemo(() => new THREE.BoxGeometry(0.06, 0.08, 1.03), []);
   const wallGeometry = useMemo(() => new THREE.BoxGeometry(0.98, 0.2, 0.98), []);
   const wallBarGeometry = useMemo(() => new THREE.BoxGeometry(0.96, 0.02, 0.08), []);
   const stoneGeometry = useMemo(() => new THREE.DodecahedronGeometry(0.45, 1), []);
@@ -2101,6 +2079,7 @@ export const Game3D = ({
   const floorMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const floorBorderMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const waterMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
+  const edgeRailMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const wallMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const wallBarMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const stoneMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
@@ -2135,6 +2114,16 @@ export const Game3D = ({
     waterMaterial.emissiveIntensity = 0.2;
     waterMaterial.roughnessMap = noiseTexture ?? null;
     waterMaterial.needsUpdate = true;
+
+    // Board edge indicator: modern "rail" around non-void islands so boundaries read clearly.
+    edgeRailMaterial.color = new THREE.Color('#0b1220');
+    edgeRailMaterial.emissive = new THREE.Color('#16324a');
+    edgeRailMaterial.emissiveIntensity = 0.22;
+    edgeRailMaterial.roughness = 0.92;
+    edgeRailMaterial.metalness = 0.06;
+    edgeRailMaterial.transparent = true;
+    edgeRailMaterial.opacity = 0.92;
+    edgeRailMaterial.needsUpdate = true;
 
     wallMaterial.color = new THREE.Color(themeColors.wall);
     wallMaterial.roughness = 0.7;
@@ -2177,7 +2166,7 @@ export const Game3D = ({
     breakableMaterial.bumpScale = 0.06;
     breakableMaterial.envMapIntensity = 0.35;
     breakableMaterial.needsUpdate = true;
-  }, [themeColors, noiseTexture, breakableTexture, floorMaterial, floorBorderMaterial, waterMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
+  }, [themeColors, noiseTexture, breakableTexture, floorMaterial, floorBorderMaterial, waterMaterial, edgeRailMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
 
   const floorBorderPositions = useMemo(
     () => tileData.floor.map(([x, y, z]) => [x, y + 0.001, z] as [number, number, number]),
@@ -2189,7 +2178,7 @@ export const Game3D = ({
   );
 
   return (
-    <div className="w-full h-full bg-sky-400 overflow-hidden touch-none relative z-30">
+    <div className="w-full h-full bg-black overflow-hidden touch-none relative z-30">
       <Canvas
         shadows
         dpr={[1, 2]}
@@ -2267,6 +2256,21 @@ export const Game3D = ({
           rotation={planeRotation}
           receiveShadow
         />
+        {/* Island edge rails (visual only) */}
+        <InstancedMeshSet
+          positions={tileData.edgeRailsH}
+          geometry={edgeRailHGeometry}
+          material={edgeRailMaterial}
+          castShadow={false}
+          receiveShadow
+        />
+        <InstancedMeshSet
+          positions={tileData.edgeRailsV}
+          geometry={edgeRailVGeometry}
+          material={edgeRailMaterial}
+          castShadow={false}
+          receiveShadow
+        />
         <InstancedMeshSet
           positions={tileData.wallBase}
           geometry={wallGeometry}
@@ -2310,6 +2314,7 @@ export const Game3D = ({
             key={`red-key-${index}-${position[0]}-${position[2]}`}
             position={position}
             glowColor="#ff8a80"
+            accentColor="#ef4444"
           />
         ))}
         {tileData.greenKeys.map((position, index) => (
@@ -2317,6 +2322,7 @@ export const Game3D = ({
             key={`green-key-${index}-${position[0]}-${position[2]}`}
             position={position}
             glowColor="#b9f6ca"
+            accentColor="#22c55e"
           />
         ))}
         {tileData.redLocks.map((position, index) => (
@@ -2431,10 +2437,10 @@ export const Game3D = ({
           );
         })}
 
-        {/* Ground plane - lighter for better visibility */}
+        {/* Ground plane (void/outside): keep it black so the board perimeter reads clearly. */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
           <planeGeometry args={[gridWidth + 10, gridHeight + 10]} />
-          <meshStandardMaterial color="#5da7e6" emissive="#2e6fb2" />
+          <meshStandardMaterial color="#000000" emissive="#000000" />
         </mesh>
 
         {/* Selector highlight (white ring) when active and not currently selecting an arrow */}

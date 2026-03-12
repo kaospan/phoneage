@@ -62,8 +62,31 @@ interface SimulationState {
 
 // Camera zoom values (multipliers). Lower = closer / larger board. Higher = farther / smaller board.
 // The HUD shows percent as `Math.round((1 / zoomFactor) * 100)` to match existing semantics.
-const CAMERA_ZOOM_LEVELS = [1.16, 1.08, 1.0, 0.97, 0.93, 0.9, 0.86, 0.82] as const;
-const DEFAULT_CAMERA_ZOOM_INDEX = 4; // 0.93 => ~108%
+// Add extra zoom-in steps at the end so mobile/fullscreen can fill the viewport without clipping.
+const CAMERA_ZOOM_LEVELS = [1.16, 1.08, 1.0, 0.97, 0.93, 0.9, 0.86, 0.82, 0.78, 0.74] as const;
+const DEFAULT_CAMERA_ZOOM_INDEX = 4; // 0.93 => ~108% (desktop/tablet baseline)
+// Mobile baseline: default to ~122% (0.82) so tiles are readable on phones.
+const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = (() => {
+  const target = 0.82; // ~122%
+  let idx = CAMERA_ZOOM_LEVELS.findIndex((z) => Math.abs(z - target) < 1e-6);
+  if (idx >= 0) return idx;
+
+  // Fallback: closest match if the list changes.
+  idx = 0;
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < CAMERA_ZOOM_LEVELS.length; i += 1) {
+    const d = Math.abs(CAMERA_ZOOM_LEVELS[i] - target);
+    if (d < best) {
+      best = d;
+      idx = i;
+    }
+  }
+  return idx;
+})();
+// On mobile, auto-fit should not zoom in beyond the baseline 122% unless the user does it manually (+ button).
+const MOBILE_AUTO_FIT_MAX_ZOOM_IN_INDEX = (() => {
+  return MOBILE_DEFAULT_CAMERA_ZOOM_INDEX;
+})();
   const VIEW_MODES = ["3d", "fps", "2d", "sprite"] as const;
   type ViewMode = (typeof VIEW_MODES)[number];
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
@@ -201,7 +224,9 @@ export const PuzzleGame = () => {
   const [viewMode, setViewMode] = useState<ViewMode>("3d");
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
-  const [cameraZoomIndex, setCameraZoomIndex] = useState(DEFAULT_CAMERA_ZOOM_INDEX);
+  const [cameraZoomIndex, setCameraZoomIndex] = useState(() => (
+    isMobile ? MOBILE_DEFAULT_CAMERA_ZOOM_INDEX : DEFAULT_CAMERA_ZOOM_INDEX
+  ));
   // Selector navigation state for keyboard-based arrow selection
   const [selectorPos, setSelectorPos] = useState<{ x: number; y: number } | null>(null);
   const [isSelectorActive, setIsSelectorActive] = useState(false);
@@ -364,11 +389,17 @@ export const PuzzleGame = () => {
       if (rect.width < 40 || rect.height < 40) return;
       const aspect = rect.width / Math.max(1, rect.height);
       const content = computeNonVoidContentSize(currentLevel?.grid);
-      const nextIndex = pickBestZoomIndexForContent({
+      let nextIndex = pickBestZoomIndexForContent({
         content,
         aspect,
         viewMode: viewMode === "2d" ? "2d" : "3d",
       });
+
+      // Mobile: cap auto-fit at the baseline (~122%) so it doesn't jump to the "extra zoom-in" steps by itself.
+      // Users can still tap (+) to zoom further in if they want.
+      if (isMobileLandscape) {
+        nextIndex = Math.min(nextIndex, MOBILE_AUTO_FIT_MAX_ZOOM_IN_INDEX);
+      }
       if (nextIndex !== cameraZoomIndex) setCameraZoomIndex(nextIndex);
       setCameraOffset({ x: 0, z: 0 });
     });

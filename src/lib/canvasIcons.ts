@@ -341,3 +341,328 @@ export function createClockIconDataUrl(size: number, opts?: ClockIconOptions): s
   const canvas = createClockIconCanvas(size, opts);
   return canvas ? canvas.toDataURL("image/png") : null;
 }
+
+export type VortexIconOptions = {
+  /** Bright inner swirl color. */
+  inner?: string;
+  /** Mid swirl color. */
+  mid?: string;
+  /** Outer splash color. */
+  outer?: string;
+  /** Dark core color. */
+  core?: string;
+  /** Outline stroke. */
+  outline?: string;
+  /** Soft glow behind the icon. */
+  glow?: string;
+};
+
+function getVortexDefaults(opts?: VortexIconOptions): Required<VortexIconOptions> {
+  return {
+    inner: opts?.inner ?? "rgba(52,211,153,0.98)", // emerald-400
+    mid: opts?.mid ?? "rgba(34,197,94,0.92)", // green-500
+    outer: opts?.outer ?? "rgba(16,185,129,0.70)", // emerald-500
+    core: opts?.core ?? "rgba(2,6,23,0.92)", // slate-950
+    outline: opts?.outline ?? "rgba(15,23,42,0.55)", // slate-900
+    glow: opts?.glow ?? "rgba(16,185,129,0.18)",
+  };
+}
+
+/**
+ * Draw a top-down "liquid vortex" icon.
+ * Intentionally deterministic (no randomness) so builds are stable across runs.
+ */
+export function drawVortexTopDownFrame(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  opts?: VortexIconOptions
+) {
+  const { inner, mid, outer, core, outline, glow } = getVortexDefaults(opts);
+
+  ctx.clearRect(0, 0, size, size);
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.46;
+
+  // Glow behind.
+  if (glow && glow !== "transparent" && glow !== "rgba(0,0,0,0)" && glow !== "rgba(0,0,0,0.0)") {
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r * 1.25);
+    grad.addColorStop(0, glow);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Outer splash silhouette (slightly irregular circle).
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.beginPath();
+  const bumpsA = 11;
+  const bumpsB = 7;
+  for (let i = 0; i <= 240; i += 1) {
+    const t = i / 240;
+    const ang = t * Math.PI * 2;
+    const bump = 1 + 0.06 * Math.sin(ang * bumpsA) + 0.03 * Math.sin(ang * bumpsB + 1.4);
+    const rr = r * 0.98 * bump;
+    const x = Math.cos(ang) * rr;
+    const y = Math.sin(ang) * rr;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  const splashGrad = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.02);
+  splashGrad.addColorStop(0, "rgba(0,0,0,0)");
+  splashGrad.addColorStop(0.45, outer);
+  splashGrad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = splashGrad;
+  ctx.fill();
+  ctx.restore();
+
+  // Main vortex disc: green liquid fading into a dark core.
+  const discGrad = ctx.createRadialGradient(cx, cy, r * 0.06, cx, cy, r);
+  discGrad.addColorStop(0, core);
+  discGrad.addColorStop(0.22, "rgba(2,6,23,0.82)");
+  discGrad.addColorStop(0.44, inner);
+  discGrad.addColorStop(0.72, mid);
+  discGrad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = discGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spiral strokes (liquid swirl).
+  ctx.save();
+  ctx.translate(cx, cy);
+  const arms = 4;
+  const turns = 3.8;
+  for (let a = 0; a < arms; a += 1) {
+    const phase = (a * Math.PI * 2) / arms + 0.25;
+    ctx.beginPath();
+    for (let i = 0; i <= 260; i += 1) {
+      const t = i / 260;
+      const rr = t * r * 0.9;
+      const ang = t * Math.PI * 2 * turns + phase + t * 0.6;
+      const x = Math.cos(ang) * rr;
+      const y = Math.sin(ang) * rr;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = Math.max(1, Math.round(size * 0.03));
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+  // Inner swirl accent.
+  ctx.beginPath();
+  for (let i = 0; i <= 220; i += 1) {
+    const t = i / 220;
+    const rr = t * r * 0.55;
+    const ang = t * Math.PI * 2 * 5.2 + 0.9;
+    const x = Math.cos(ang) * rr;
+    const y = Math.sin(ang) * rr;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = "rgba(16,185,129,0.55)";
+  ctx.lineWidth = Math.max(1, Math.round(size * 0.035));
+  ctx.stroke();
+  ctx.restore();
+
+  // Rim highlight (not a full ring, avoids "target" look).
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = Math.max(1, size * 0.03);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.92, -Math.PI * 0.15, Math.PI * 0.35);
+  ctx.stroke();
+
+  // Dark core (hole) with soft edge (avoid "target" look).
+  const coreGrad = ctx.createRadialGradient(cx, cy, r * 0.02, cx, cy, r * 0.22);
+  coreGrad.addColorStop(0, core);
+  coreGrad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.24, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Outline accents: a couple of arcs instead of a full ring.
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = Math.max(1, size * 0.025);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.98, Math.PI * 0.12, Math.PI * 0.48);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.98, Math.PI * 1.08, Math.PI * 1.28);
+  ctx.stroke();
+}
+
+export function drawVortexTopDown(ctx: CanvasRenderingContext2D, size: number, opts?: VortexIconOptions) {
+  drawVortexTopDownFrame(ctx, size, opts);
+}
+
+export function createVortexIconCanvas(size: number, opts?: VortexIconOptions): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  drawVortexTopDown(ctx, size, opts);
+  return canvas;
+}
+
+export function createVortexIconDataUrl(size: number, opts?: VortexIconOptions): string | null {
+  const canvas = createVortexIconCanvas(size, opts);
+  return canvas ? canvas.toDataURL("image/png") : null;
+}
+
+export type KeyIconOptions = {
+  /** Accent color to distinguish red vs green keys. */
+  accent?: string;
+  /** Soft glow behind the key. */
+  glow?: string;
+  /** Outline stroke. */
+  outline?: string;
+  /** Metal highlight. */
+  metalLight?: string;
+  /** Metal shadow. */
+  metalDark?: string;
+};
+
+function getKeyDefaults(opts?: KeyIconOptions): Required<KeyIconOptions> {
+  return {
+    accent: opts?.accent ?? "rgba(239,68,68,0.98)", // red-500
+    glow: opts?.glow ?? "rgba(239,68,68,0.18)",
+    outline: opts?.outline ?? "rgba(15,23,42,0.55)",
+    metalLight: opts?.metalLight ?? "rgba(255,244,200,0.98)",
+    metalDark: opts?.metalDark ?? "rgba(180,120,20,0.98)",
+  };
+}
+
+const pathRoundRect = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) => {
+  const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
+};
+
+/**
+ * Draw a simple, readable top-down key icon (ring head + shaft + teeth).
+ * Designed to remain recognizable even when the camera is high/top-down.
+ */
+export function drawKeyTopDown(ctx: CanvasRenderingContext2D, size: number, opts?: KeyIconOptions) {
+  const { accent, glow, outline, metalLight, metalDark } = getKeyDefaults(opts);
+  ctx.clearRect(0, 0, size, size);
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.46;
+
+  // Glow for contrast on bright tiles.
+  if (glow && glow !== "transparent" && glow !== "rgba(0,0,0,0)" && glow !== "rgba(0,0,0,0.0)") {
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r * 1.2);
+    grad.addColorStop(0, glow);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 1.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const metalGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  metalGrad.addColorStop(0, metalLight);
+  metalGrad.addColorStop(0.6, "rgba(245,200,95,0.98)");
+  metalGrad.addColorStop(1, metalDark);
+
+  ctx.strokeStyle = outline;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(1, size * 0.05);
+
+  // Ring head.
+  const headCx = cx - r * 0.18;
+  const headCy = cy - r * 0.05;
+  const headR = r * 0.23;
+  ctx.fillStyle = metalGrad;
+  ctx.beginPath();
+  ctx.arc(headCx, headCy, headR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Punch hole (transparent).
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.arc(headCx, headCy, headR * 0.52, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Shaft (rounded rectangle).
+  const shaftX = headCx + headR * 0.25;
+  const shaftY = headCy - headR * 0.32;
+  const shaftW = r * 0.92;
+  const shaftH = headR * 0.64;
+  ctx.fillStyle = metalGrad;
+  pathRoundRect(ctx, shaftX, shaftY, shaftW, shaftH, shaftH * 0.35);
+  ctx.fill();
+  ctx.stroke();
+
+  // Teeth.
+  const toothBaseX = shaftX + shaftW * 0.68;
+  const toothY = shaftY + shaftH * 0.52;
+  const toothW = shaftW * 0.12;
+  const toothH = shaftH * 0.55;
+  for (let i = 0; i < 2; i += 1) {
+    const x = toothBaseX + i * toothW * 1.05;
+    const h = toothH * (i === 0 ? 1.0 : 0.75);
+    ctx.fillStyle = metalGrad;
+    pathRoundRect(ctx, x, toothY, toothW, h, shaftH * 0.18);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Accent gem/dot to show key color clearly.
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.arc(headCx + headR * 0.55, headCy - headR * 0.15, headR * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tiny highlight.
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.beginPath();
+  ctx.arc(headCx - headR * 0.15, headCy - headR * 0.12, headR * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export function createKeyIconCanvas(size: number, opts?: KeyIconOptions): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  drawKeyTopDown(ctx, size, opts);
+  return canvas;
+}
+
+export function createKeyIconDataUrl(size: number, opts?: KeyIconOptions): string | null {
+  const canvas = createKeyIconCanvas(size, opts);
+  return canvas ? canvas.toDataURL("image/png") : null;
+}
