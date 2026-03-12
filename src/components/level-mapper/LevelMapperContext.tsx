@@ -1079,6 +1079,13 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setHourglassBonusByCell({ ...(res.hourglassBonusByCellSaved ?? {}) });
             setIsSaved(true);
 
+            // Persist current overlay tweaks immediately. This avoids a race where a dev-only file write
+            // triggers a Vite reload before the effect-based localStorage persistence runs.
+            if (res.levelId != null) {
+                saveLevelImageScale(res.levelId, { x: imageScaleX, y: imageScaleY, offsetY: imageOffsetY, lock: lockImageAspect });
+                saveLevelLayoutOverride(res.levelId, rows, cols);
+            }
+
             // Promote the current editor state (including rows/cols + overlay stretch tweaks) to be the new
             // "default" for this level's Reset Layout. This is what you want when you manually correct
             // the grid height/shape and then save.

@@ -1816,10 +1816,11 @@ export const Game3D = ({
   const breakableTexture = useMemo(() => {
     if (typeof document === 'undefined') return null;
 
-    // Build a pixel-art-ish cracked rock that reads like the original sprite tiles.
+    // Build a crisp, DOS-style "breakable rock" tile.
+    // The original game uses a deterministic cracked-rock sprite, so avoid randomness here.
     // We draw at low-res then scale up with nearest-neighbor for crisp pixels.
     const outSize = 128;
-    const srcSize = 32;
+    const srcSize = 16;
 
     const src = document.createElement('canvas');
     src.width = srcSize;
@@ -1830,14 +1831,36 @@ export const Game3D = ({
     const wall = new THREE.Color(themeColors.wall);
     const stone = new THREE.Color(themeColors.stone);
     const floor = new THREE.Color(themeColors.floor);
-    const base = wall.clone().lerp(stone, 0.55);
+    // Base tint tracks the theme's wall/stone palette but with sprite-like contrast.
+    const base = wall.clone().lerp(stone, 0.62);
+    const highlight = floor.clone().lerp(new THREE.Color('#ffffff'), 0.18);
+    const shadow = stone.clone().lerp(new THREE.Color('#000000'), 0.42);
+    const midLight = base.clone().lerp(highlight, 0.28);
+    const midDark = base.clone().lerp(shadow, 0.22);
+
+    const rgb = (c: THREE.Color) => ({
+      r: Math.round(c.r * 255),
+      g: Math.round(c.g * 255),
+      b: Math.round(c.b * 255),
+    });
+
+    const fillPx = (x: number, y: number, c: THREE.Color, a = 1) => {
+      if (x < 0 || y < 0 || x >= srcSize || y >= srcSize) return;
+      const { r, g, b } = rgb(c);
+      ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+      ctx.fillRect(x, y, 1, 1);
+    };
 
     ctx.fillStyle = `#${base.getHexString()}`;
     ctx.fillRect(0, 0, srcSize, srcSize);
 
-    // Bevel border like DOS tiles (top/left highlight, bottom/right shadow).
-    const highlight = floor.clone().lerp(new THREE.Color('#ffffff'), 0.15);
-    const shadow = stone.clone().lerp(new THREE.Color('#000000'), 0.35);
+    // Subtle quadrant shading to match the "chunky" sprite lighting.
+    ctx.fillStyle = `rgba(${rgb(midLight).r},${rgb(midLight).g},${rgb(midLight).b},0.55)`;
+    ctx.fillRect(1, 1, 7, 7);
+    ctx.fillStyle = `rgba(${rgb(midDark).r},${rgb(midDark).g},${rgb(midDark).b},0.5)`;
+    ctx.fillRect(8, 8, 7, 7);
+
+    // Bevel border like classic tiles (top/left highlight, bottom/right shadow).
     ctx.fillStyle = `#${highlight.getHexString()}`;
     ctx.fillRect(0, 0, srcSize, 1);
     ctx.fillRect(0, 0, 1, srcSize);
@@ -1845,62 +1868,94 @@ export const Game3D = ({
     ctx.fillRect(0, srcSize - 1, srcSize, 1);
     ctx.fillRect(srcSize - 1, 0, 1, srcSize);
 
-    // Speckle noise (deterministic-ish per theme because the base colors change).
-    for (let i = 0; i < 110; i += 1) {
-      const x = Math.floor(Math.random() * srcSize);
-      const y = Math.floor(Math.random() * srcSize);
-      const isLight = Math.random() > 0.55;
-      const c = base
-        .clone()
-        .lerp(isLight ? highlight : shadow, isLight ? 0.22 : 0.18)
-        .lerp(floor, isLight ? 0.05 : 0.0);
-      ctx.fillStyle = `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},0.8)`;
-      ctx.fillRect(x, y, 1, 1);
+    // Deterministic speckles (keeps it from reading as a flat color).
+    for (let y = 1; y < srcSize - 1; y += 1) {
+      for (let x = 1; x < srcSize - 1; x += 1) {
+        const v = (x * 17 + y * 31) % 97;
+        if (v === 2 || v === 7) fillPx(x, y, midLight, 0.5);
+        if (v === 91 || v === 93) fillPx(x, y, midDark, 0.45);
+      }
     }
 
-    // Cracks: dark core + small light rim to emulate the sprite's etched look.
-    const crackCore = shadow.clone().lerp(new THREE.Color('#000000'), 0.25);
-    const crackRim = highlight.clone().lerp(floor, 0.35);
-    ctx.lineCap = 'butt';
-    ctx.lineJoin = 'miter';
+    // Cracks: dark core + light rim to emulate the etched sprite look.
+    const crackCore = shadow.clone().lerp(new THREE.Color('#000000'), 0.35);
+    const crackRim = highlight.clone().lerp(floor, 0.45);
 
-    const drawCrack = (seedX: number, seedY: number) => {
-      const pts: Array<[number, number]> = [];
-      let x = seedX;
-      let y = seedY;
-      pts.push([x, y]);
-
-      for (let i = 0; i < 8; i += 1) {
-        x += (Math.random() - 0.5) * 6;
-        y += (Math.random() - 0.5) * 6;
-        x = Math.max(2, Math.min(srcSize - 3, x));
-        y = Math.max(2, Math.min(srcSize - 3, y));
-        pts.push([x, y]);
-      }
-
-      const strokePath = (dx: number, dy: number, stroke: string) => {
-        ctx.strokeStyle = stroke;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(pts[0][0] + dx, pts[0][1] + dy);
-        for (let i = 1; i < pts.length; i += 1) {
-          ctx.lineTo(pts[i][0] + dx, pts[i][1] + dy);
+    const drawBresenham = (x0: number, y0: number, x1: number, y1: number, plot: (x: number, y: number) => void) => {
+      let dx = Math.abs(x1 - x0);
+      let sx = x0 < x1 ? 1 : -1;
+      let dy = -Math.abs(y1 - y0);
+      let sy = y0 < y1 ? 1 : -1;
+      let err = dx + dy;
+      let x = x0;
+      let y = y0;
+      while (true) {
+        plot(x, y);
+        if (x === x1 && y === y1) break;
+        const e2 = 2 * err;
+        if (e2 >= dy) {
+          err += dy;
+          x += sx;
         }
-        ctx.stroke();
-      };
-
-      // Dark crack core + rim highlight offset by 1px (sprite-like).
-      strokePath(0, 0, `#${crackCore.getHexString()}`);
-      strokePath(
-        1,
-        0,
-        `rgba(${Math.round(crackRim.r * 255)},${Math.round(crackRim.g * 255)},${Math.round(crackRim.b * 255)},0.55)`
-      );
+        if (e2 <= dx) {
+          err += dx;
+          y += sy;
+        }
+      }
     };
 
-    for (let i = 0; i < 5; i += 1) {
-      drawCrack(6 + Math.random() * (srcSize - 12), 6 + Math.random() * (srcSize - 12));
+    const plotCrack = (x: number, y: number) => {
+      // Core (2px-ish thickness).
+      fillPx(x, y, crackCore, 0.95);
+      fillPx(x + 1, y, crackCore, 0.75);
+      // Rim highlight on the top-left side like the original sprite.
+      fillPx(x - 1, y - 1, crackRim, 0.55);
+      fillPx(x, y - 1, crackRim, 0.35);
+    };
+
+    const crackPaths: Array<Array<[number, number]>> = [
+      // Main diagonal crack (top-mid toward bottom-left).
+      [
+        [9, 1],
+        [7, 4],
+        [5, 7],
+        [3, 10],
+        [2, 13],
+      ],
+      // Branch crack (mid toward bottom-right).
+      [
+        [6, 7],
+        [9, 9],
+        [12, 11],
+        [14, 13],
+      ],
+      // Vertical-ish crack on the right chunk.
+      [
+        [11, 3],
+        [12, 6],
+        [12, 9],
+        [11, 12],
+      ],
+      // Small chip crack near top-left chunk.
+      [
+        [3, 4],
+        [5, 3],
+        [7, 4],
+      ],
+    ];
+
+    for (const pts of crackPaths) {
+      for (let i = 0; i < pts.length - 1; i += 1) {
+        const [x0, y0] = pts[i];
+        const [x1, y1] = pts[i + 1];
+        drawBresenham(x0, y0, x1, y1, plotCrack);
+      }
     }
+
+    // A couple of bright "chips" to match the sprite highlights.
+    fillPx(12, 2, highlight, 0.85);
+    fillPx(13, 3, highlight, 0.65);
+    fillPx(4, 12, highlight, 0.55);
 
     // Scale up to output size with nearest-neighbor.
     const out = document.createElement('canvas');

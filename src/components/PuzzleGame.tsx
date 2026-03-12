@@ -182,6 +182,21 @@ const facingTowardTarget = (
   return facingFromDelta(0, dy, fallback);
 };
 
+const deltaFromFacing = (facing: FacingDirection): { dx: number; dy: number } => {
+  switch (facing) {
+    case "up":
+      return { dx: 0, dy: -1 };
+    case "right":
+      return { dx: 1, dy: 0 };
+    case "down":
+      return { dx: 0, dy: 1 };
+    case "left":
+      return { dx: -1, dy: 0 };
+    default:
+      return { dx: 0, dy: -1 };
+  }
+};
+
 type LevelData = ReturnType<typeof getAllLevels>[number];
 
 export const PuzzleGame = () => {
@@ -726,8 +741,24 @@ export const PuzzleGame = () => {
 
     const queueMove = useCallback((dx: number, dy: number) => {
       if (isComplete || isBuilding || isTimeUp || shouldRotateGate) return;
+
+      // FPS view uses "relative" controls:
+      // Up = forward (keep going straight), Down = backward, Left/Right = strafe relative to facing.
+      // This matches user expectation: if facing LEFT on the 2D map, pressing UP continues left.
+      if (viewMode === "fps") {
+        const sim = simRef.current;
+        const localId = localPlayerIdRef.current;
+        const facing = sim?.players.get(localId)?.facing ?? "up";
+        const fwd = deltaFromFacing(facing);
+        const right = { dx: -fwd.dy, dy: fwd.dx }; // rotate clockwise in grid space
+        const worldDx = dx * right.dx + (-dy) * fwd.dx;
+        const worldDy = dx * right.dy + (-dy) * fwd.dy;
+        enqueueInput({ type: "move", dx: worldDx, dy: worldDy });
+        return;
+      }
+
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding, isTimeUp, shouldRotateGate]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, shouldRotateGate, viewMode]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -1450,15 +1481,15 @@ export const PuzzleGame = () => {
                    {`L${currentLevel.id}`}
                  </span>
                  <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
-                 {timeLeftText && (
-                   <span
-                     className={[
-                       "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-black",
-                       isTimerUrgent
-                         ? "border-red-300/80 bg-red-700 text-white"
-                         : "border-border/60 bg-background/60 text-foreground",
-                     ].join(" ")}
-                     title="Time left"
+                  {timeLeftText && (
+                    <span
+                      className={[
+                        "inline-flex items-center gap-2 rounded-md border px-2 py-1 text-sm font-black tabular-nums",
+                        isTimerUrgent
+                          ? "border-red-300/80 bg-red-700 text-white"
+                          : "border-border/60 bg-background/60 text-foreground",
+                      ].join(" ")}
+                      title="Time left"
                    >
                      <span aria-hidden>⏱</span>
                      <span>{timeLeftText}</span>
@@ -1661,18 +1692,18 @@ export const PuzzleGame = () => {
                 </span>
                 <span className="text-muted-foreground text-xl">•</span>
                 <span className="text-foreground font-medium text-lg">{`Moves: ${moves}`}</span>
-                {timeLeftText ? (
-                  <>
-                    <span className="text-muted-foreground text-xl">•</span>
-                    <span
-                      className={[
-                        "inline-flex items-center gap-2 rounded-md border px-2 py-1 text-sm font-black",
-                        isTimerUrgent
-                          ? "border-red-300/80 bg-red-700 text-white"
-                          : "border-border/60 bg-background/60 text-foreground",
-                      ].join(" ")}
-                      title="Time left"
-                    >
+                 {timeLeftText ? (
+                   <>
+                     <span className="text-muted-foreground text-xl">•</span>
+                     <span
+                       className={[
+                         "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-base font-black tabular-nums",
+                         isTimerUrgent
+                           ? "border-red-300/80 bg-red-700 text-white"
+                           : "border-border/60 bg-background/60 text-foreground",
+                       ].join(" ")}
+                       title="Time left"
+                     >
                       <span aria-hidden>⏱</span>
                       <span>{timeLeftText}</span>
                     </span>
