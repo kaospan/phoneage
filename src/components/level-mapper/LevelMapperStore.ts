@@ -16,6 +16,14 @@ export interface LevelMapperContextValue {
   activeTile: number;
   setActiveTile: (id: number) => void;
 
+  // Hourglass (+time) configuration
+  // Per-cell bonuses keyed by "x,y" (column,row). Used only for tile id 20.
+  hourglassBonusByCell: Record<string, number>;
+  setHourglassBonusByCell: Dispatch<SetStateAction<Record<string, number>>>;
+  // Brush value applied when painting hourglass tiles (seconds added when collected).
+  hourglassBrushSeconds: number;
+  setHourglassBrushSeconds: (n: number) => void;
+
   // Player start position
   playerStart: { x: number; y: number } | null;
   setPlayerStart: (pos: { x: number; y: number } | null) => void;
@@ -118,6 +126,8 @@ export interface LevelMapperContextValue {
     playerStart: { x: number; y: number } | null;
     theme: ColorTheme | undefined;
     timeLimitSeconds: number | null;
+    // Per-cell hourglass bonuses keyed by "x,y" (column,row). Used only for tile id 20.
+    hourglassBonusByCell?: Record<string, number>;
     imageURL: string | null;
     overlayEnabled: boolean;
     overlayOpacity: number;

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
+import { createClockIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
 import { detectGridLines } from "@/components/level-mapper/gridDetection";
 import { getAlignmentHints } from "@/components/level-mapper/alignmentProfile";
@@ -300,48 +301,58 @@ export function GameSprite2D({
     const cy = size / 2;
     const r = size * 0.46;
 
-    // CD disc body (cool cyan metallic gradient).
-    const grad = ctx.createRadialGradient(cx - r * 0.18, cy - r * 0.18, r * 0.12, cx, cy, r);
-    grad.addColorStop(0, "rgba(255,255,255,0.95)");
-    grad.addColorStop(0.22, "rgba(190,245,255,0.88)");
-    grad.addColorStop(0.55, "rgba(110,220,255,0.78)");
-    grad.addColorStop(1, "rgba(10,70,90,0.62)");
+    // Wormhole/vortex: cyan -> purple swirl with dark core.
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+    grad.addColorStop(0, "rgba(0,0,0,0.95)");
+    grad.addColorStop(0.28, "rgba(12,24,50,0.92)");
+    grad.addColorStop(0.55, "rgba(0,210,255,0.88)");
+    grad.addColorStop(0.82, "rgba(160,70,255,0.82)");
+    grad.addColorStop(1, "rgba(0,0,0,0.0)");
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
 
     // Outer rim.
-    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.strokeStyle = "rgba(210,245,255,0.25)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(cx, cy, r - 0.7, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Inner ring + hole.
-    ctx.strokeStyle = "rgba(0,0,0,0.55)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.18, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(0,0,0,0.85)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.07, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Shine wedge.
+    // Spiral arms.
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(-0.35);
-    ctx.fillStyle = "rgba(255,255,255,0.22)";
-    ctx.beginPath();
-    ctx.arc(0, 0, r, -0.18, 0.18);
-    ctx.lineTo(0, 0);
-    ctx.closePath();
-    ctx.fill();
+    const arms = 3;
+    const turns = 3.2;
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1;
+    for (let a = 0; a < arms; a += 1) {
+      const phase = (a * Math.PI * 2) / arms;
+      ctx.beginPath();
+      for (let t = 0; t <= 1.001; t += 1 / 110) {
+        const rr = t * r * 0.92;
+        const ang = t * Math.PI * 2 * turns + phase;
+        const x = Math.cos(ang) * rr;
+        const y = Math.sin(ang) * rr;
+        if (t === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
     ctx.restore();
 
+    // Dark core (hole).
+    ctx.fillStyle = "rgba(0,0,0,0.92)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
     return canvas.toDataURL("image/png");
+  }, []);
+
+  const bonusTimeFallbackUrl = useMemo(() => {
+    return createClockIconDataUrl(32, { glow: "rgba(239,68,68,0.18)" });
   }, []);
 
   return (
@@ -388,12 +399,13 @@ export function GameSprite2D({
               // Sprite mode policy:
               // - Void must be visually empty (transparent) so the game background shows through.
               // - Do not use atlas/ref sprites for void even if present.
-              const backgroundImage =
-                tileType === 5 ? undefined :
-                atlasSprite ? `url(${atlasSprite})` :
-                refSprite ? `url(${refSprite})` :
-                tileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
-                undefined;
+                const backgroundImage =
+                 tileType === 5 ? undefined :
+                 atlasSprite ? `url(${atlasSprite})` :
+                 refSprite ? `url(${refSprite})` :
+                 tileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
+                 tileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
+                 undefined;
 
               const fallback =
                 tileType === 5 ? "transparent" :
@@ -407,6 +419,7 @@ export function GameSprite2D({
                 tileType === 16 ? "rgba(150,20,20,0.80)" :
                 tileType === 17 ? "rgba(20,110,35,0.80)" :
                 tileType === 18 ? "rgba(0,0,0,0.88)" :
+                tileType === 20 ? "rgba(251,191,36,0.78)" :
                 "rgba(255,255,255,0.06)";
 
               return (

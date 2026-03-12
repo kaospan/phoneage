@@ -9,6 +9,7 @@ import { loadCustomLevelDefinition, loadCustomLevelIds } from '@/lib/customLevel
 // 14 = red key, 15 = green key
 // 16 = red lock, 17 = green lock
 // 18 = start cave marker (non-goal), 19 = teleport pad (paired in reading order)
+// 20 = Bonus Time collectible (adds time to the per-level countdown timer)
 
 export type ArrowDirection = 'up' | 'right' | 'down' | 'left';
 
@@ -117,6 +118,11 @@ export interface Level {
    * gameplay will display a countdown and show a "TIME'S UP!" banner at 0.
    */
   timeLimitSeconds?: number;
+  /**
+   * Optional hourglass bonuses by cell coordinate (keyed by "x,y").
+   * Bonus Time tiles (20) add these seconds to the countdown when collected.
+   */
+  hourglassBonusByCell?: Record<string, number>;
   image?: string;
   sources?: string[];
   autoBuild?: boolean;
@@ -367,7 +373,8 @@ export const getAllLevels = (): Level[] => {
          // Handle new format: { grid, playerStart }
          if (parsed && typeof parsed === 'object' && parsed.grid) {
            console.log(`✓ Override found for level ${l.id} (new format)`);
-           const result = { ...l, grid: parsed.grid as number[][] };
+           const nextGrid = parsed.grid as number[][];
+           const result: Level = { ...l, grid: nextGrid };
            if (parsed.playerStart) {
              result.playerStart = parsed.playerStart;
            }
@@ -385,6 +392,30 @@ export const getAllLevels = (): Level[] => {
              } else {
                // Treat 0/null/invalid as "no timer"
                delete (result as any).timeLimitSeconds;
+             }
+           }
+           if (parsed.hourglassBonusByCell && typeof parsed.hourglassBonusByCell === 'object') {
+             const out: Record<string, number> = {};
+             const grid = nextGrid;
+             const maxY = grid.length;
+             const maxX = grid[0]?.length ?? 0;
+             for (const [k, v] of Object.entries(parsed.hourglassBonusByCell as Record<string, unknown>)) {
+               const n = Number(v);
+               if (!Number.isFinite(n)) continue;
+               const parts = String(k).split(',');
+               if (parts.length !== 2) continue;
+               const x = Number(parts[0]);
+               const y = Number(parts[1]);
+               if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
+               if (x < 0 || y < 0 || y >= maxY || x >= maxX) continue;
+               if (grid[y]?.[x] !== 20) continue;
+               const sec = Math.max(1, Math.min(86400, Math.round(n)));
+               out[`${x},${y}`] = sec;
+             }
+             if (Object.keys(out).length > 0) {
+               result.hourglassBonusByCell = out;
+             } else {
+               delete (result as any).hourglassBonusByCell;
              }
            }
            return result;

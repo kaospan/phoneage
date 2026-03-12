@@ -13,6 +13,7 @@ import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
  * @param playerStart - The player starting position (if any)
  * @param theme - The color theme for the level (if any)
  * @param timeLimitSeconds - Optional per-level countdown timer in seconds (null disables)
+ * @param hourglassBonusByCell - Optional per-cell hourglass bonuses keyed by "x,y" (column,row)
  * @param importLevelIndex - Index of the imported level (if any)
  * @param allLevels - Array of all available levels
  * @returns Updated levels array after save
@@ -22,6 +23,7 @@ export const saveGridChanges = (
     playerStart: { x: number; y: number } | null,
     theme: ColorTheme | undefined,
     timeLimitSeconds: number | null,
+    hourglassBonusByCell: Record<string, number>,
     importLevelIndex: number | null,
     allLevels: ReturnType<typeof getAllLevels>
 ): {
@@ -61,6 +63,26 @@ export const saveGridChanges = (
         return next;
     })();
 
+    const sanitizeHourglassBonusByCell = (value: Record<string, number>, gridToCheck: number[][]) => {
+        const out: Record<string, number> = {};
+        for (const [key, raw] of Object.entries(value ?? {})) {
+            const parts = key.split(',');
+            if (parts.length !== 2) continue;
+            const x = Number(parts[0]);
+            const y = Number(parts[1]);
+            if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
+            if (y < 0 || y >= gridToCheck.length) continue;
+            if (x < 0 || x >= (gridToCheck[0]?.length ?? 0)) continue;
+            if (gridToCheck[y]?.[x] !== 20) continue;
+            const n = Number(raw);
+            if (!Number.isFinite(n)) continue;
+            out[`${x},${y}`] = Math.max(1, Math.min(86400, Math.round(n)));
+        }
+        return out;
+    };
+
+    const hourglassToSave = sanitizeHourglassBonusByCell(hourglassBonusByCell, gridToSave);
+
     // Merge with any existing override payload to avoid erasing newer fields added over time.
     const existingOverrideForLevel = (levelId: number): Record<string, unknown> | null => {
         try {
@@ -76,7 +98,7 @@ export const saveGridChanges = (
 
     const dataToSaveForLevel = (levelId: number) => {
         const prev = existingOverrideForLevel(levelId);
-        return {
+        const payload: Record<string, unknown> = {
             ...(prev ?? {}),
             grid: gridToSave,
             playerStart,
@@ -84,6 +106,14 @@ export const saveGridChanges = (
             // Preserve semantics: null means "no timer".
             timeLimitSeconds,
         };
+
+        if (Object.keys(hourglassToSave).length > 0) {
+            payload.hourglassBonusByCell = hourglassToSave;
+        } else {
+            delete payload.hourglassBonusByCell;
+        }
+
+        return payload;
     };
 
     let override: 'saved' | 'cleared' | 'none' = 'none';
@@ -114,6 +144,11 @@ export const saveGridChanges = (
     
     // Always save to general mapper storage
     localStorage.setItem('levelmapper_grid', JSON.stringify(gridToSave));
+    if (Object.keys(hourglassToSave).length > 0) {
+        localStorage.setItem('levelmapper_hourglassBonusByCell', JSON.stringify(hourglassToSave));
+    } else {
+        localStorage.removeItem('levelmapper_hourglassBonusByCell');
+    }
     if (playerStart) {
         localStorage.setItem('levelmapper_playerStart', JSON.stringify(playerStart));
     }

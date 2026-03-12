@@ -5,6 +5,7 @@ import { getPairedTeleport, TELEPORT_CELL } from './teleport';
 
 const isKeyCell = (cell: CellType) => cell === 14 || cell === 15;
 const isLockCell = (cell: CellType) => cell === 16 || cell === 17;
+const isHourglassCell = (cell: CellType) => cell === 20;
 const keyColorForCell = (cell: CellType) => (cell === 14 ? 'red' : cell === 15 ? 'green' : null);
 const lockColorForCell = (cell: CellType) => (cell === 16 ? 'red' : cell === 17 ? 'green' : null);
 
@@ -17,6 +18,7 @@ export interface PlayerMoveOutcome {
   startGlide?: boolean;
   collectedKey?: 'red' | 'green';
   unlockedLock?: 'red' | 'green';
+  collectedHourglass?: Position;
 }
 
 export function attemptPlayerMove(state: GameState, dx: number, dy: number): PlayerMoveOutcome {
@@ -30,6 +32,7 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
   const targetCell = grid[targetY][targetX];
   const targetKey = keyColorForCell(targetCell);
   const targetLock = lockColorForCell(targetCell);
+  const targetHourglass = isHourglassCell(targetCell);
 
   // If on arrow
   if (isArrowCell(playerCell)) {
@@ -37,19 +40,21 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
       return {};
     }
 
-    // Step priority (floor, cave, start-marker cave, arrow, fresh breakable rock)
-    if (targetCell === 0 || targetCell === 3 || targetCell === 18 || targetCell === TELEPORT_CELL || isArrowCell(targetCell) || isKeyCell(targetCell) || isLockCell(targetCell)) {
+    // Step priority (floor, cave, start-marker cave, arrow, collectibles)
+    if (targetCell === 0 || targetCell === 3 || targetCell === 18 || targetCell === TELEPORT_CELL || isArrowCell(targetCell) || isKeyCell(targetCell) || isLockCell(targetCell) || targetHourglass) {
       const outcome: PlayerMoveOutcome = {
         newPlayerPos: { x: targetX, y: targetY },
         consumedMove: true
       };
-      if (targetKey || targetLock) {
+      if (targetKey || targetLock || targetHourglass) {
         const newGrid = grid.map(r => [...r]);
         if (targetKey) {
           inventory[targetKey] = true;
           outcome.collectedKey = targetKey;
         } else if (targetLock) {
           outcome.unlockedLock = targetLock;
+        } else if (targetHourglass) {
+          outcome.collectedHourglass = { x: targetX, y: targetY };
         }
         newGrid[targetY][targetX] = 0;
         baseGrid[targetY][targetX] = 0;
@@ -126,13 +131,15 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     newPlayerPos: { x: targetX, y: targetY },
     consumedMove: true
   };
-  if (targetKey || targetLock) {
+  if (targetKey || targetLock || targetHourglass) {
     const newGrid = outcome.newGrid ?? grid.map(r => [...r]);
     if (targetKey) {
       inventory[targetKey] = true;
       outcome.collectedKey = targetKey;
     } else if (targetLock) {
       outcome.unlockedLock = targetLock;
+    } else if (targetHourglass) {
+      outcome.collectedHourglass = { x: targetX, y: targetY };
     }
     newGrid[targetY][targetX] = 0;
     baseGrid[targetY][targetX] = 0;

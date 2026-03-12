@@ -48,6 +48,7 @@ const keyColorForCell = (cell: CellType): keyof KeyInventory | null =>
   cell === 14 ? "red" : cell === 15 ? "green" : null;
 const lockColorForCell = (cell: CellType): keyof KeyInventory | null =>
   cell === 16 ? "red" : cell === 17 ? "green" : null;
+const isHourglassCell = (cell: CellType) => cell === 20;
 
 function buildBaseGrid(levelGrid: CellType[][]): CellType[][] {
   return levelGrid.map((row, y) =>
@@ -62,7 +63,7 @@ function buildBaseGrid(levelGrid: CellType[][]): CellType[][] {
         // Do not let the start-marker cave (18) or teleport (19) "bleed" into arrow base terrain.
         const terrainTypes = adjacentCells
           .filter((c) => !isArrowCell(c))
-          .map((c) => (c === 18 || c === TELEPORT_CELL ? 0 : c));
+          .map((c) => (c === 18 || c === TELEPORT_CELL || c === 20 ? 0 : c));
         if (terrainTypes.length > 0) {
           const counts = new Map<number, number>();
           for (const t of terrainTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
@@ -142,6 +143,7 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
   const targetCell = grid[ty][tx] as CellType;
   const targetKey = keyColorForCell(targetCell);
   const targetLock = lockColorForCell(targetCell);
+  const targetHourglass = isHourglassCell(targetCell);
 
   const next: SolveState = {
     grid: grid,
@@ -161,7 +163,7 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
   if (isArrowCell(playerCell)) {
     if (targetLock && !inv[targetLock]) return null;
 
-    // Step priority (floor, cave (goal), start-marker cave, arrow, key/lock)
+    // Step priority (floor, cave (goal), start-marker cave, arrow, collectibles)
     if (
       targetCell === 0 ||
       targetCell === 3 ||
@@ -169,12 +171,13 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
       targetCell === TELEPORT_CELL ||
       isArrowCell(targetCell) ||
       isKeyCell(targetCell) ||
-      isLockCell(targetCell)
+      isLockCell(targetCell) ||
+      targetHourglass
     ) {
       ensureCloned();
       next.playerPos = { x: tx, y: ty };
 
-      if (targetKey || targetLock) {
+      if (targetKey || targetLock || targetHourglass) {
         if (targetKey) {
           next.inventory[targetKey] = true;
         }
@@ -249,7 +252,7 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
 
   ensureCloned();
   next.playerPos = { x: tx, y: ty };
-  if (targetKey || targetLock) {
+  if (targetKey || targetLock || targetHourglass) {
     if (targetKey) {
       next.inventory[targetKey] = true;
     }

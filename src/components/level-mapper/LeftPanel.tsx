@@ -45,6 +45,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
+        hourglassBrushSeconds, setHourglassBrushSeconds, setHourglassBonusByCell,
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
@@ -214,6 +215,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         setRows(editable.length);
         setCols(editable[0]?.length || 0);
         setGrid(editable);
+        setHourglassBonusByCell({ ...(lvl.hourglassBonusByCell ?? {}) });
 
         // Prefer a user-uploaded screenshot saved in the mapper, otherwise fall back to bundled assets.
         const storedUpload = await getLevelImageUrl(lvl.id);
@@ -264,6 +266,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             timeLimitSeconds: (typeof lvl.timeLimitSeconds === 'number' && Number.isFinite(lvl.timeLimitSeconds) && Number(lvl.timeLimitSeconds) > 0)
                 ? Math.round(Number(lvl.timeLimitSeconds))
                 : null,
+            hourglassBonusByCell: { ...(lvl.hourglassBonusByCell ?? {}) },
             imageURL: normalizedURL,
             overlayEnabled: Boolean(normalizedURL),
             overlayOpacity: 0.5,
@@ -334,6 +337,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         onClick={() => {
                             setGrid(voidGrid(rows, cols));
                             setImageURL(null);
+                            setHourglassBonusByCell({});
                             setPlayerStart(null);
                             setGridOffsetX(0);
                             setGridOffsetY(0);
@@ -783,6 +787,28 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         />
                         <div className="text-[11px] text-muted-foreground">sec (0 = off)</div>
                     </div>
+
+                    {/* Bonus Time (+time) brush */}
+                    {activeTile === 20 && (
+                        <div className="flex items-center gap-2 flex-wrap mt-2 p-2 border rounded bg-muted/30">
+                            <label className="text-xs font-semibold text-foreground whitespace-nowrap">Bonus Time:</label>
+                            <input
+                                className="w-28 px-3 py-1.5 rounded border bg-background text-foreground text-sm [color-scheme:dark]"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                step={1}
+                                value={hourglassBrushSeconds}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const n = Math.max(1, Math.min(86400, Math.round(Number(raw)) || 0));
+                                    setHourglassBrushSeconds(n);
+                                }}
+                                title="Seconds added when Bonus Time is collected"
+                            />
+                            <div className="text-[11px] text-muted-foreground">sec bonus (needs timer on)</div>
+                        </div>
+                    )}
                     <div className="mt-2 relative">
                         {imageURL ? (
                             <div className="text-sm p-4 border rounded border-emerald-500/25 bg-emerald-500/10 text-emerald-100">

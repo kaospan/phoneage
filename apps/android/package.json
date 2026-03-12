@@ -5,6 +5,7 @@
   "scripts": {
     "sync:web": "node scripts/sync-web.mjs",
     "cap:add": "cap add android",
+    "cap:copy": "cap copy android",
     "cap:sync": "cap sync android",
     "cap:open": "cap open android"
   },
@@ -16,4 +17,3 @@
     "@capacitor/cli": "^6.0.0"
   }
 }
-

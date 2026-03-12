@@ -66,13 +66,14 @@ const CAMERA_ZOOM_LEVELS = [1.16, 1.08, 1.0, 0.97, 0.93, 0.9, 0.86, 0.82] as con
 const DEFAULT_CAMERA_ZOOM_INDEX = 4; // 0.93 => ~108%
   const VIEW_MODES = ["3d", "fps", "2d", "sprite"] as const;
   type ViewMode = (typeof VIEW_MODES)[number];
-  const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   "3d": "3D",
   fps: "FPS",
   "2d": "2D",
   sprite: "SPR",
   };
 const EMPTY_KEYS: KeyInventory = { red: false, green: false };
+const DEFAULT_BONUS_TIME_SECONDS = 50;
 
 type GridContentSize = { width: number; height: number };
 
@@ -223,6 +224,11 @@ export const PuzzleGame = () => {
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
+  const timerEnabledRef = useRef(false);
+
+  useEffect(() => {
+    timerEnabledRef.current = Boolean(levelTimeLimitSeconds);
+  }, [levelTimeLimitSeconds]);
 
   const clearTimerInterval = useCallback(() => {
     if (timerIntervalRef.current != null) {
@@ -249,6 +255,27 @@ export const PuzzleGame = () => {
     setTimeLeftSeconds(sec);
     timerRemainingMsRef.current = sec * 1000;
   }, [clearTimerInterval]);
+
+  const addLevelTimeSeconds = useCallback((deltaSeconds: number) => {
+    const delta = Math.max(0, Math.round(Number(deltaSeconds)));
+    if (delta <= 0) return;
+    if (!timerEnabledRef.current) return;
+
+    const deltaMs = delta * 1000;
+    const maxMs = 86400 * 1000;
+    const nextRemaining = Math.min(maxMs, timerRemainingMsRef.current + deltaMs);
+    timerRemainingMsRef.current = nextRemaining;
+
+    if (timerEndAtMsRef.current != null) {
+      timerEndAtMsRef.current = Math.min(Date.now() + maxMs, timerEndAtMsRef.current + deltaMs);
+    } else {
+      // If paused for some reason, resume with the extended remaining time.
+      timerEndAtMsRef.current = Date.now() + nextRemaining;
+    }
+
+    setIsTimeUp(false);
+    setTimeLeftSeconds(Math.ceil(nextRemaining / 1000));
+  }, []);
 
   const simRef = useRef<SimulationState | null>(null);
   const inputQueueRef = useRef<Map<PlayerId, InputCommand[]>>(new Map());
@@ -406,7 +433,7 @@ export const PuzzleGame = () => {
 
             const terrainTypes = adjacentCells.filter(c =>
               c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13
-            ).map((c) => (c === 18 || c === 19 ? 0 : c));
+            ).map((c) => (c === 18 || c === 19 || c === 20 ? 0 : c));
 
             if (terrainTypes.length > 0) {
               const counts = terrainTypes.reduce((acc, type) => {
@@ -920,6 +947,18 @@ export const PuzzleGame = () => {
           }
           if (outcome.unlockedLock && player.isLocal) {
             toast.success(`${outcome.unlockedLock.toUpperCase()} LOCK OPENED`);
+          }
+          if (outcome.collectedHourglass && player.isLocal) {
+            const at = outcome.collectedHourglass;
+            const key = `${at.x},${at.y}`;
+            const raw = (currentLevel as any)?.hourglassBonusByCell?.[key];
+            const bonus = Math.max(1, Math.min(86400, Math.round(Number(raw ?? DEFAULT_BONUS_TIME_SECONDS))));
+            if (timerEnabledRef.current) {
+              addLevelTimeSeconds(bonus);
+              toast.success(`+${bonus}s`, { duration: 1400 });
+            } else {
+              toast.info("BONUS TIME COLLECTED", { duration: 1400 });
+            }
           }
           if (outcome.brokeRock && player.isLocal) {
             toast.info("ROCK CRUMBLED!");

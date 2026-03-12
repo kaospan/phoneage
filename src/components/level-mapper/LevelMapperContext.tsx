@@ -61,6 +61,50 @@ const reshapeGridPreservingOverlap = (prev: number[][], nextRows: number, nextCo
     return next;
 };
 
+const parseCoordKey = (key: string): { x: number; y: number } | null => {
+    const parts = key.split(',');
+    if (parts.length !== 2) return null;
+    const x = Number(parts[0]);
+    const y = Number(parts[1]);
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+    return { x, y };
+};
+
+const clampHourglassBonusByCell = (prev: Record<string, number>, rows: number, cols: number) => {
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(prev)) {
+        const pos = parseCoordKey(k);
+        if (!pos) continue;
+        if (pos.x < 0 || pos.y < 0 || pos.y >= rows || pos.x >= cols) continue;
+        const n = Number(v);
+        if (!Number.isFinite(n)) continue;
+        out[`${pos.x},${pos.y}`] = Math.max(1, Math.min(86400, Math.round(n)));
+    }
+    return out;
+};
+
+const shiftHourglassBonusByCell = (
+    prev: Record<string, number>,
+    dx: number,
+    dy: number,
+    rows: number,
+    cols: number
+) => {
+    if (dx === 0 && dy === 0) return clampHourglassBonusByCell(prev, rows, cols);
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(prev)) {
+        const pos = parseCoordKey(k);
+        if (!pos) continue;
+        const x = pos.x + dx;
+        const y = pos.y + dy;
+        if (x < 0 || y < 0 || y >= rows || x >= cols) continue;
+        const n = Number(v);
+        if (!Number.isFinite(n)) continue;
+        out[`${x},${y}`] = Math.max(1, Math.min(86400, Math.round(n)));
+    }
+    return out;
+};
+
 const stripJsonComments = (value: string) => value.replace(/\/\/.*$/gm, '').trim();
 
 const parseGridJson = (value: string): number[][] => {
@@ -113,6 +157,29 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [cols, setCols] = useState(20);
         const [activeTile, setActiveTile] = useState(0);
         const [grid, setGrid] = useState<number[][]>(() => emptyGrid(12, 20));
+        const [hourglassBonusByCell, setHourglassBonusByCell] = useState<Record<string, number>>(() => {
+            if (typeof window === 'undefined') return {};
+            try {
+                const raw = localStorage.getItem('levelmapper_hourglassBonusByCell');
+                if (!raw) return {};
+                const parsed = JSON.parse(raw) as unknown;
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+                return clampHourglassBonusByCell(parsed as Record<string, number>, 12, 20);
+            } catch {
+                return {};
+            }
+        });
+        const [hourglassBrushSeconds, setHourglassBrushSeconds] = useState<number>(() => {
+            if (typeof window === 'undefined') return 50;
+            try {
+                const raw = localStorage.getItem('levelmapper_hourglassBrushSeconds');
+                const n = raw == null ? 50 : Number(raw);
+                if (!Number.isFinite(n)) return 50;
+                return Math.max(1, Math.min(86400, Math.round(n)));
+            } catch {
+                return 50;
+            }
+        });
         const [playerStart, setPlayerStart] = useState<{ x: number; y: number } | null>(null);
         const [theme, setTheme] = useState<ColorTheme | undefined>(undefined);
         const [timeLimitSeconds, setTimeLimitSeconds] = useState<number | null>(() => {
@@ -166,6 +233,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             playerStart: { x: number; y: number } | null;
             theme: ColorTheme | undefined;
             timeLimitSeconds: number | null;
+            hourglassBonusByCell: Record<string, number>;
             imageURL: string | null;
             overlayEnabled: boolean;
             overlayOpacity: number;
@@ -188,6 +256,16 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         useSaveCompareLevel(compareLevelIndex, saveCompareLevelIndex);
         useSaveImportLevel(importLevelIndex, saveImportLevelIndex);
 
+        // Persist the hourglass brush (tool) value between sessions.
+        useEffect(() => {
+            if (typeof window === 'undefined') return;
+            try {
+                localStorage.setItem('levelmapper_hourglassBrushSeconds', String(hourglassBrushSeconds));
+            } catch {
+                // ignore
+            }
+        }, [hourglassBrushSeconds]);
+
         // Detection results are image-specific; clear when the image changes.
         useEffect(() => {
             setLastGridDetection(null);
@@ -201,6 +279,20 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (!lvl) return;
             saveLevelLayoutOverride(lvl.id, rows, cols);
         }, [rows, cols, importLevelIndex, allLevels]);
+
+        // Keep hourglass metadata within current grid bounds.
+        useEffect(() => {
+            setHourglassBonusByCell((prev) => {
+                const next = clampHourglassBonusByCell(prev, rows, cols);
+                const prevKeys = Object.keys(prev);
+                const nextKeys = Object.keys(next);
+                if (prevKeys.length !== nextKeys.length) return next;
+                for (const k of nextKeys) {
+                    if (prev[k] !== next[k]) return next;
+                }
+                return prev;
+            });
+        }, [rows, cols]);
 
         // Persist per-level overlay image distortion (X/Y) so clipped/non-square screenshots can be aligned precisely.
         useEffect(() => {
@@ -261,6 +353,13 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setRows(resolved.grid.length);
                         setCols(resolved.grid[0]?.length || 0);
                         setGrid(resolved.grid.map(row => [...row]));
+                        setHourglassBonusByCell({ ...(resolved.hourglassBonusByCell ?? {}) });
+                        if (typeof resolved.timeLimitSeconds === 'number' && Number.isFinite(resolved.timeLimitSeconds)) {
+                            const n = Math.max(0, Math.round(Number(resolved.timeLimitSeconds)));
+                            setTimeLimitSeconds(n > 0 ? n : null);
+                        } else {
+                            setTimeLimitSeconds(null);
+                        }
                         if (storedUpload) {
                             setImageURL(storedUpload);
                         setOverlayEnabled(true);
@@ -278,12 +377,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     setGridFrameWidth(null);
                     setGridFrameHeight(null);
                     // Per-level image distortion is loaded via the effect above.
-                    if (resolved.playerStart) {
-                        setPlayerStart({ x: resolved.playerStart.x, y: resolved.playerStart.y });
-                    }
-                    if (resolved.theme) {
-                        setTheme(resolved.theme);
-                        }
+                    setPlayerStart(resolved.playerStart ? { x: resolved.playerStart.x, y: resolved.playerStart.y } : null);
+                    setTheme(resolved.theme);
                         console.log(`Auto-loaded Level ${resolved.id} from previous session`);
                     };
 
@@ -850,6 +945,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             playerStart: { x: number; y: number } | null;
             theme: ColorTheme | undefined;
             timeLimitSeconds: number | null;
+            hourglassBonusByCell?: Record<string, number>;
             imageURL: string | null;
             overlayEnabled: boolean;
             overlayOpacity: number;
@@ -867,6 +963,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 ...snapshot,
                 grid: snapshot.grid.map((row) => [...row]),
                 playerStart: snapshot.playerStart ? { ...snapshot.playerStart } : null,
+                hourglassBonusByCell: { ...(snapshot.hourglassBonusByCell ?? {}) },
             };
         };
 
@@ -885,6 +982,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setPlayerStart(snapshot.playerStart ? { ...snapshot.playerStart } : null);
             setTheme(snapshot.theme);
             setTimeLimitSeconds(snapshot.timeLimitSeconds ?? null);
+            setHourglassBonusByCell({ ...(snapshot.hourglassBonusByCell ?? {}) });
             setImageURL(snapshot.imageURL);
             setOverlayEnabled(snapshot.overlayEnabled);
             setOverlayOpacity(snapshot.overlayOpacity);
@@ -903,7 +1001,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         const saveChanges = () => {
-            const res = saveGridChanges(grid, playerStart, theme, timeLimitSeconds, importLevelIndex, allLevels);
+            const res = saveGridChanges(grid, playerStart, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
             setAllLevels(res.levels);
             setIsSaved(true);
 
@@ -915,6 +1013,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 playerStart,
                 theme,
                 timeLimitSeconds,
+                hourglassBonusByCell,
                 imageURL,
                 overlayEnabled,
                 overlayOpacity,
@@ -956,7 +1055,96 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         console.log('✓ Creating context value...');
-        const value: LevelMapperContextValue = { rows, cols, setRows, setCols, grid, setGrid, activeTile, setActiveTile, playerStart, setPlayerStart, theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, imageURL, setImageURL, canvasRef, zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight, showGrid, setShowGrid, overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch, imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect, allLevels, setAllLevels, compareLevelIndex, setCompareLevelIndex, compareLevel, importLevelIndex, setImportLevelIndex, undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0, isSaved, setIsSaved, saveChanges, showUnsavedBanner, detectGrid, snapToLockedCounts, detectCells, detectGridAndCells, useDetectCurrentCounts, setUseDetectCurrentCounts, lastGridDetection, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows, addColumnLeft, addColumnRight, addRowTop, addRowBottom, removeColumnLeft, removeColumnRight, removeRowTop, removeRowBottom, exportTS, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput, setLoadedSnapshot, resetToLoadedSnapshot, pushUndo, replaceGridShape };
+        const value: LevelMapperContextValue = {
+            rows,
+            cols,
+            setRows,
+            setCols,
+            grid,
+            setGrid,
+            activeTile,
+            setActiveTile,
+            hourglassBonusByCell,
+            setHourglassBonusByCell,
+            hourglassBrushSeconds,
+            setHourglassBrushSeconds,
+            playerStart,
+            setPlayerStart,
+            theme,
+            setTheme,
+            timeLimitSeconds,
+            setTimeLimitSeconds,
+            imageURL,
+            setImageURL,
+            canvasRef,
+            zoom,
+            setZoom,
+            gridOffsetX,
+            setGridOffsetX,
+            gridOffsetY,
+            setGridOffsetY,
+            gridFrameWidth,
+            setGridFrameWidth,
+            gridFrameHeight,
+            setGridFrameHeight,
+            showGrid,
+            setShowGrid,
+            overlayEnabled,
+            setOverlayEnabled,
+            overlayOpacity,
+            setOverlayOpacity,
+            overlayStretch,
+            setOverlayStretch,
+            imageScaleX,
+            setImageScaleX,
+            imageScaleY,
+            setImageScaleY,
+            lockImageAspect,
+            setLockImageAspect,
+            allLevels,
+            setAllLevels,
+            compareLevelIndex,
+            setCompareLevelIndex,
+            compareLevel,
+            importLevelIndex,
+            setImportLevelIndex,
+            undo,
+            redo,
+            canUndo: undoStack.length > 0,
+            canRedo: redoStack.length > 0,
+            isSaved,
+            setIsSaved,
+            saveChanges,
+            showUnsavedBanner,
+            detectGrid,
+            snapToLockedCounts,
+            detectCells,
+            detectGridAndCells,
+            useDetectCurrentCounts,
+            setUseDetectCurrentCounts,
+            lastGridDetection,
+            contextMenu,
+            setContextMenu,
+            addMultipleColumns,
+            addMultipleRows,
+            addColumnLeft,
+            addColumnRight,
+            addRowTop,
+            addRowBottom,
+            removeColumnLeft,
+            removeColumnRight,
+            removeRowTop,
+            removeRowBottom,
+            exportTS,
+            jsonInput,
+            setJsonInput,
+            syncJsonInputToGrid,
+            applyJsonInput,
+            setLoadedSnapshot,
+            resetToLoadedSnapshot,
+            pushUndo,
+            replaceGridShape,
+        };
 
         console.log('✅ LevelMapperProvider ready');
         return <LevelMapperContext.Provider value={value}>{children}</LevelMapperContext.Provider>;

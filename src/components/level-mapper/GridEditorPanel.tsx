@@ -17,6 +17,7 @@ export const GridEditorPanel: React.FC = () => {
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
         lastGridDetection,
         exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
+        hourglassBrushSeconds, setHourglassBonusByCell,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
         pushUndo,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
@@ -55,6 +56,26 @@ export const GridEditorPanel: React.FC = () => {
     const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
     const markUnsaved = React.useCallback(() => setIsSaved(false), [setIsSaved]);
+
+    const updateHourglassMetaAt = React.useCallback(
+        (row: number, col: number, tileId: number) => {
+            const key = `${col},${row}`;
+            setHourglassBonusByCell((prev) => {
+                // Avoid extra re-renders when there's nothing to change.
+                const had = Object.prototype.hasOwnProperty.call(prev, key);
+                if (tileId === 20) {
+                    const nextVal = Math.max(1, Math.min(86400, Math.round(Number(hourglassBrushSeconds) || 50)));
+                    if (had && prev[key] === nextVal) return prev;
+                    return { ...prev, [key]: nextVal };
+                }
+                if (!had) return prev;
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        },
+        [setHourglassBonusByCell, hourglassBrushSeconds]
+    );
 
     const importedLevelId = React.useMemo(() => {
         if (importLevelIndex === null) return null;
@@ -337,6 +358,7 @@ export const GridEditorPanel: React.FC = () => {
         const applyStartCaveAt = (row: number, col: number) => {
             if (!didPushUndoRef.current) { pushUndo(); didPushUndoRef.current = true; }
             setPlayerStart({ x: col, y: row });
+            updateHourglassMetaAt(row, col, 18);
             setGrid((g) => {
                 const ng = g.map((rr) => [...rr]);
 
@@ -379,6 +401,7 @@ export const GridEditorPanel: React.FC = () => {
             if (ng[r] && ng[r][c] !== undefined) ng[r][c] = activeTile;
             return ng;
         });
+        updateHourglassMetaAt(r, c, activeTile);
         trustedCellsRef.current.add(`${r},${c}`);
     };
     const continuePaint = (r: number, c: number) => {
@@ -395,6 +418,7 @@ export const GridEditorPanel: React.FC = () => {
             if (ng[r] && ng[r][c] !== undefined) ng[r][c] = activeTile;
             return ng;
         });
+        updateHourglassMetaAt(r, c, activeTile);
         trustedCellsRef.current.add(`${r},${c}`);
     };
     const endPaint = () => { isPaintingRef.current = false; didPushUndoRef.current = false; };

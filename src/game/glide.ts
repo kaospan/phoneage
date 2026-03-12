@@ -2,8 +2,8 @@ import { CellType, Position, PlayerGlideResult, ArrowMoveResult } from './types'
 import { isArrowCell } from './arrows';
 
 // Cells blocking glide (stop before entering)
-const PLAYER_GLIDE_BLOCKERS = new Set<CellType>([0, 1, 2, 3, 6, 18, 19]); // floor, fire/wall, stone, cave (goal), breakable rock, start-marker cave, teleport
-const REMOTE_GLIDE_BLOCKERS = new Set<CellType>([0, 1, 2, 3, 6, 18, 19]); // remote: floor stops, fire/wall, stone, cave, breakable rock, start-marker cave, teleport, arrows handled separately
+const PLAYER_GLIDE_BLOCKERS = new Set<CellType>([0, 1, 2, 3, 6, 18, 19, 20]); // floor, fire/wall, stone, cave (goal), breakable rock, start-marker cave, teleport, bonus time
+const REMOTE_GLIDE_BLOCKERS = new Set<CellType>([0, 1, 2, 3, 6, 18, 19, 20]); // remote: floor stops, fire/wall, stone, cave, breakable rock, start-marker cave, teleport, bonus time, arrows handled separately
 
 // Cells over which player-carried arrow may glide
 const PLAYER_GLIDABLE = new Set<CellType>([4,5]); // water, void

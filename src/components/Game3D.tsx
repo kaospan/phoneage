@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { themes, type ColorTheme } from '@/data/levels';
 import { isArrowCell } from '@/game/arrows';
+import { createClockIconCanvas } from '@/lib/canvasIcons';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
@@ -284,6 +285,61 @@ const LockTile = ({
           metalness={0.45}
         />
       </mesh>
+    </group>
+  );
+};
+
+// Bonus Time collectible (clock) - adds time to the countdown when collected.
+const BonusTimeTile = ({ position }: { position: [number, number, number] }) => {
+  const groupRef = useRef<THREE.Group | null>(null);
+  const glow = "#ef4444";
+
+  const iconTexture = useMemo(() => {
+    const canvas = createClockIconCanvas(128, { glow: "rgba(239,68,68,0.18)" });
+    if (!canvas) return null;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.anisotropy = 1;
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+
+  useFrame((state) => {
+    const g = groupRef.current;
+    if (!g) return;
+    const t = state.clock.getElapsedTime();
+    g.position.y = position[1] + 0.03 + Math.sin(t * 2.1) * 0.012;
+    g.rotation.y = 0;
+  });
+
+  return (
+    <group ref={groupRef} position={position} scale={1.18}>
+      {/* Glow ring */}
+      <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+        <ringGeometry args={[0.28, 0.42, 40]} />
+        <meshBasicMaterial color={glow} transparent opacity={0.8} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
+        <circleGeometry args={[0.28, 40]} />
+        <meshBasicMaterial color="#0b1220" transparent opacity={0.25} depthWrite={false} toneMapped={false} />
+      </mesh>
+
+      {/* Top-down clock icon (Bonus Time) */}
+      <mesh position={[0, 0.011, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
+        <planeGeometry args={[0.7, 0.7]} />
+        <meshBasicMaterial
+          map={iconTexture ?? undefined}
+          transparent
+          opacity={1}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+
+      <pointLight position={[0, 0.42, 0]} intensity={0.35} color={glow} distance={2.2} />
     </group>
   );
 };
@@ -983,61 +1039,130 @@ const StartCave = ({ position }: { position: [number, number, number] }) => {
   );
 };
 
-// Teleport pad (CD disc-like) - stepping on a pad teleports to its paired pad.
+// Teleport pad (wormhole/vortex) - stepping on a pad teleports to its paired pad.
 const TeleportTile = ({ position }: { position: [number, number, number] }) => {
-  const groupRef = useRef<THREE.Group | null>(null);
-  const shineRef = useRef<THREE.Mesh | null>(null);
+  const vortexRef = useRef<THREE.Mesh | null>(null);
+  const shimmerRef = useRef<THREE.Mesh | null>(null);
+  const lightRef = useRef<THREE.PointLight | null>(null);
+
+  const vortexTexture = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, size, size);
+    const cx = size / 2;
+    const cy = size / 2;
+    const r = size * 0.48;
+
+    // Base glow (cyan -> purple), dark core for depth.
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+    grad.addColorStop(0, 'rgba(0,0,0,0.95)');
+    grad.addColorStop(0.28, 'rgba(10,20,45,0.92)');
+    grad.addColorStop(0.55, 'rgba(0,210,255,0.88)');
+    grad.addColorStop(0.82, 'rgba(150,60,255,0.82)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Spiral arms.
+    ctx.save();
+    ctx.translate(cx, cy);
+    const arms = 3;
+    const turns = 3.2;
+    for (let a = 0; a < arms; a += 1) {
+      const phase = (a * Math.PI * 2) / arms;
+      ctx.beginPath();
+      for (let t = 0; t <= 1.001; t += 1 / 260) {
+        const rr = t * r * 0.92;
+        const ang = t * Math.PI * 2 * turns + phase;
+        const x = Math.cos(ang) * rr;
+        const y = Math.sin(ang) * rr;
+        if (t === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Outer rim.
+    ctx.strokeStyle = 'rgba(210,245,255,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Dark core (hole).
+    ctx.fillStyle = 'rgba(0,0,0,0.92)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.anisotropy = 1;
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
 
   useFrame((state) => {
-    const g = groupRef.current;
-    if (!g) return;
     const t = state.clock.getElapsedTime();
-    g.rotation.y = t * 0.6;
-    if (shineRef.current) {
-      shineRef.current.rotation.z = t * 0.9;
-    }
+    if (vortexRef.current) vortexRef.current.rotation.z = t * 0.75;
+    if (shimmerRef.current) shimmerRef.current.rotation.z = -t * 1.05;
+    if (lightRef.current) lightRef.current.intensity = 0.42 + Math.sin(t * 2.4) * 0.06;
   });
 
   return (
-    <group ref={groupRef} position={position}>
-      {/* Disc base */}
+    <group position={position}>
+      {/* Outer ring */}
       <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <circleGeometry args={[0.44, 48]} />
+        <ringGeometry args={[0.32, 0.46, 56]} />
         <meshStandardMaterial
-          color="#d7f6ff"
-          emissive="#69e6ff"
-          emissiveIntensity={0.18}
-          roughness={0.22}
-          metalness={0.95}
+          color="#22d3ee"
+          emissive="#67e8f9"
+          emissiveIntensity={0.28}
+          roughness={0.55}
+          metalness={0.15}
+          transparent
+          opacity={0.95}
         />
       </mesh>
 
-      {/* Inner ring + hole */}
-      <mesh position={[0, 0.013, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.14, 0.22, 48]} />
-        <meshStandardMaterial color="#0b1220" emissive="#0b1220" emissiveIntensity={0.25} roughness={1} metalness={0} />
-      </mesh>
-      <mesh position={[0, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.06, 24]} />
-        <meshStandardMaterial color="#050505" emissive="#000000" emissiveIntensity={0.0} roughness={1} metalness={0} />
-      </mesh>
-
-      {/* Shine sweep (sector) */}
-      <mesh
-        ref={shineRef}
-        position={[0, 0.016, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        renderOrder={10}
-      >
-        <circleGeometry args={[0.44, 48, Math.PI * 0.12, Math.PI * 0.22]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.2} depthWrite={false} toneMapped={false} />
-      </mesh>
-      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={9}>
-        <ringGeometry args={[0.3, 0.44, 48, 1, Math.PI * 1.1, Math.PI * 0.18]} />
-        <meshBasicMaterial color="#b6f3ff" transparent opacity={0.24} depthWrite={false} toneMapped={false} />
+      {/* Vortex surface */}
+      <mesh ref={vortexRef} position={[0, 0.013, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10}>
+        <circleGeometry args={[0.34, 56]} />
+        <meshBasicMaterial
+          map={vortexTexture ?? undefined}
+          transparent
+          opacity={0.95}
+          depthWrite={false}
+          toneMapped={false}
+        />
       </mesh>
 
-      <pointLight position={[0, 0.28, 0]} intensity={0.45} color="#69e6ff" distance={2.4} />
+      {/* Shimmer sweep */}
+      <mesh ref={shimmerRef} position={[0, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={11}>
+        <ringGeometry args={[0.14, 0.34, 56, 1, Math.PI * 0.9, Math.PI * 0.22]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.12} depthWrite={false} toneMapped={false} />
+      </mesh>
+
+      {/* Core hole */}
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
+        <circleGeometry args={[0.1, 28]} />
+        <meshStandardMaterial color="#050505" emissive="#000000" roughness={1} metalness={0} />
+      </mesh>
+
+      <pointLight ref={lightRef} position={[0, 0.28, 0]} intensity={0.42} color="#67e8f9" distance={2.6} />
     </group>
   );
 };
@@ -1366,7 +1491,8 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
         cloudGroup.position.x = xOffset - 10 - gridWidth / 2;
 
         // Subtle vertical bob
-        cloudGroup.position.y = -1.5 + Math.sin(time * 0.3 + i * 2) * 0.15;
+        // Keep clouds safely below the board so they never overlap non-void tiles.
+        cloudGroup.position.y = -2.2 + Math.sin(time * 0.3 + i * 2) * 0.1;
 
         // Slight opacity variation
         cloudGroup.children.forEach((mesh) => {
@@ -1402,7 +1528,7 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
         ref={(el) => {
           if (el) cloudRefs.current[cloud.id] = el;
         }}
-        position={[cloud.startX, -1.5, cloud.startZ]}
+        position={[cloud.startX, -2.2, cloud.startZ]}
         scale={cloud.scale}
       >
         {/* Cloud made of overlapping spheres */}
@@ -1879,6 +2005,7 @@ export const Game3D = ({
     const greenLocks: Array<[number, number, number]> = [];
     const startCaves: Array<[number, number, number]> = [];
     const teleports: Array<[number, number, number]> = [];
+    const bonusTime: Array<[number, number, number]> = [];
     const arrows: Array<{ x: number; y: number; cell: number }> = [];
 
     for (let y = 0; y < grid.length; y += 1) {
@@ -1903,13 +2030,14 @@ export const Game3D = ({
         if (cell === 17) greenLocks.push([pos[0], 0, pos[2]]);
         if (cell === 18) startCaves.push([pos[0], 0.02, pos[2]]);
         if (cell === 19) teleports.push([pos[0], 0.02, pos[2]]);
+        if (cell === 20) bonusTime.push([pos[0], 0.02, pos[2]]);
         if (isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13) {
           arrows.push({ x, y, cell });
         }
       }
     }
 
-    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, arrows };
+    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, bonusTime, arrows };
   }, [grid, offsetX, offsetZ]);
 
   const contentBounds = useMemo(() => {
@@ -2216,6 +2344,11 @@ export const Game3D = ({
         {/* Teleports */}
         {tileData.teleports.map((position, index) => (
           <TeleportTile key={`teleport-${index}-${position[0]}-${position[2]}`} position={position} />
+        ))}
+
+        {/* Bonus Time (clock) */}
+        {tileData.bonusTime.map((position, index) => (
+          <BonusTimeTile key={`bonus-time-${index}-${position[0]}-${position[2]}`} position={position} />
         ))}
 
         {/* Arrows (interactive) */}
