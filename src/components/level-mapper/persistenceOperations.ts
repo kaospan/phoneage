@@ -30,6 +30,8 @@ export const saveGridChanges = (
     levels: ReturnType<typeof getAllLevels>;
     override: 'saved' | 'cleared' | 'none';
     levelId: number | null;
+    gridSaved: number[][];
+    hourglassBonusByCellSaved: Record<string, number>;
 } => {
     // If the player start was mistakenly painted as the goal cave (3), convert it to the non-goal
     // start-marker cave (18) so reaching it does nothing and cavePos detection stays correct.
@@ -162,7 +164,13 @@ export const saveGridChanges = (
     }
     
     // Reload and return updated levels
-    return { levels: getAllLevels(), override, levelId };
+    return {
+        levels: getAllLevels(),
+        override,
+        levelId,
+        gridSaved: gridToSave,
+        hourglassBonusByCellSaved: hourglassToSave,
+    };
 };
 
 const LEVEL_LAYOUT_OVERRIDE_PREFIX = 'level_layout_override_';

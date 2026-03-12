@@ -1003,17 +1003,20 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const saveChanges = () => {
             const res = saveGridChanges(grid, playerStart, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
             setAllLevels(res.levels);
+            // Keep editor state in sync with the *actual* persisted payload (e.g. start-marker cave conversion).
+            setGrid(res.gridSaved.map((row) => [...row]));
+            setHourglassBonusByCell({ ...(res.hourglassBonusByCellSaved ?? {}) });
             setIsSaved(true);
 
             // Promote the current editor state (including rows/cols + overlay stretch tweaks) to be the new
             // "default" for this level's Reset Layout. This is what you want when you manually correct
             // the grid height/shape and then save.
             setLoadedSnapshot({
-                grid,
+                grid: res.gridSaved,
                 playerStart,
                 theme,
                 timeLimitSeconds,
-                hourglassBonusByCell,
+                hourglassBonusByCell: res.hourglassBonusByCellSaved,
                 imageURL,
                 overlayEnabled,
                 overlayOpacity,
@@ -1033,10 +1036,49 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setCompareLevelIndex(compareLevelIndex);
             }
 
+            // Dev-only: promote mapper saves into repo defaults (src/data/promoted-levels.json) so builds
+            // use your manual corrections as the default level data.
+            if (import.meta.env.DEV && res.override === 'saved' && res.levelId != null) {
+                const levelId = res.levelId;
+                const writerUrl = (import.meta.env.VITE_LEVEL_WRITER_URL as string | undefined) ?? 'http://localhost:8787/write-level-default';
+                const findCavePos = (g: number[][]) => {
+                    for (let y = 0; y < g.length; y += 1) {
+                        for (let x = 0; x < (g[y]?.length ?? 0); x += 1) {
+                            if (g[y][x] === 3) return { x, y };
+                        }
+                    }
+                    // Fallback; gameplay will still resync cavePos from the grid.
+                    return { x: 0, y: 0 };
+                };
+
+                const payload: Record<string, unknown> = {
+                    grid: res.gridSaved,
+                    playerStart: playerStart ?? { x: 0, y: 0 },
+                    cavePos: findCavePos(res.gridSaved),
+                };
+                if (theme !== undefined) payload.theme = theme;
+                if (timeLimitSeconds != null && Number.isFinite(timeLimitSeconds) && timeLimitSeconds > 0) {
+                    payload.timeLimitSeconds = Math.round(timeLimitSeconds);
+                }
+                if (res.hourglassBonusByCellSaved && Object.keys(res.hourglassBonusByCellSaved).length > 0) {
+                    payload.hourglassBonusByCell = res.hourglassBonusByCellSaved;
+                }
+
+                void fetch(`${writerUrl}?id=${levelId}&overwrite=1`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(payload),
+                }).catch((err) => {
+                    console.warn('level-default writer not available (skipping):', err);
+                });
+            }
+
             if (res.override === 'cleared' && res.levelId != null) {
                 alert(`Grid is empty. Cleared level ${res.levelId} override and reverted to its default map.`);
             } else if (res.override === 'saved' && res.levelId != null) {
-                alert(`Changes saved for level ${res.levelId}.`);
+                alert(
+                    `Changes saved for level ${res.levelId}.\n\nTip: To make this the repo default for builds, run \`npm run asset-writer\` while saving (dev-only).`
+                );
             } else {
                 alert('Changes saved!');
             }

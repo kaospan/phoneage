@@ -1,5 +1,6 @@
 import { stageImageSets } from '@/data/assetCatalog';
 import { loadCustomLevelDefinition, loadCustomLevelIds } from '@/lib/customLevels';
+import promotedLevelDefaultsRaw from '@/data/promoted-levels.json';
 
 // Stone Age DOS game levels
 // Legend: 
@@ -142,7 +143,96 @@ export const isPlaceholderGrid = (grid?: number[][]) => {
 export const shouldAllowLevelOverride = (level: Level) =>
   level.lockOverride !== true;
 
-export const manualLevels: Level[] = [
+type PromotedLevelDefault = Pick<
+  Level,
+  | 'id'
+  | 'grid'
+  | 'playerStart'
+  | 'cavePos'
+  | 'theme'
+  | 'timeLimitSeconds'
+  | 'hourglassBonusByCell'
+  | 'lockOverride'
+>;
+
+const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => {
+  if (!Array.isArray(value)) return [];
+
+  const out: PromotedLevelDefault[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as any;
+    const id = Number(e.id);
+    const grid = e.grid as unknown;
+    const playerStart = e.playerStart as unknown;
+    const cavePos = e.cavePos as unknown;
+
+    if (!Number.isInteger(id) || id <= 0) continue;
+    if (!Array.isArray(grid) || !Array.isArray(grid[0])) continue;
+    if (!playerStart || typeof playerStart !== 'object') continue;
+    if (!cavePos || typeof cavePos !== 'object') continue;
+
+    const psx = Number((playerStart as any).x);
+    const psy = Number((playerStart as any).y);
+    const cx = Number((cavePos as any).x);
+    const cy = Number((cavePos as any).y);
+    if (![psx, psy, cx, cy].every(Number.isInteger)) continue;
+
+    const rows = (grid as any[]).length;
+    const cols = Array.isArray((grid as any[])[0]) ? ((grid as any[])[0] as any[]).length : 0;
+    if (rows <= 0 || cols <= 0) continue;
+    if (psx < 0 || psy < 0 || psy >= rows || psx >= cols) continue;
+    if (cx < 0 || cy < 0 || cy >= rows || cx >= cols) continue;
+
+    const theme = typeof e.theme === 'string' && (e.theme as string) in themes ? (e.theme as ColorTheme) : undefined;
+    const timeLimitSeconds =
+      e.timeLimitSeconds === undefined ? undefined : Math.max(1, Math.min(86400, Math.round(Number(e.timeLimitSeconds))));
+
+    const hourglassBonusByCell =
+      e.hourglassBonusByCell && typeof e.hourglassBonusByCell === 'object' ? (e.hourglassBonusByCell as Record<string, number>) : undefined;
+
+    out.push({
+      id,
+      grid: grid as number[][],
+      playerStart: { x: psx, y: psy },
+      cavePos: { x: cx, y: cy },
+      ...(theme ? { theme } : {}),
+      ...(Number.isFinite(timeLimitSeconds) ? { timeLimitSeconds } : {}),
+      ...(hourglassBonusByCell ? { hourglassBonusByCell } : {}),
+      ...(e.lockOverride !== undefined ? { lockOverride: Boolean(e.lockOverride) } : {}),
+    });
+  }
+
+  return out;
+};
+
+const promotedLevelDefaults = coercePromotedLevelDefaults(promotedLevelDefaultsRaw);
+
+const applyPromotedLevelDefaults = (levels: Level[]): Level[] => {
+  if (promotedLevelDefaults.length === 0) return levels;
+
+  const byId = new Map<number, PromotedLevelDefault>();
+  for (const p of promotedLevelDefaults) byId.set(p.id, p);
+
+  const seen = new Set<number>();
+  const merged = levels.map((l) => {
+    const p = byId.get(l.id);
+    if (!p) return l;
+    seen.add(l.id);
+    // These are explicit, user-promoted defaults; never auto-build over them.
+    return { ...l, ...p, autoBuild: false };
+  });
+
+  for (const p of promotedLevelDefaults) {
+    if (seen.has(p.id)) continue;
+    merged.push({ ...p, autoBuild: false });
+  }
+
+  merged.sort((a, b) => a.id - b.id);
+  return merged;
+};
+
+const baseManualLevels: Level[] = [
   // Level 1 - User custom grid
   {
     id: 1,
@@ -281,6 +371,8 @@ export const manualLevels: Level[] = [
     cavePos: { x: 14, y: 6 }
   }
 ];
+
+export const manualLevels: Level[] = applyPromotedLevelDefaults(baseManualLevels);
 
 export const manualFallbackById = new Map(manualLevels.map((level) => [level.id, level]));
 const manualById = new Map(manualLevels.map((level) => [level.id, level]));

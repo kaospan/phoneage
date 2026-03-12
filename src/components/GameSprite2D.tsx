@@ -339,10 +339,19 @@ export function GameSprite2D({
   return (
     <div
       className={[
-        "w-full h-full flex overflow-hidden touch-none select-none bg-black",
+        "w-full h-full flex overflow-hidden touch-none select-none",
         // In fullscreen mode, keep the board visually lower so the HUD never occludes rows.
         fullBleed ? "items-end justify-center" : "items-center justify-center",
       ].join(" ")}
+      style={{
+        // Outside the board perimeter we show the original level screenshot for nostalgia.
+        // Inside the board, void cells are transparent but sit on a black board background.
+        backgroundColor: "black",
+        backgroundImage: levelImageUrl ? `url(${levelImageUrl})` : undefined,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+      }}
       onClick={() => onCancelSelection?.()}
     >
       <div
@@ -354,7 +363,8 @@ export function GameSprite2D({
       >
         <div
           className={[
-            "grid gap-[2px] bg-transparent",
+            // The board itself is always black so void reads as empty even if the screenshot has detail.
+            "grid gap-[2px] bg-black",
             fullBleed ? "p-0 rounded-none" : "p-2 rounded-lg",
           ].join(" ")}
           style={{
