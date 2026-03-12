@@ -1119,7 +1119,9 @@ export const PuzzleGame = () => {
         return;
       }
 
-      toast.info("Move the selector onto an arrow block, then press Space or Enter.");
+      // If user tries to "select" a non-arrow cell, just return control to player silently.
+      resetSelectorToPlayer();
+      flashPlayerHighlight();
     }, [
       enqueueInput,
       flashPlayerHighlight,

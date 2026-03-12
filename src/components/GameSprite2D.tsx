@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
 import { createClockIconDataUrl, createKeyIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
+import { referenceSpriteUrls } from "@/data/assetCatalog";
 import { detectGridLines } from "@/components/level-mapper/gridDetection";
 import { getAlignmentHints } from "@/components/level-mapper/alignmentProfile";
 import { normalizeMapperImage } from "@/components/level-mapper/imageNormalization";
@@ -41,6 +42,13 @@ const pickLatestByType = (refs: CellReference[]) => {
     if (!existing || ref.timestamp > existing.timestamp) latest.set(ref.tileType, ref);
   }
   return latest;
+};
+
+const getStartCaveSpriteFallback = () => {
+  // Start cave (18) is a synthetic marker we paint into the grid to show the original spawn tile.
+  // It does not exist in the level screenshot (the hero covers a floor tile), so sampling it from
+  // the screenshot would capture the hero. Use the built-in cave reference sprite instead.
+  return referenceSpriteUrls.cave;
 };
 
 export function GameSprite2D({
@@ -179,7 +187,10 @@ export function GameSprite2D({
             const raw = atlasGrid[r]?.[c];
             if (raw === undefined) continue;
             const tileType = cavePos.x === c && cavePos.y === r ? 3 : raw;
-            if (tileType === 5) continue; // void handled separately in sprite mode (transparent)
+            // Void is handled separately in sprite mode (transparent).
+            if (tileType === 5) continue;
+            // Start cave (18) is synthetic; never sample it from the screenshot or we'll capture the hero.
+            if (tileType === 18) continue;
             if (!sampleByType.has(tileType)) sampleByType.set(tileType, { row: r, col: c });
           }
         }
@@ -336,6 +347,8 @@ export function GameSprite2D({
     return createClockIconDataUrl(32, { glow: "rgba(239,68,68,0.18)" });
   }, []);
 
+  const startCaveFallbackUrl = useMemo(() => getStartCaveSpriteFallback(), []);
+
   return (
     <div
       className={[
@@ -396,14 +409,15 @@ export function GameSprite2D({
               // - Void must be visually empty (transparent) so the game background shows through.
               // - Do not use atlas/ref sprites for void even if present.
                 const backgroundImage =
-                 tileType === 5 ? undefined :
-                 atlasSprite ? `url(${atlasSprite})` :
-                 refSprite ? `url(${refSprite})` :
-                 tileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
-                 tileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
-                 tileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
-                 tileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
-                 undefined;
+                  tileType === 5 ? undefined :
+                  tileType === 18 ? (refSprite ? `url(${refSprite})` : startCaveFallbackUrl ? `url(${startCaveFallbackUrl})` : undefined) :
+                  atlasSprite ? `url(${atlasSprite})` :
+                  refSprite ? `url(${refSprite})` :
+                  tileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
+                  tileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
+                  tileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
+                  tileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
+                  undefined;
 
               const fallback =
                 tileType === 5 ? "transparent" :

@@ -342,6 +342,152 @@ export function createClockIconDataUrl(size: number, opts?: ClockIconOptions): s
   return canvas ? canvas.toDataURL("image/png") : null;
 }
 
+export type BreakableRockTileOptions = {
+  /** Base tile fill (mid tone). */
+  base?: string;
+  /** Light bevel / highlight. */
+  highlight?: string;
+  /** Dark bevel / shadow. */
+  shadow?: string;
+  /** Crack core color. */
+  crack?: string;
+  /** Crack rim highlight color (subtle). */
+  crackRim?: string;
+};
+
+function getBreakableRockDefaults(opts?: BreakableRockTileOptions): Required<BreakableRockTileOptions> {
+  return {
+    // Defaults chosen to resemble the original DOS "breakable rock" tile (brown stone with cracks).
+    base: opts?.base ?? "rgba(146, 92, 58, 1)",
+    highlight: opts?.highlight ?? "rgba(205, 152, 104, 1)",
+    shadow: opts?.shadow ?? "rgba(64, 34, 18, 1)",
+    crack: opts?.crack ?? "rgba(26, 14, 8, 1)",
+    crackRim: opts?.crackRim ?? "rgba(255, 240, 210, 0.35)",
+  };
+}
+
+/**
+ * Draw a pixel-art-ish top-down breakable rock tile.
+ * Deterministic (no Math.random) so builds are stable.
+ */
+export function drawBreakableRockTile(ctx: CanvasRenderingContext2D, size: number, opts?: BreakableRockTileOptions) {
+  const { base, highlight, shadow, crack, crackRim } = getBreakableRockDefaults(opts);
+
+  ctx.clearRect(0, 0, size, size);
+
+  // Base fill.
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+
+  // Gentle diagonal shading (gives the tile some "block" depth without a full gradient wash).
+  const diag = ctx.createLinearGradient(0, 0, size, size);
+  diag.addColorStop(0, "rgba(255,255,255,0.10)");
+  diag.addColorStop(0.55, "rgba(0,0,0,0.00)");
+  diag.addColorStop(1, "rgba(0,0,0,0.18)");
+  ctx.fillStyle = diag;
+  ctx.fillRect(0, 0, size, size);
+
+  // Right-side face shadow (matches the reference: darker strip on the right).
+  ctx.fillStyle = "rgba(0,0,0,0.14)";
+  ctx.fillRect(Math.floor(size * 0.72), 0, Math.ceil(size * 0.28), size);
+
+  // Bevel border (DOS-like): top/left highlight, bottom/right shadow.
+  ctx.fillStyle = highlight;
+  ctx.fillRect(0, 0, size, 1);
+  ctx.fillRect(0, 0, 1, size);
+  ctx.fillStyle = shadow;
+  ctx.fillRect(0, size - 1, size, 1);
+  ctx.fillRect(size - 1, 0, 1, size);
+
+  // Inner bevel (subtle).
+  ctx.fillStyle = "rgba(255,255,255,0.10)";
+  ctx.fillRect(1, 1, size - 2, 1);
+  ctx.fillRect(1, 1, 1, size - 2);
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.fillRect(1, size - 2, size - 2, 1);
+  ctx.fillRect(size - 2, 1, 1, size - 2);
+
+  // A few deterministic "chips"/speckles (keeps it from looking flat).
+  const specks: Array<[number, number, "l" | "d"]> = [
+    [4, 5, "l"], [8, 7, "d"], [12, 4, "l"], [18, 6, "d"],
+    [6, 14, "d"], [10, 12, "l"], [22, 10, "d"], [26, 8, "l"],
+    [5, 22, "d"], [9, 24, "l"], [20, 22, "d"], [25, 26, "l"],
+  ];
+  for (const [x, y, t] of specks) {
+    ctx.fillStyle = t === "l" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.12)";
+    ctx.fillRect(x, y, 1, 1);
+  }
+
+  const strokeCrack = (pts: Array<[number, number]>) => {
+    // Dark core.
+    ctx.strokeStyle = crack;
+    ctx.lineWidth = 1;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+
+    // Rim highlight (slightly offset like etched pixels).
+    ctx.strokeStyle = crackRim;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0] + 1, pts[0][1]);
+    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i][0] + 1, pts[i][1]);
+    ctx.stroke();
+  };
+
+  // Cracks: a "cross" + small branches to match the classic breakable block feel.
+  const m = Math.floor(size / 2);
+  strokeCrack([
+    [Math.floor(size * 0.28), Math.floor(size * 0.30)],
+    [m - 2, Math.floor(size * 0.34)],
+    [m + 1, m - 1],
+    [m + 2, Math.floor(size * 0.70)],
+  ]);
+  strokeCrack([
+    [Math.floor(size * 0.22), m + 2],
+    [m - 2, m],
+    [Math.floor(size * 0.78), m + 3],
+  ]);
+  strokeCrack([
+    [m + 2, Math.floor(size * 0.18)],
+    [m + 4, m - 2],
+    [Math.floor(size * 0.86), m - 6],
+  ]);
+  strokeCrack([
+    [Math.floor(size * 0.40), Math.floor(size * 0.82)],
+    [m - 1, m + 4],
+    [Math.floor(size * 0.30), Math.floor(size * 0.62)],
+  ]);
+
+  // Corner chunk shadow (tiny 2x2) to mimic the sprite's fractured pieces.
+  ctx.fillStyle = "rgba(0,0,0,0.14)";
+  ctx.fillRect(Math.floor(size * 0.12), Math.floor(size * 0.12), 2, 2);
+  ctx.fillRect(Math.floor(size * 0.60), Math.floor(size * 0.52), 2, 2);
+  ctx.fillStyle = "rgba(255,255,255,0.10)";
+  ctx.fillRect(Math.floor(size * 0.16), Math.floor(size * 0.14), 1, 1);
+  ctx.fillRect(Math.floor(size * 0.62), Math.floor(size * 0.54), 1, 1);
+}
+
+export function createBreakableRockTileCanvas(size: number, opts?: BreakableRockTileOptions): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  // Keep pixels crisp even if callers scale this canvas into a texture.
+  ctx.imageSmoothingEnabled = false;
+  drawBreakableRockTile(ctx, size, opts);
+  return canvas;
+}
+
+export function createBreakableRockTileDataUrl(size: number, opts?: BreakableRockTileOptions): string | null {
+  const canvas = createBreakableRockTileCanvas(size, opts);
+  return canvas ? canvas.toDataURL("image/png") : null;
+}
+
 export type VortexIconOptions = {
   /** Bright inner swirl color. */
   inner?: string;

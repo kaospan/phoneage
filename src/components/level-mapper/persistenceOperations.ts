@@ -203,7 +203,7 @@ export const loadLevelLayoutOverride = (levelId: number): { rows: number; cols: 
     }
 };
 
-export type LevelImageScale = { x: number; y: number; lock: boolean };
+export type LevelImageScale = { x: number; y: number; lock: boolean; offsetY?: number };
 
 export const loadLevelImageScale = (levelId: number): LevelImageScale | null => {
     if (typeof window === 'undefined') return null;
@@ -214,9 +214,10 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
         if (!parsed || typeof parsed !== 'object') return null;
         const x = Number((parsed as any).x ?? 1);
         const y = Number((parsed as any).y ?? 1);
+        const offsetY = Number((parsed as any).offsetY ?? 0);
         const lock = Boolean((parsed as any).lock ?? true);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-        return { x, y, lock };
+        return { x, y, lock, offsetY: Number.isFinite(offsetY) ? offsetY : 0 };
     } catch {
         return null;
     }

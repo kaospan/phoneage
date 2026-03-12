@@ -43,7 +43,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         detectGrid, snapToLockedCounts, detectCells, detectGridAndCells,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
-        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
+        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
         hourglassBrushSeconds, setHourglassBrushSeconds, setHourglassBonusByCell,
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
@@ -234,13 +234,16 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         if (savedScale) {
             const x = Number(savedScale.x);
             const y = Number(savedScale.y);
+            const offsetY = Number((savedScale as any).offsetY ?? 0);
             const lock = Boolean(savedScale.lock);
             if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
             if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+            if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
             setLockImageAspect(lock);
         } else {
             setImageScaleX(1);
             setImageScaleY(1);
+            setImageOffsetY(0);
             setLockImageAspect(true);
         }
 
@@ -273,6 +276,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             overlayStretch: true,
             imageScaleX: savedScale?.x ?? 1,
             imageScaleY: savedScale?.y ?? 1,
+            imageOffsetY: Number((savedScale as any)?.offsetY ?? 0),
             lockImageAspect: savedScale?.lock ?? true,
             zoom: 1,
             gridOffsetX: 0,

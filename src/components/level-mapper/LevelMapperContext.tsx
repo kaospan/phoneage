@@ -218,13 +218,23 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const prevSizeRef = useRef({ rows, cols });
         const skipAutoResizeRef = useRef(false);
         const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: BulkContextType } | null>(null);
-        const [undoStack, setUndoStack] = useState<number[][][]>([]);
-        const [redoStack, setRedoStack] = useState<number[][][]>([]);
+        type UndoLayoutSnapshot = {
+            kind: 'layout';
+            grid: number[][];
+            imageScaleX: number;
+            imageScaleY: number;
+            imageOffsetY: number;
+            lockImageAspect: boolean;
+        };
+        type UndoEntry = number[][] | UndoLayoutSnapshot;
+        const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+        const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
         const [overlayEnabled, setOverlayEnabled] = useState(false);
         const [overlayOpacity, setOverlayOpacity] = useState(0.5);
         const [overlayStretch, setOverlayStretch] = useState(true);
         const [imageScaleX, setImageScaleX] = useState(1);
         const [imageScaleY, setImageScaleY] = useState(1);
+        const [imageOffsetY, setImageOffsetY] = useState(0);
         const [lockImageAspect, setLockImageAspect] = useState(true);
         const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(false);
         const [lastGridDetection, setLastGridDetection] = useState<ReturnType<typeof detectGridLines> | null>(null);
@@ -240,6 +250,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             overlayStretch: boolean;
             imageScaleX: number;
             imageScaleY: number;
+            imageOffsetY: number;
             lockImageAspect: boolean;
             zoom: number;
             gridOffsetX: number;
@@ -304,13 +315,16 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (saved) {
                 const x = Number(saved.x);
                 const y = Number(saved.y);
+                const offsetY = Number((saved as any).offsetY ?? 0);
                 const lock = Boolean(saved.lock);
                 if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
                 if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+                if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
                 setLockImageAspect(lock);
             } else {
                 setImageScaleX(1);
                 setImageScaleY(1);
+                setImageOffsetY(0);
                 setLockImageAspect(true);
             }
             // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -320,8 +334,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (importLevelIndex === null) return;
             const lvl = allLevels[importLevelIndex];
             if (!lvl) return;
-            saveLevelImageScale(lvl.id, { x: imageScaleX, y: imageScaleY, lock: lockImageAspect });
-        }, [importLevelIndex, allLevels, imageScaleX, imageScaleY, lockImageAspect]);
+            saveLevelImageScale(lvl.id, { x: imageScaleX, y: imageScaleY, offsetY: imageOffsetY, lock: lockImageAspect });
+        }, [importLevelIndex, allLevels, imageScaleX, imageScaleY, imageOffsetY, lockImageAspect]);
 
         // Auto-load level on startup if one was previously imported.
         // For placeholder auto-build levels, load the image and keep the editor responsive
@@ -496,8 +510,62 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             });
         };
 
-        const undo = () => { if (undoStack.length === 0) return; setRedoStack(s => [...s, grid.map(r => [...r])]); const prev = undoStack[undoStack.length - 1]; setGrid(prev.map(r => [...r])); setUndoStack(s => s.slice(0, -1)); setIsSaved(false); };
-        const redo = () => { if (redoStack.length === 0) return; setUndoStack(s => [...s, grid.map(r => [...r])]); const next = redoStack[redoStack.length - 1]; setGrid(next.map(r => [...r])); setRedoStack(s => s.slice(0, -1)); setIsSaved(false); };
+        const createLayoutUndoEntry = (): UndoLayoutSnapshot => ({
+            kind: 'layout',
+            grid: grid.map((r) => [...r]),
+            imageScaleX,
+            imageScaleY,
+            imageOffsetY,
+            lockImageAspect,
+        });
+
+        const pushUndoSnapshot = () => {
+            setUndoStack((s) => [...s, createLayoutUndoEntry()]);
+            setRedoStack([]);
+            setIsSaved(false);
+        };
+
+        const undo = () => {
+            if (undoStack.length === 0) return;
+            const prev = undoStack[undoStack.length - 1];
+
+            if (Array.isArray(prev)) {
+                // Grid-only edit: undo just the grid so layout tweaks remain.
+                setRedoStack((s) => [...s, grid.map((r) => [...r])]);
+                setGrid(prev.map((r) => [...r]));
+            } else {
+                // Layout tweak: undo grid + layout fields.
+                setRedoStack((s) => [...s, createLayoutUndoEntry()]);
+                setGrid(prev.grid.map((r) => [...r]));
+                setImageScaleX(prev.imageScaleX);
+                setImageScaleY(prev.imageScaleY);
+                setImageOffsetY(prev.imageOffsetY);
+                setLockImageAspect(prev.lockImageAspect);
+            }
+
+            setUndoStack((s) => s.slice(0, -1));
+            setIsSaved(false);
+        };
+
+        const redo = () => {
+            if (redoStack.length === 0) return;
+            const next = redoStack[redoStack.length - 1];
+
+            if (Array.isArray(next)) {
+                setUndoStack((s) => [...s, grid.map((r) => [...r])]);
+                setGrid(next.map((r) => [...r]));
+            } else {
+                setUndoStack((s) => [...s, createLayoutUndoEntry()]);
+                setGrid(next.grid.map((r) => [...r]));
+                setImageScaleX(next.imageScaleX);
+                setImageScaleY(next.imageScaleY);
+                setImageOffsetY(next.imageOffsetY);
+                setLockImageAspect(next.lockImageAspect);
+            }
+
+            setRedoStack((s) => s.slice(0, -1));
+            setIsSaved(false);
+        };
 
         const referenceSigCacheRef = useRef<{
             key: string;
@@ -952,6 +1020,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             overlayStretch: boolean;
             imageScaleX: number;
             imageScaleY: number;
+            imageOffsetY?: number;
             lockImageAspect: boolean;
             zoom: number;
             gridOffsetX: number;
@@ -961,6 +1030,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }) => {
             loadedSnapshotRef.current = {
                 ...snapshot,
+                imageOffsetY: Number.isFinite(snapshot.imageOffsetY as any) ? Number(snapshot.imageOffsetY) : 0,
                 grid: snapshot.grid.map((row) => [...row]),
                 playerStart: snapshot.playerStart ? { ...snapshot.playerStart } : null,
                 hourglassBonusByCell: { ...(snapshot.hourglassBonusByCell ?? {}) },
@@ -989,6 +1059,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setOverlayStretch(snapshot.overlayStretch);
             setImageScaleX(snapshot.imageScaleX);
             setImageScaleY(snapshot.imageScaleY);
+            setImageOffsetY(snapshot.imageOffsetY ?? 0);
             setLockImageAspect(snapshot.lockImageAspect);
             setZoom(snapshot.zoom);
             setGridOffsetX(snapshot.gridOffsetX);
@@ -1023,6 +1094,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 overlayStretch,
                 imageScaleX,
                 imageScaleY,
+                imageOffsetY,
                 lockImageAspect,
                 zoom,
                 gridOffsetX,
@@ -1141,6 +1213,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setImageScaleX,
             imageScaleY,
             setImageScaleY,
+            imageOffsetY,
+            setImageOffsetY,
             lockImageAspect,
             setLockImageAspect,
             allLevels,
@@ -1185,6 +1259,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setLoadedSnapshot,
             resetToLoadedSnapshot,
             pushUndo,
+            pushUndoSnapshot,
             replaceGridShape,
         };
 

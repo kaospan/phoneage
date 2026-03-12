@@ -66,6 +66,9 @@ export interface LevelMapperContextValue {
   setImageScaleX: (n: number) => void;
   imageScaleY: number;
   setImageScaleY: (n: number) => void;
+  // Extra overlay image vertical translation (in source image pixels), used to anchor stretch from top/bottom.
+  imageOffsetY: number;
+  setImageOffsetY: (n: number) => void;
   lockImageAspect: boolean;
   setLockImageAspect: (b: boolean) => void;
 
@@ -134,6 +137,7 @@ export interface LevelMapperContextValue {
     overlayStretch: boolean;
     imageScaleX: number;
     imageScaleY: number;
+    imageOffsetY?: number;
     lockImageAspect: boolean;
     zoom: number;
     gridOffsetX: number;
@@ -145,6 +149,8 @@ export interface LevelMapperContextValue {
 
   // Editing helpers
   pushUndo: () => void;
+  // Pushes a snapshot that includes layout (overlay scale/offset) so undo/redo can revert image alignment tweaks.
+  pushUndoSnapshot: () => void;
   replaceGridShape: (nextGrid: number[][]) => void;
 }
 

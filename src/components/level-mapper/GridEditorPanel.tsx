@@ -14,12 +14,12 @@ export const GridEditorPanel: React.FC = () => {
         compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
         importLevelIndex,
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity, overlayStretch, setOverlayStretch,
-        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, lockImageAspect, setLockImageAspect,
+        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         lastGridDetection,
         exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
         hourglassBrushSeconds, setHourglassBonusByCell,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
-        pushUndo,
+        pushUndo, pushUndoSnapshot,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         addMultipleColumns, addMultipleRows, contextMenu, setContextMenu,
         showUnsavedBanner, isSaved: savedFlag, imageURL,
@@ -36,7 +36,7 @@ export const GridEditorPanel: React.FC = () => {
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
     const [isResizingImageY, setIsResizingImageY] = React.useState(false);
-    const resizeYStartRef = React.useRef<{ y: number; scaleY: number; direction: 1 | -1 } | null>(null);
+    const resizeYStartRef = React.useRef<{ y: number; scaleY: number; offsetY: number; direction: 1 | -1; bottomPx?: number } | null>(null);
     // Track cells the user manually painted/confirmed so learning can use trusted labels only.
     const trustedCellsRef = React.useRef<Set<string>>(new Set());
     const [showAlignmentGuide, setShowAlignmentGuide] = React.useState(true);
@@ -204,6 +204,8 @@ export const GridEditorPanel: React.FC = () => {
     const scaledDisplayHeight = displaySize.height * imageScaleY;
     const overlayScaleX = imageNaturalSize ? scaledDisplayWidth / imageNaturalSize.width : 1;
     const overlayScaleY = imageNaturalSize ? scaledDisplayHeight / imageNaturalSize.height : 1;
+    const imageTopPx = imageOffsetY * overlayScaleY;
+    const imageBottomPx = imageTopPx + scaledDisplayHeight;
     const displayOffsetX = gridOffsetX * overlayScaleX;
     const displayOffsetY = gridOffsetY * overlayScaleY;
     const naturalFrameWidth = gridFrameWidth ?? imageNaturalSize?.width ?? 0;
@@ -214,7 +216,7 @@ export const GridEditorPanel: React.FC = () => {
         if (guideGrid.rows !== rows || guideGrid.cols !== cols) return null;
 
         const guideOffsetX = guideGrid.offsetX * overlayScaleX;
-        const guideOffsetY = guideGrid.offsetY * overlayScaleY;
+        const guideOffsetY = imageTopPx + guideGrid.offsetY * overlayScaleY;
         const guideCellW = guideGrid.cellWidth * overlayScaleX;
         const guideCellH = guideGrid.cellHeight * overlayScaleY;
 
@@ -250,6 +252,7 @@ export const GridEditorPanel: React.FC = () => {
         cols,
         overlayScaleX,
         overlayScaleY,
+        imageTopPx,
         displayOffsetX,
         displayOffsetY,
         cellWidth,
@@ -265,17 +268,20 @@ export const GridEditorPanel: React.FC = () => {
         const wantedOverlayScaleY = cellHeight / guideGrid.cellHeight;
         if (!Number.isFinite(wantedOverlayScaleY) || wantedOverlayScaleY <= 0) return;
         const next = Math.max(0.85, Math.min(1.15, wantedOverlayScaleY / baseOverlayScaleY));
+        pushUndoSnapshot();
         markUnsaved();
         setLockImageAspect(false);
         setImageScaleY(Number(next.toFixed(3)));
-    }, [guideGrid, imageNaturalSize, displaySize.height, cellHeight, markUnsaved]);
+    }, [guideGrid, imageNaturalSize, displaySize.height, cellHeight, markUnsaved, pushUndoSnapshot, setImageScaleY, setLockImageAspect]);
 
     const beginResizeImageY = React.useCallback((clientY: number, direction: 1 | -1) => {
+        pushUndoSnapshot();
         markUnsaved();
         setLockImageAspect(false);
-        resizeYStartRef.current = { y: clientY, scaleY: imageScaleY, direction };
+        const bottomPx = direction === -1 && imageNaturalSize ? (imageOffsetY + imageNaturalSize.height) * overlayScaleY : undefined;
+        resizeYStartRef.current = { y: clientY, scaleY: imageScaleY, offsetY: imageOffsetY, direction, bottomPx };
         setIsResizingImageY(true);
-    }, [imageScaleY, markUnsaved]);
+    }, [imageScaleY, imageOffsetY, imageNaturalSize, markUnsaved, overlayScaleY, pushUndoSnapshot, setLockImageAspect]);
 
     const moveResizeImageY = React.useCallback((clientY: number) => {
         const start = resizeYStartRef.current;
@@ -286,7 +292,16 @@ export const GridEditorPanel: React.FC = () => {
         const next = start.scaleY * (1 + dy / denom);
         const clamped = Math.max(0.85, Math.min(1.15, next));
         setImageScaleY(Number(clamped.toFixed(3)));
-    }, [scaledDisplayHeight]);
+        if (start.direction === -1 && start.bottomPx != null && imageNaturalSize && displaySize.height > 0) {
+            // Keep the bottom edge fixed when resizing from the top handle so "void" appears on top.
+            const imgH = imageNaturalSize.height;
+            const nextOverlayScaleY = (displaySize.height * clamped) / imgH;
+            if (Number.isFinite(nextOverlayScaleY) && nextOverlayScaleY > 0) {
+                const nextOffsetY = start.bottomPx / nextOverlayScaleY - imgH;
+                setImageOffsetY(Math.max(0, Number(nextOffsetY.toFixed(2))));
+            }
+        }
+    }, [scaledDisplayHeight, imageNaturalSize, displaySize.height, setImageOffsetY, setImageScaleY]);
 
     const endResizeImageY = React.useCallback(() => {
         resizeYStartRef.current = null;
@@ -595,8 +610,10 @@ export const GridEditorPanel: React.FC = () => {
     // Get the import level info for display
     const importLevel = importLevelIndex !== null && importLevelIndex !== undefined ? allLevels[importLevelIndex] : null;
     const rulerSizePx = RULER_SIZE_PX;
-    const contentWidthPx = Math.max(scaledDisplayWidth, cols * cellWidth);
-    const contentHeightPx = Math.max(scaledDisplayHeight, rows * cellHeight);
+    const gridRightPx = displayOffsetX + cols * cellWidth;
+    const gridBottomPx = displayOffsetY + rows * cellHeight;
+    const contentWidthPx = Math.max(scaledDisplayWidth, gridRightPx);
+    const contentHeightPx = Math.max(imageBottomPx, gridBottomPx);
 
     return (
         <div className="w-full lg:flex-1 lg:min-w-0 bg-card rounded border p-2">
@@ -1130,9 +1147,10 @@ export const GridEditorPanel: React.FC = () => {
                                     <img
                                         src={imageURL}
                                         alt="overlay"
-                                        className="absolute top-0 left-0 pointer-events-none"
+                                        className="absolute left-0 pointer-events-none"
                                         style={{
                                             opacity: overlayOpacity,
+                                            top: `${imageTopPx}px`,
                                             width: `${scaledDisplayWidth}px`,
                                             height: `${scaledDisplayHeight}px`,
                                             // When aspect is unlocked we intentionally allow distortion to match screenshots.
@@ -1147,7 +1165,7 @@ export const GridEditorPanel: React.FC = () => {
                                         className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
                                         style={{
                                             left: `${Math.max(0, scaledDisplayWidth / 2)}px`,
-                                            top: 0,
+                                            top: `${imageTopPx}px`,
                                             transform: "translate(-50%, 0)",
                                             width: 22,
                                             height: 22,
@@ -1188,7 +1206,7 @@ export const GridEditorPanel: React.FC = () => {
                                         className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
                                         style={{
                                             left: `${Math.max(0, scaledDisplayWidth / 2)}px`,
-                                            top: `${Math.max(0, scaledDisplayHeight)}px`,
+                                            top: `${Math.max(0, imageBottomPx)}px`,
                                             transform: "translate(-50%, -50%)",
                                             width: 22,
                                             height: 22,
@@ -1227,9 +1245,9 @@ export const GridEditorPanel: React.FC = () => {
                                 {overlayEnabled && imageURL && showAlignmentGuide && alignment && (
                                     <svg
                                         className="absolute top-0 left-0 pointer-events-none"
-                                        width={Math.max(1, Math.round(scaledDisplayWidth))}
-                                        height={Math.max(1, Math.round(scaledDisplayHeight))}
-                                        viewBox={`0 0 ${Math.max(1, scaledDisplayWidth)} ${Math.max(1, scaledDisplayHeight)}`}
+                                        width={Math.max(1, Math.round(contentWidthPx))}
+                                        height={Math.max(1, Math.round(contentHeightPx))}
+                                        viewBox={`0 0 ${Math.max(1, contentWidthPx)} ${Math.max(1, contentHeightPx)}`}
                                         style={{ zIndex: 16 }}
                                     >
                                         {/* Detected grid bounds */}
