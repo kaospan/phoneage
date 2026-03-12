@@ -36,7 +36,7 @@ export const GridEditorPanel: React.FC = () => {
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
     const [isResizingImageY, setIsResizingImageY] = React.useState(false);
-    const resizeYStartRef = React.useRef<{ y: number; scaleY: number } | null>(null);
+    const resizeYStartRef = React.useRef<{ y: number; scaleY: number; direction: 1 | -1 } | null>(null);
     // Track cells the user manually painted/confirmed so learning can use trusted labels only.
     const trustedCellsRef = React.useRef<Set<string>>(new Set());
     const [showAlignmentGuide, setShowAlignmentGuide] = React.useState(true);
@@ -270,17 +270,18 @@ export const GridEditorPanel: React.FC = () => {
         setImageScaleY(Number(next.toFixed(3)));
     }, [guideGrid, imageNaturalSize, displaySize.height, cellHeight, markUnsaved]);
 
-    const beginResizeImageY = React.useCallback((clientY: number) => {
+    const beginResizeImageY = React.useCallback((clientY: number, direction: 1 | -1) => {
         markUnsaved();
         setLockImageAspect(false);
-        resizeYStartRef.current = { y: clientY, scaleY: imageScaleY };
+        resizeYStartRef.current = { y: clientY, scaleY: imageScaleY, direction };
         setIsResizingImageY(true);
     }, [imageScaleY, markUnsaved]);
 
     const moveResizeImageY = React.useCallback((clientY: number) => {
         const start = resizeYStartRef.current;
         if (!start) return;
-        const dy = clientY - start.y;
+        // Direction makes "drag away from the edge" increase size for both top and bottom handles.
+        const dy = (clientY - start.y) * start.direction;
         const denom = Math.max(1, scaledDisplayHeight);
         const next = start.scaleY * (1 + dy / denom);
         const clamped = Math.max(0.85, Math.min(1.15, next));
@@ -1146,6 +1147,47 @@ export const GridEditorPanel: React.FC = () => {
                                         className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
                                         style={{
                                             left: `${Math.max(0, scaledDisplayWidth / 2)}px`,
+                                            top: 0,
+                                            transform: "translate(-50%, 0)",
+                                            width: 22,
+                                            height: 22,
+                                            zIndex: 30,
+                                            cursor: "ns-resize",
+                                            touchAction: "none",
+                                        }}
+                                        title="Drag to stretch/compress the overlay image vertically (grid stays fixed)."
+                                        onPointerDown={(e) => {
+                                            e.preventDefault();
+                                            e.currentTarget.setPointerCapture(e.pointerId);
+                                            beginResizeImageY(e.clientY, -1);
+                                        }}
+                                        onPointerMove={(e) => {
+                                            if (!isResizingImageY) return;
+                                            e.preventDefault();
+                                            moveResizeImageY(e.clientY);
+                                        }}
+                                        onPointerUp={(e) => {
+                                            e.preventDefault();
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageY();
+                                        }}
+                                        onPointerCancel={(e) => {
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageY();
+                                        }}
+                                    >
+                                        <ArrowDownUp className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                )}
+                                {overlayEnabled && imageURL && (
+                                    <div
+                                        className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
+                                        style={{
+                                            left: `${Math.max(0, scaledDisplayWidth / 2)}px`,
                                             top: `${Math.max(0, scaledDisplayHeight)}px`,
                                             transform: "translate(-50%, -50%)",
                                             width: 22,
@@ -1158,7 +1200,7 @@ export const GridEditorPanel: React.FC = () => {
                                         onPointerDown={(e) => {
                                             e.preventDefault();
                                             e.currentTarget.setPointerCapture(e.pointerId);
-                                            beginResizeImageY(e.clientY);
+                                            beginResizeImageY(e.clientY, 1);
                                         }}
                                         onPointerMove={(e) => {
                                             if (!isResizingImageY) return;
