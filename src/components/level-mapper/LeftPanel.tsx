@@ -287,9 +287,12 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     };
 
     return (
-        <div className="w-full lg:w-auto bg-card rounded border p-2 relative overflow-y-auto" style={{ width, minWidth: min, maxWidth: max, maxHeight: '100vh' }}>
+        <div
+            className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border/60 bg-card/95 p-2.5 shadow-sm lg:w-auto"
+            style={{ width, minWidth: min, maxWidth: max, maxHeight: '100%' }}
+        >
             {/* File Upload - Always visible across all tabs */}
-            <div className="mb-3 pb-3 border-b">
+            <div className="mb-2.5 shrink-0 border-b border-border/60 pb-2.5">
                 <div className="flex items-center gap-2 flex-wrap">
                     <input
                         ref={fileInputRef}
@@ -542,14 +545,14 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 </DialogContent>
             </Dialog>
 
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
-                <TabsList className="grid w-full grid-cols-3 mb-2">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col">
+                <TabsList className="mb-2 grid w-full shrink-0 grid-cols-3">
                     <TabsTrigger value="editor">Editor</TabsTrigger>
                     <TabsTrigger value="sprites">Capture</TabsTrigger>
                     <TabsTrigger value="references">References</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="editor" className="space-y-2 relative">
+                <TabsContent value="editor" className="relative mt-0 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                     {/* Loading Overlay */}
                     {isDetecting && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center rounded bg-slate-950/70 backdrop-blur-sm">
@@ -825,7 +828,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     <Palette activeTile={activeTile} setActiveTile={setActiveTile} />
                 </TabsContent>
 
-                <TabsContent value="sprites">
+                <TabsContent value="sprites" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
                     <SpriteCapture
                         imageURL={imageURL}
                         rows={rows}
@@ -840,7 +843,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     />
                 </TabsContent>
 
-                <TabsContent value="references">
+                <TabsContent value="references" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
                     <CellReferenceManager />
                 </TabsContent>
             </Tabs>

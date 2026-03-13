@@ -38,21 +38,24 @@ export const JsonPanel: React.FC<{ width: number; onStartResize: () => void; min
     }, [isSaved]); // Update when save state changes
 
     return (
-        <div className="w-full lg:w-auto bg-card rounded border p-2 relative" style={{ width, minWidth: min, maxWidth: max }}>
+        <div
+            className="relative flex h-full min-h-0 w-full flex-col rounded-xl border border-border/60 bg-card/95 p-3 shadow-sm lg:w-auto"
+            style={{ width, minWidth: min, maxWidth: max }}
+        >
             {/* Title positioned to the right of chevron button */}
-            <div className="text-sm font-medium mb-3 pl-8">JSON Editor</div>
+            <div className="mb-3 pl-8 text-sm font-medium">JSON Editor</div>
 
             {/* Current (Editing) Grid */}
             <div className="mb-4">
                 <div className="text-xs font-semibold mb-1 text-blue-600">Current Grid (Editing)</div>
-                <pre className="text-[8px] leading-[1.4] font-mono bg-muted p-2 rounded border overflow-auto max-h-[40vh] whitespace-pre">{formatGridWithRowNumbers(grid)}</pre>
+                <pre className="max-h-[28vh] overflow-auto whitespace-pre rounded border bg-muted p-2 font-mono text-[8px] leading-[1.4]">{formatGridWithRowNumbers(grid)}</pre>
             </div>
 
             {/* Saved Grid - only show if exists */}
             {savedGrid && (
                 <div className="mb-4">
                     <div className="text-xs font-semibold mb-1 text-green-600">Saved Grid (Last Save)</div>
-                    <pre className="text-[8px] leading-[1.4] font-mono bg-muted p-2 rounded border overflow-auto max-h-[40vh] whitespace-pre">{formatGridWithRowNumbers(savedGrid)}</pre>
+                    <pre className="max-h-[28vh] overflow-auto whitespace-pre rounded border bg-muted p-2 font-mono text-[8px] leading-[1.4]">{formatGridWithRowNumbers(savedGrid)}</pre>
                 </div>
             )}
 

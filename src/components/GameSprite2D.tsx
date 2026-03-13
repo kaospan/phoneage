@@ -34,6 +34,7 @@ type LevelSpriteAtlas = {
 // Sprite mode atlas building is useful even at moderate confidence; only bail out
 // when detection is clearly wrong (e.g. sampling black borders/HUD).
 const ATLAS_MIN_CONFIDENCE = 0.08;
+const HERO_SPRITE_CACHE_KEY = "stone-age-spr-hero-sprite-v1";
 
 const pickLatestByType = (refs: CellReference[]) => {
   const latest = new Map<number, CellReference>();
@@ -130,7 +131,17 @@ export function GameSprite2D({
         return;
       }
 
-      setLevelAtlas({ tileSprites: {}, status: "Building sprites..." });
+      const cachedHeroSprite = (() => {
+        if (typeof window === "undefined") return undefined;
+        try {
+          const s = localStorage.getItem(HERO_SPRITE_CACHE_KEY);
+          return s || undefined;
+        } catch {
+          return undefined;
+        }
+      })();
+
+      setLevelAtlas({ tileSprites: {}, heroSprite: cachedHeroSprite, status: "Building sprites..." });
 
       try {
         // Normalize/crop level screenshots (trim borders + HUD row) so grid detection isn't polluted.
@@ -153,17 +164,15 @@ export function GameSprite2D({
 
         const det = detectGridLines(dsCanvas, true, rows, cols, getAlignmentHints());
         if (!det) {
-          setLevelAtlas({ tileSprites: {}, status: "Sprite mode: grid detect failed (using reference sprites)" });
-          return;
-        }
-        if (det.confidence < ATLAS_MIN_CONFIDENCE) {
           setLevelAtlas({
             tileSprites: {},
-            status: `Sprite mode: low grid confidence (conf ${det.confidence.toFixed(2)}) - using reference sprites`,
-            confidence: det.confidence,
+            heroSprite: cachedHeroSprite,
+            status: "Sprite mode: grid detect failed (using reference sprites)",
           });
           return;
         }
+
+        const allowAtlas = det.confidence >= ATLAS_MIN_CONFIDENCE;
 
         const scaleX = img.width / dsW;
         const scaleY = img.height / dsH;
@@ -182,16 +191,18 @@ export function GameSprite2D({
         srcCtx.drawImage(img, 0, 0);
 
         const sampleByType = new Map<number, { row: number; col: number }>();
-        for (let r = 0; r < rows; r += 1) {
-          for (let c = 0; c < cols; c += 1) {
-            const raw = atlasGrid[r]?.[c];
-            if (raw === undefined) continue;
-            const tileType = cavePos.x === c && cavePos.y === r ? 3 : raw;
-            // Void is handled separately in sprite mode (transparent).
-            if (tileType === 5) continue;
-            // Start cave (18) is synthetic; never sample it from the screenshot or we'll capture the hero.
-            if (tileType === 18) continue;
-            if (!sampleByType.has(tileType)) sampleByType.set(tileType, { row: r, col: c });
+        if (allowAtlas) {
+          for (let r = 0; r < rows; r += 1) {
+            for (let c = 0; c < cols; c += 1) {
+              const raw = atlasGrid[r]?.[c];
+              if (raw === undefined) continue;
+              const tileType = cavePos.x === c && cavePos.y === r ? 3 : raw;
+              // Void is handled separately in sprite mode (transparent).
+              if (tileType === 5) continue;
+              // Start cave (18) is synthetic; never sample it from the screenshot or we'll capture the hero.
+              if (tileType === 18) continue;
+              if (!sampleByType.has(tileType)) sampleByType.set(tileType, { row: r, col: c });
+            }
           }
         }
 
@@ -199,11 +210,11 @@ export function GameSprite2D({
         const outW = 64;
         const outH = 64;
 
-        const cropCell = (row: number, col: number) => {
-          const sx = offsetX + col * cellW + inset;
-          const sy = offsetY + row * cellH + inset;
-          const sw = Math.max(1, cellW - inset * 2);
-          const sh = Math.max(1, cellH - inset * 2);
+        const cropCell = (row: number, col: number, insetPx = inset) => {
+          const sx = offsetX + col * cellW + insetPx;
+          const sy = offsetY + row * cellH + insetPx;
+          const sw = Math.max(1, cellW - insetPx * 2);
+          const sh = Math.max(1, cellH - insetPx * 2);
           const out = document.createElement("canvas");
           out.width = outW;
           out.height = outH;
@@ -244,6 +255,7 @@ export function GameSprite2D({
             if (mean < 28 && blackFrac > 0.55) {
               setLevelAtlas({
                 tileSprites: {},
+                heroSprite: cachedHeroSprite,
                 status: `Sprite mode: bad atlas crop (floor too dark) - using reference sprites`,
                 confidence: det.confidence,
               });
@@ -252,12 +264,51 @@ export function GameSprite2D({
           }
         }
 
+        const findCleanFloorCell = () => {
+          const isFloorAt = (x: number, y: number) => {
+            const v = grid[y]?.[x];
+            if (v == null) return false;
+            if (x === cavePos.x && y === cavePos.y) return false;
+            // Start cave (18) is synthetic; do not treat it as a clean floor sample.
+            if (v === 18) return false;
+            return v === 0;
+          };
+
+          // Prefer an interior floor tile (surrounded by floor) to reduce edge/shadow contamination.
+          for (let y = 1; y < rows - 1; y += 1) {
+            for (let x = 1; x < cols - 1; x += 1) {
+              if (playerStart && playerStart.x === x && playerStart.y === y) continue;
+              if (!isFloorAt(x, y)) continue;
+
+              let ok = true;
+              for (let dy = -1; dy <= 1 && ok; dy += 1) {
+                for (let dx = -1; dx <= 1; dx += 1) {
+                  if (dx === 0 && dy === 0) continue;
+                  if (!isFloorAt(x + dx, y + dy)) { ok = false; break; }
+                }
+              }
+              if (ok) return { x, y };
+            }
+          }
+
+          // Fallback: any non-start floor tile.
+          for (let y = 0; y < rows; y += 1) {
+            for (let x = 0; x < cols; x += 1) {
+              if (playerStart && playerStart.x === x && playerStart.y === y) continue;
+              if (isFloorAt(x, y)) return { x, y };
+            }
+          }
+
+          return null;
+        };
+
         // Extract a transparent hero sprite by diffing player-start cell against a clean floor cell.
         let heroSprite: string | undefined;
-        const floorPos = sampleByType.get(0);
-        if (floorPos && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
-          const floorCanvas = cropCell(floorPos.row, floorPos.col);
-          const heroCanvas = cropCell(playerStart.y, playerStart.x);
+        const cleanFloor = findCleanFloorCell();
+        if (cleanFloor && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
+          const floorCanvas = cropCell(cleanFloor.y, cleanFloor.x);
+          // Slightly smaller inset for the hero crop so we don't clip the sprite.
+          const heroCanvas = cropCell(playerStart.y, playerStart.x, Math.max(0, inset - 1));
           if (floorCanvas && heroCanvas) {
             const fc = floorCanvas.getContext("2d", { willReadFrequently: true });
             const hc = heroCanvas.getContext("2d", { willReadFrequently: true });
@@ -270,8 +321,8 @@ export function GameSprite2D({
               const oc = out.getContext("2d");
               if (oc) {
                 const outData = oc.createImageData(outW, outH);
-                // Threshold tuned for these screenshots: keep anything that differs from floor by enough luma/chroma.
-                const thr = 34;
+                // Keep anything that differs from floor by enough luma/chroma.
+                const thr = 26;
                 let nonFloorPixels = 0;
                 for (let i = 0; i < outData.data.length; i += 4) {
                   const dr = Math.abs(heroData.data[i] - floorData.data[i]);
@@ -289,9 +340,7 @@ export function GameSprite2D({
                   }
                 }
 
-                // If we extracted almost nothing, the hero crop likely missed (bad grid confidence/offset),
-                // so fall back to the in-cell 🦖 marker instead of showing an invisible/blank sprite.
-                const minPixels = 40;
+                const minPixels = 24;
                 if (nonFloorPixels >= minPixels) {
                   oc.putImageData(outData, 0, 0);
                   heroSprite = out.toDataURL("image/png");
@@ -301,15 +350,23 @@ export function GameSprite2D({
           }
         }
 
+        if (heroSprite) {
+          try { localStorage.setItem(HERO_SPRITE_CACHE_KEY, heroSprite); } catch { /* ignore */ }
+        } else {
+          heroSprite = cachedHeroSprite;
+        }
+
         setLevelAtlas({
           tileSprites,
           heroSprite,
-          status: `Sprites ready (conf ${det.confidence.toFixed(2)})`,
+          status: allowAtlas
+            ? `Sprites ready (conf ${det.confidence.toFixed(2)})`
+            : `Sprite mode: low grid confidence (conf ${det.confidence.toFixed(2)}) - using reference sprites`,
           confidence: det.confidence,
         });
       } catch (e) {
         console.error(e);
-        setLevelAtlas({ tileSprites: {}, status: "Sprite mode: failed to build sprites (using reference sprites)" });
+        setLevelAtlas({ tileSprites: {}, heroSprite: cachedHeroSprite, status: "Sprite mode: failed to build sprites (using reference sprites)" });
       }
     };
 
@@ -348,6 +405,7 @@ export function GameSprite2D({
   }, []);
 
   const startCaveFallbackUrl = useMemo(() => getStartCaveSpriteFallback(), []);
+  const startCaveSpriteUrl = levelAtlas?.tileSprites?.[3] ?? startCaveFallbackUrl;
 
   return (
     <div
@@ -396,42 +454,45 @@ export function GameSprite2D({
           {grid.map((row, y) =>
             row.map((cell, x) => {
               const isCave = cavePos.x === x && cavePos.y === y;
-              const tileType = isCave ? 3 : cell;
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
+              const tileType = isCave ? 3 : cell;
+              // If the player is standing on the start-marker cave (18), render the base tile as floor
+              // so the cave appears only after the hero moves off the spawn tile (nostalgia behavior).
+              const displayTileType = isPlayer && tileType === 18 ? 0 : tileType;
               const isArrow = isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13;
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
               const edge = edgeMasks?.[y]?.[x] ?? null;
 
-              const atlasSprite = levelAtlas?.tileSprites?.[tileType];
-              const refSprite = latestByType.get(tileType)?.imageData;
+              const atlasSprite = levelAtlas?.tileSprites?.[displayTileType];
+              const refSprite = latestByType.get(displayTileType)?.imageData;
               // Sprite mode policy:
               // - Void must be visually empty (transparent) so the game background shows through.
               // - Do not use atlas/ref sprites for void even if present.
                 const backgroundImage =
-                  tileType === 5 ? undefined :
-                  tileType === 18 ? (refSprite ? `url(${refSprite})` : startCaveFallbackUrl ? `url(${startCaveFallbackUrl})` : undefined) :
+                  displayTileType === 5 ? undefined :
+                  displayTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
                   atlasSprite ? `url(${atlasSprite})` :
                   refSprite ? `url(${refSprite})` :
-                  tileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
-                  tileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
-                  tileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
-                  tileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
+                  displayTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
+                  displayTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
+                  displayTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
+                  displayTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
                   undefined;
 
               const fallback =
-                tileType === 5 ? "transparent" :
-                tileType === 0 ? "rgba(255,255,255,0.08)" :
-                tileType === 4 ? "rgba(30,144,255,0.55)" :
-                tileType === 1 ? "rgba(255,80,80,0.65)" :
-                tileType === 2 ? "rgba(120,85,60,0.75)" :
-                tileType === 6 ? "rgba(160,155,140,0.80)" :
-                tileType === 14 ? "rgba(255,70,70,0.70)" :
-                tileType === 15 ? "rgba(60,210,120,0.70)" :
-                tileType === 16 ? "rgba(150,20,20,0.80)" :
-                tileType === 17 ? "rgba(20,110,35,0.80)" :
-                tileType === 18 ? "rgba(0,0,0,0.88)" :
-                tileType === 20 ? "rgba(251,191,36,0.78)" :
+                displayTileType === 5 ? "transparent" :
+                displayTileType === 0 ? "rgba(255,255,255,0.08)" :
+                displayTileType === 4 ? "rgba(30,144,255,0.55)" :
+                displayTileType === 1 ? "rgba(255,80,80,0.65)" :
+                displayTileType === 2 ? "rgba(120,85,60,0.75)" :
+                displayTileType === 6 ? "rgba(160,155,140,0.80)" :
+                displayTileType === 14 ? "rgba(255,70,70,0.70)" :
+                displayTileType === 15 ? "rgba(60,210,120,0.70)" :
+                displayTileType === 16 ? "rgba(150,20,20,0.80)" :
+                displayTileType === 17 ? "rgba(20,110,35,0.80)" :
+                displayTileType === 18 ? "rgba(0,0,0,0.88)" :
+                displayTileType === 20 ? "rgba(251,191,36,0.78)" :
                 "rgba(255,255,255,0.06)";
 
               return (
@@ -450,7 +511,7 @@ export function GameSprite2D({
                     backgroundPosition: "center",
                     imageRendering: "pixelated",
                     boxShadow:
-                      !backgroundImage && tileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
+                      !backgroundImage && displayTileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
                       undefined,
                   }}
                   onClick={(e) => {
@@ -498,14 +559,16 @@ export function GameSprite2D({
                         draggable={false}
                       />
                     ) : (
-                      <div
-                        className="absolute inset-0 flex items-center justify-center font-black text-white"
-                        style={{
-                          textShadow: "0 1px 2px rgba(0,0,0,0.7)",
-                          fontSize: "min(3.2vw, 26px)",
-                        }}
-                      >
-                        🦖
+                      // Avoid non-nostalgic fallbacks (emoji/new hero). If the hero sprite hasn't been
+                      // extracted yet, show a subtle marker so play is still possible.
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div
+                          className="h-[70%] w-[70%] rounded-full border-2 border-emerald-200/90 bg-emerald-400/20"
+                          style={{
+                            boxShadow:
+                              "0 0 0 2px rgba(0,0,0,0.35), 0 0 18px rgba(16,185,129,0.55)",
+                          }}
+                        />
                       </div>
                     )
                   )}

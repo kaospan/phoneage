@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { LevelMapperProvider } from '@/components/level-mapper/LevelMapperContext';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
-import UnsavedBanner from '@/components/level-mapper/UnsavedBanner';
 import BulkAddContextMenu from '@/components/level-mapper/BulkAddContextMenu';
 import LeftPanel from '@/components/level-mapper/LeftPanel';
 import GridEditorPanel from '@/components/level-mapper/GridEditorPanel';
 import JsonPanel from '@/components/level-mapper/JsonPanel';
 import { TILE_TYPES } from '@/lib/levelgrid';
+import { toast } from 'sonner';
 
 const THEME_LABELS: Record<string, string> = {
     default: 'Default (Brown)',
@@ -23,7 +23,7 @@ const CollapsedLeftPanel: React.FC<{ onExpand: () => void }> = ({ onExpand }) =>
     const themeLabel = THEME_LABELS[theme || 'default'] ?? 'Default (Brown)';
 
     return (
-        <div className="self-start w-[240px] max-h-[100vh] overflow-y-auto rounded border bg-card p-2 transition-all duration-300">
+        <div className="self-start w-[220px] max-h-full overflow-y-auto rounded-xl border border-border/60 bg-card/95 p-2.5 shadow-sm transition-all duration-300">
             <div className="mb-2 flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tools</div>
                 <button
@@ -81,12 +81,13 @@ const LayoutInner: React.FC = () => {
     try {
         const { showUnsavedBanner, isSaved, saveChanges, contextMenu, setContextMenu, addMultipleColumns, addMultipleRows } = useLevelMapper();
         console.log('✓ Context loaded:', { showUnsavedBanner, isSaved });
+        const unsavedToastIdRef = useRef<string | number | null>(null);
 
         // Local panel widths (UI only)
-        const [leftPanelWidth, setLeftPanelWidth] = useState(400);
-        const leftPanelMin = 280; const leftPanelMax = 800;
-        const [rightPanelWidth, setRightPanelWidth] = useState(350);
-        const rightPanelMin = 250; const rightPanelMax = 600;
+        const [leftPanelWidth, setLeftPanelWidth] = useState(320);
+        const leftPanelMin = 260; const leftPanelMax = 680;
+        const [rightPanelWidth, setRightPanelWidth] = useState(300);
+        const rightPanelMin = 260; const rightPanelMax = 560;
         const isResizingLeftRef = useRef(false);
         const isResizingRightRef = useRef(false);
 
@@ -112,15 +113,34 @@ const LayoutInner: React.FC = () => {
             return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
         }, [leftPanelMin, leftPanelMax, rightPanelMin, rightPanelMax]);
 
+        useEffect(() => {
+            if (!isSaved && showUnsavedBanner) {
+                const toastId = 'level-mapper-unsaved';
+                unsavedToastIdRef.current = toast.warning('You have unsaved changes', {
+                    id: toastId,
+                    position: 'bottom-right',
+                    duration: 4500,
+                    description: 'Save the current mapper layout and grid changes when ready.',
+                    action: {
+                        label: 'Save',
+                        onClick: () => saveChanges(),
+                    },
+                });
+                return;
+            }
+
+            if (isSaved && unsavedToastIdRef.current !== null) {
+                toast.dismiss(unsavedToastIdRef.current);
+                unsavedToastIdRef.current = null;
+            }
+        }, [isSaved, saveChanges, showUnsavedBanner]);
+
         return (
-            <div className="w-full min-h-screen p-2 md:p-4 bg-background text-foreground">
-                <div className="fixed top-0 left-0 w-full z-50">
-                    <UnsavedBanner visible={!isSaved && showUnsavedBanner} onSave={saveChanges} />
-                </div>
-                <div className="w-full mx-auto flex flex-wrap lg:flex-nowrap gap-3 pt-1 relative">
+            <div className="w-full min-h-screen bg-background p-2 text-foreground md:p-2.5">
+                <div className="relative mx-auto flex min-h-[calc(100svh-1rem)] w-full flex-col gap-2.5 pt-1 lg:h-[calc(100svh-1.5rem)] lg:min-h-0 lg:flex-row lg:items-stretch">
                     {/* Left panel with collapse button */}
                     {!leftCollapsed && (
-                        <div className="relative transition-all duration-300">
+                        <div className="relative min-h-0 transition-all duration-300">
                             <LeftPanel width={leftPanelWidth} onStartResize={() => { isResizingLeftRef.current = true; }} min={leftPanelMin} max={leftPanelMax} />
                             <button
                                 onClick={() => setLeftCollapsed(true)}
@@ -141,7 +161,7 @@ const LayoutInner: React.FC = () => {
 
                     {/* Right panel with collapse button */}
                     {!rightCollapsed && (
-                        <div className="relative transition-all duration-300">
+                        <div className="relative min-h-0 transition-all duration-300">
                             <JsonPanel width={rightPanelWidth} onStartResize={() => { isResizingRightRef.current = true; }} min={rightPanelMin} max={rightPanelMax} />
                             <button
                                 onClick={() => setRightCollapsed(true)}
@@ -157,7 +177,7 @@ const LayoutInner: React.FC = () => {
                     {rightCollapsed && (
                         <button
                             onClick={() => setRightCollapsed(false)}
-                            className="self-start p-2 bg-card border rounded hover:bg-muted transition-all duration-300"
+                            className="self-start rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm hover:bg-muted transition-all duration-300"
                             title="Expand right panel"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

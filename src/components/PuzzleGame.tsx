@@ -1482,17 +1482,17 @@ export const PuzzleGame = () => {
                  </span>
                  <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
                   {timeLeftText && (
-                    <span
-                      className={[
-                        "inline-flex items-center gap-2 rounded-md border px-2 py-1 text-sm font-black tabular-nums",
-                        isTimerUrgent
-                          ? "border-red-300/80 bg-red-700 text-white"
-                          : "border-border/60 bg-background/60 text-foreground",
-                      ].join(" ")}
-                      title="Time left"
-                   >
-                     <span aria-hidden>⏱</span>
-                     <span>{timeLeftText}</span>
+                     <span
+                       className={[
+                         "inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-[13px] font-black tabular-nums shadow-md",
+                         isTimerUrgent
+                           ? "border-red-200/80 bg-red-700 text-white shadow-lg ring-2 ring-red-200/40"
+                           : "border-border/60 bg-background/70 text-foreground ring-1 ring-black/10",
+                       ].join(" ")}
+                       title="Time left"
+                    >
+                      <span aria-hidden>⏱</span>
+                      <span>{timeLeftText}</span>
                    </span>
                  )}
                  <div className="flex items-center gap-1">
@@ -1692,20 +1692,20 @@ export const PuzzleGame = () => {
                 </span>
                 <span className="text-muted-foreground text-xl">•</span>
                 <span className="text-foreground font-medium text-lg">{`Moves: ${moves}`}</span>
-                 {timeLeftText ? (
-                   <>
-                     <span className="text-muted-foreground text-xl">•</span>
-                     <span
-                       className={[
-                         "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-base font-black tabular-nums",
-                         isTimerUrgent
-                           ? "border-red-300/80 bg-red-700 text-white"
-                           : "border-border/60 bg-background/60 text-foreground",
-                       ].join(" ")}
-                       title="Time left"
-                     >
-                      <span aria-hidden>⏱</span>
-                      <span>{timeLeftText}</span>
+                  {timeLeftText ? (
+                    <>
+                      <span className="text-muted-foreground text-xl">•</span>
+                      <span
+                        className={[
+                          "inline-flex items-center gap-2 rounded-md border px-3.5 py-2 text-base font-black tabular-nums shadow-md",
+                          isTimerUrgent
+                            ? "border-red-200/80 bg-red-700 text-white shadow-lg ring-2 ring-red-200/40"
+                            : "border-border/60 bg-background/70 text-foreground ring-1 ring-black/10",
+                        ].join(" ")}
+                        title="Time left"
+                      >
+                       <span aria-hidden>⏱</span>
+                       <span>{timeLeftText}</span>
                     </span>
                   </>
                 ) : (

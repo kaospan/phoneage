@@ -6,6 +6,7 @@ import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
 import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
+import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
 const RULER_SIZE_PX = 28;
 
@@ -201,7 +202,9 @@ export const GridEditorPanel: React.FC = () => {
     const dragStartRef = React.useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 
     const scaledDisplayWidth = displaySize.width * imageScaleX;
-    const scaledDisplayHeight = displaySize.height * imageScaleY;
+    // Baseline vertical correction so typical "aligned" state is ~100%.
+    const effectiveImageScaleY = imageScaleY * OVERLAY_IMAGE_SCALE_Y_BASE;
+    const scaledDisplayHeight = displaySize.height * effectiveImageScaleY;
     const overlayScaleX = imageNaturalSize ? scaledDisplayWidth / imageNaturalSize.width : 1;
     const overlayScaleY = imageNaturalSize ? scaledDisplayHeight / imageNaturalSize.height : 1;
     const imageTopPx = imageOffsetY * overlayScaleY;
@@ -263,7 +266,7 @@ export const GridEditorPanel: React.FC = () => {
         if (!guideGrid || !imageNaturalSize) return;
         // Find scaleY that makes the detected tile height line up with the grid's cellHeight.
         // cellHeight is already based on the screenshot's detected frame; this just compensates for mild vertical distortion.
-        const baseOverlayScaleY = displaySize.height / imageNaturalSize.height;
+        const baseOverlayScaleY = (displaySize.height / imageNaturalSize.height) * OVERLAY_IMAGE_SCALE_Y_BASE;
         if (!Number.isFinite(baseOverlayScaleY) || baseOverlayScaleY <= 0) return;
         const wantedOverlayScaleY = cellHeight / guideGrid.cellHeight;
         if (!Number.isFinite(wantedOverlayScaleY) || wantedOverlayScaleY <= 0) return;
@@ -295,7 +298,7 @@ export const GridEditorPanel: React.FC = () => {
         if (start.direction === -1 && start.bottomPx != null && imageNaturalSize && displaySize.height > 0) {
             // Keep the bottom edge fixed when resizing from the top handle so "void" appears on top.
             const imgH = imageNaturalSize.height;
-            const nextOverlayScaleY = (displaySize.height * clamped) / imgH;
+            const nextOverlayScaleY = (displaySize.height * clamped * OVERLAY_IMAGE_SCALE_Y_BASE) / imgH;
             if (Number.isFinite(nextOverlayScaleY) && nextOverlayScaleY > 0) {
                 const nextOffsetY = start.bottomPx / nextOverlayScaleY - imgH;
                 setImageOffsetY(Math.max(0, Number(nextOffsetY.toFixed(2))));
@@ -614,26 +617,40 @@ export const GridEditorPanel: React.FC = () => {
     const gridBottomPx = displayOffsetY + rows * cellHeight;
     const contentWidthPx = Math.max(scaledDisplayWidth, gridRightPx);
     const contentHeightPx = Math.max(imageBottomPx, gridBottomPx);
+    const imageMeta =
+        overlayEnabled && imageNaturalSize
+            ? `Image: ${imageNaturalSize.width}×${imageNaturalSize.height}px | Frame: ${Math.round(naturalFrameWidth)}×${Math.round(naturalFrameHeight)}px | View: ${Math.round(displaySize.width)}×${Math.round(displaySize.height)}px | Cell: ${cellWidth.toFixed(1)}×${cellHeight.toFixed(1)}px`
+            : null;
 
     return (
-        <div className="w-full lg:flex-1 lg:min-w-0 bg-card rounded border p-2">
-            <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-3">
-                    <div className="text-sm font-medium">
+        <div className="flex w-full min-h-0 flex-1 flex-col rounded-xl border border-border/60 bg-card/95 p-2.5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border/60 pb-2">
+                <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium">
                         Grid Editor ({rows}×{cols} = {rows * cols} cells)
-                    </div>
-                    {importLevel && (
-                        <div className="px-3 py-1 rounded-md text-xs font-semibold border border-sky-500/30 bg-sky-500/10 text-sky-100">
-                            Editing: Level {importLevel.id}
                         </div>
-                    )}
-                    {imageURL && overlayEnabled && (
-                        <div className="px-2 py-1 rounded text-xs border border-emerald-500/25 bg-emerald-500/10 text-emerald-100">
-                            Image overlay active
+                        {importLevel && (
+                            <div className="rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">
+                                Editing: Level {importLevel.id}
+                            </div>
+                        )}
+                        {imageURL && overlayEnabled && (
+                            <div className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-100">
+                                Image overlay active
+                            </div>
+                        )}
+                        <div className="rounded-md border border-border/50 bg-background/55 px-2 py-1 text-[11px] text-muted-foreground">
+                            Diff cells: {differences.length}
+                        </div>
+                    </div>
+                    {imageMeta && (
+                        <div className="text-[11px] leading-tight text-muted-foreground">
+                            {imageMeta}
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
                     <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={!canUndo} title="Undo" aria-label="Undo">
                         <Undo2 />
                     </Button>
@@ -642,11 +659,8 @@ export const GridEditorPanel: React.FC = () => {
                     </Button>
                 </div>
             </div>
-            <div className="flex items-center justify-between gap-2">
-                <div className="text-xs text-muted-foreground">
-                    Diff cells: {differences.length}
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
+            <div className="mt-2 grid gap-2">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background/30 p-2">
                     {imageURL && overlayEnabled && (
                         <Button
                             size="icon"
@@ -705,11 +719,6 @@ export const GridEditorPanel: React.FC = () => {
                         </div>
                     )}
                     {/* Intentionally no "stretched/uniform" toggle: it was confusing and didn't affect alignment workflow. */}
-                    {overlayEnabled && imageNaturalSize && (
-                        <span className="text-xs text-muted-foreground">
-                            Image: {imageNaturalSize.width}×{imageNaturalSize.height}px | Frame: {Math.round(naturalFrameWidth)}×{Math.round(naturalFrameHeight)}px | View: {Math.round(displaySize.width)}×{Math.round(displaySize.height)}px | Cell: {cellWidth.toFixed(1)}×{cellHeight.toFixed(1)}px
-                        </span>
-                    )}
                     {imageURL && (
                         <div className="flex items-center gap-1 text-xs">
                             <span className="text-muted-foreground" title="View zoom">🔎</span>
@@ -876,6 +885,9 @@ export const GridEditorPanel: React.FC = () => {
                             </Button>
                         </div>
                     )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background/20 p-2">
                     {imageURL && overlayEnabled && (
                         <div className="flex items-center gap-1 text-xs">
                             <Button
@@ -1055,24 +1067,24 @@ export const GridEditorPanel: React.FC = () => {
                 </div>
             </div>
             {isDragMode && (
-                <div className="mt-1 text-xs text-amber-600">
+                <div className="mt-2 text-xs text-amber-600">
                     Drag anywhere on the grid to fine-tune alignment. Mouse wheel zooms the view; hold Alt to scale only the overlay image. Turn drag mode off to paint or click cells.
                 </div>
             )}
-            <div className="mt-2">
+            <div className="mt-2 min-h-0 flex-1">
                 <div
                     ref={containerRef}
-                    className="overflow-auto border rounded p-3 h-[calc(100vh-260px)] min-h-[320px] [color-scheme:dark]"
+                    className="h-full min-h-[320px] overflow-auto rounded-xl border border-border/60 bg-background/20 p-1.5 [color-scheme:dark]"
                     onWheel={onWheelZoom}
                 >
-                    <div
-                        className="relative mx-auto"
-                        style={{
-                            width: `${contentWidthPx + rulerSizePx}px`,
-                            height: `${contentHeightPx + rulerSizePx}px`,
-                            minWidth: '100%',
-                        }}
-                    >
+                    <div className="flex min-h-full min-w-full items-start justify-center">
+                        <div
+                            className="relative"
+                            style={{
+                                width: `${contentWidthPx + rulerSizePx}px`,
+                                height: `${contentHeightPx + rulerSizePx}px`,
+                            }}
+                        >
                         <div
                             className="grid"
                             style={{
@@ -1383,6 +1395,7 @@ export const GridEditorPanel: React.FC = () => {
                                 </div>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>

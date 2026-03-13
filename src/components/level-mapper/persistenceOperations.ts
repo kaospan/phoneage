@@ -1,5 +1,6 @@
 import { getAllLevels, isPlaceholderGrid, type ColorTheme } from '@/data/levels';
 import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
+import { LEVEL_IMAGE_SCALE_STORAGE_VERSION, OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
 /**
  * Persistence operations for level mapper
@@ -203,7 +204,17 @@ export const loadLevelLayoutOverride = (levelId: number): { rows: number; cols: 
     }
 };
 
-export type LevelImageScale = { x: number; y: number; lock: boolean; offsetY?: number };
+export type LevelImageScale = {
+    x: number;
+    // User-facing Y adjustment factor (1.0 = baseline).
+    // Effective Y scale = y * OVERLAY_IMAGE_SCALE_Y_BASE
+    y: number;
+    lock: boolean;
+    offsetY?: number;
+    // Optional versioning for future migrations.
+    v?: number;
+    baseY?: number;
+};
 
 export const loadLevelImageScale = (levelId: number): LevelImageScale | null => {
     if (typeof window === 'undefined') return null;
@@ -213,11 +224,26 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return null;
         const x = Number((parsed as any).x ?? 1);
-        const y = Number((parsed as any).y ?? 1);
+        const yRaw = Number((parsed as any).y ?? 1);
         const offsetY = Number((parsed as any).offsetY ?? 0);
         const lock = Boolean((parsed as any).lock ?? true);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-        return { x, y, lock, offsetY: Number.isFinite(offsetY) ? offsetY : 0 };
+        const v = Number((parsed as any).v ?? 1);
+        if (!Number.isFinite(x) || !Number.isFinite(yRaw)) return null;
+
+        // v1 stored the effective Y scale directly. v2 stores user-facing adjustment (1.0 = baseline).
+        const y =
+            v >= LEVEL_IMAGE_SCALE_STORAGE_VERSION
+                ? yRaw
+                : yRaw / Math.max(1e-6, OVERLAY_IMAGE_SCALE_Y_BASE);
+
+        return {
+            x,
+            y,
+            lock,
+            offsetY: Number.isFinite(offsetY) ? offsetY : 0,
+            v: LEVEL_IMAGE_SCALE_STORAGE_VERSION,
+            baseY: OVERLAY_IMAGE_SCALE_Y_BASE,
+        };
     } catch {
         return null;
     }
@@ -226,7 +252,12 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
 export const saveLevelImageScale = (levelId: number, value: LevelImageScale): void => {
     if (typeof window === 'undefined') return;
     try {
-        localStorage.setItem(`${LEVEL_IMAGE_SCALE_PREFIX}${levelId}`, JSON.stringify(value));
+        const out: LevelImageScale = {
+            ...value,
+            v: LEVEL_IMAGE_SCALE_STORAGE_VERSION,
+            baseY: OVERLAY_IMAGE_SCALE_Y_BASE,
+        };
+        localStorage.setItem(`${LEVEL_IMAGE_SCALE_PREFIX}${levelId}`, JSON.stringify(out));
     } catch {
         // ignore
     }
