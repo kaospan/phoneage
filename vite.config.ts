@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    emptyOutDir: false,
     chunkSizeWarningLimit: 1000, // Increase limit to 1000 kB
   },
 }));
