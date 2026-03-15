@@ -11,3 +11,10 @@ export const LEVEL_IMAGE_SCALE_STORAGE_VERSION = 2;
 // At user scaleY=1.0 (100%), the effective vertical scale is this baseline.
 export const OVERLAY_IMAGE_SCALE_Y_BASE = 0.968;
 
+export const getDefaultOverlayImageScale = (levelId: number) => {
+    if (levelId >= 22 && levelId <= 100) {
+        return { x: 1, y: 1.15, lock: false as const };
+    }
+
+    return { x: 1, y: 1, lock: true as const };
+};

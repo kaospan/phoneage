@@ -2,6 +2,7 @@ import { getAllLevels, type ColorTheme } from '@/data/levels';
 import { voidGrid } from '@/lib/levelgrid';
 import { normalizeMapperImage } from './imageNormalization';
 import { getLevelImageUrl } from './levelImageStore';
+import { getDefaultOverlayImageScale } from './overlayDefaults';
 import {
   loadLevelImageScale,
   loadLevelLayoutOverride,
@@ -112,6 +113,7 @@ export const resolveLevelMapperBaseline = async (
       ? voidGrid(layout?.rows ?? 12, layout?.cols ?? 20)
       : cloneGrid(level.grid);
   const savedScale = loadLevelImageScale(level.id);
+  const defaultScale = getDefaultOverlayImageScale(level.id);
 
   return {
     levelId: level.id,
@@ -126,11 +128,11 @@ export const resolveLevelMapperBaseline = async (
     overlayEnabled: Boolean(normalizedURL),
     overlayOpacity: 0.5,
     overlayStretch: true,
-    imageScaleX: savedScale?.x ?? 1,
-    imageScaleY: savedScale?.y ?? 1,
+    imageScaleX: savedScale?.x ?? defaultScale.x,
+    imageScaleY: savedScale?.y ?? defaultScale.y,
     imageOffsetX: Number((savedScale as { offsetX?: number } | null)?.offsetX ?? 0),
     imageOffsetY: Number((savedScale as { offsetY?: number } | null)?.offsetY ?? 0),
-    lockImageAspect: savedScale?.lock ?? true,
+    lockImageAspect: savedScale?.lock ?? defaultScale.lock,
     zoom: 1,
     gridOffsetX: 0,
     gridOffsetY: 0,
