@@ -164,6 +164,23 @@ const isMostlyBlackRow = (
     return total > 0 && dark / total >= threshold;
 };
 
+const getBlackRowRatio = (
+    pixels: Uint8ClampedArray,
+    width: number,
+    y: number,
+    startX: number,
+    endX: number
+) => {
+    let dark = 0;
+    let total = 0;
+    for (let x = startX; x <= endX; x += 1) {
+        const index = (y * width + x) * 4;
+        if (isNearBlack(pixels[index], pixels[index + 1], pixels[index + 2])) dark += 1;
+        total += 1;
+    }
+    return total > 0 ? dark / total : 0;
+};
+
 const isMostlyBlackColumn = (
     pixels: Uint8ClampedArray,
     width: number,
@@ -270,13 +287,50 @@ const cropBlackEdges = (
 };
 
 const findHudCutRow = (pixels: Uint8ClampedArray, width: number, height: number): number | null => {
-    const minY = Math.floor(height * 0.72);
+    const minY = Math.floor(height * 0.62);
+    const minHudHeight = Math.max(24, Math.floor(height * 0.07));
+    const maxHudHeight = Math.max(minHudHeight, Math.floor(height * 0.28));
+    const separatorDarkRatio = 0.74;
+    const separatorSupportRatio = 0.62;
+    const mostlyBlackThreshold = 0.92;
 
-    for (let y = height - 2; y >= minY; y -= 1) {
-        // Look for a strong black separator row above the DOS HUD. If absent, don't crop.
-        if (isMostlyBlackRow(pixels, width, y, 0, width - 1, 0.92)) {
-            return y;
+    const hasHudLikeContentBelow = (separatorY: number) => {
+        const hudTop = separatorY + 1;
+        const hudHeight = height - hudTop;
+        if (hudHeight < minHudHeight || hudHeight > maxHudHeight) return false;
+
+        let nonBlackRows = 0;
+        let fullyBlackRows = 0;
+        let totalRows = 0;
+
+        for (let y = hudTop; y < height; y += 1) {
+            const darkRatio = getBlackRowRatio(pixels, width, y, 0, width - 1);
+            if (darkRatio >= mostlyBlackThreshold) fullyBlackRows += 1;
+            else nonBlackRows += 1;
+            totalRows += 1;
         }
+
+        if (totalRows === 0) return false;
+
+        // A real DOS footer should contain structured UI pixels below the separator.
+        const contentRatio = nonBlackRows / totalRows;
+        const blackRatio = fullyBlackRows / totalRows;
+        return contentRatio >= 0.45 && blackRatio <= 0.55;
+    };
+
+    for (let y = height - minHudHeight - 1; y >= minY; y -= 1) {
+        const darkRatio = getBlackRowRatio(pixels, width, y, 0, width - 1);
+        const prevDarkRatio = y > 0 ? getBlackRowRatio(pixels, width, y - 1, 0, width - 1) : darkRatio;
+        const nextDarkRatio = y < height - 1 ? getBlackRowRatio(pixels, width, y + 1, 0, width - 1) : darkRatio;
+
+        // Accept either a strong separator row or a short dark run above the footer.
+        const looksLikeSeparator =
+            darkRatio >= separatorDarkRatio ||
+            ((darkRatio >= separatorSupportRatio && nextDarkRatio >= separatorSupportRatio) ||
+                (darkRatio >= separatorSupportRatio && prevDarkRatio >= separatorSupportRatio));
+
+        if (!looksLikeSeparator) continue;
+        if (hasHudLikeContentBelow(y)) return y;
     }
 
     return null;
