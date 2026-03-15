@@ -9,6 +9,13 @@ export interface StageImageSet {
   sources: string[];
 }
 
+interface StageAssetCandidate {
+  id: number;
+  name: string;
+  url: string;
+  priority: number;
+}
+
 const pngs = import.meta.glob('../assets/*.png', { eager: true, import: 'default' });
 const jpgs = import.meta.glob('../assets/*.jpg', { eager: true, import: 'default' });
 
@@ -24,45 +31,77 @@ export const assetByName: Record<string, string> = assets.reduce((acc, asset) =>
   return acc;
 }, {} as Record<string, string>);
 
-const stagePrimary = assets
-  .map((asset) => {
-    // Support 1-3 digit ids: 7.png, 07.png, 82.png, 120.png, etc.
-    const match = asset.name.match(/^(\d{1,3})\.png$/);
-    return match ? { id: parseInt(match[1], 10), url: asset.url } : null;
-  })
-  .filter((entry): entry is { id: number; url: string } => Boolean(entry))
-  .sort((a, b) => a.id - b.id);
-
-const stageVariants = new Map<number, string[]>();
-
-assets.forEach((asset) => {
-  let match = asset.name.match(/^(\d{1,3})-(?:pre|1)\.png$/);
+const getStageAssetCandidate = (asset: AssetEntry): StageAssetCandidate | null => {
+  let match = asset.name.match(/^level_(\d{3})\.png$/i);
   if (match) {
-    const id = parseInt(match[1], 10);
-    const list = stageVariants.get(id) ?? [];
-    list.push(asset.url);
-    stageVariants.set(id, list);
-    return;
+    return {
+      id: parseInt(match[1], 10),
+      name: asset.name,
+      url: asset.url,
+      priority: 0,
+    };
   }
 
-  match = asset.name.match(/^level_(\d{1,3})\.png$/);
+  match = asset.name.match(/^level_(\d{1,3})\.png$/i);
   if (match) {
-    const id = parseInt(match[1], 10);
-    const list = stageVariants.get(id) ?? [];
-    list.push(asset.url);
-    stageVariants.set(id, list);
+    return {
+      id: parseInt(match[1], 10),
+      name: asset.name,
+      url: asset.url,
+      priority: 1,
+    };
   }
-});
 
-export const stageImageSets: StageImageSet[] = stagePrimary.map((entry) => {
-  const variants = stageVariants.get(entry.id) ?? [];
-  const sources = Array.from(new Set([entry.url, ...variants]));
-  return {
-    id: entry.id,
-    primary: entry.url,
-    sources,
-  };
-});
+  // Legacy bundled names: 7.png, 07.png, 082.png, etc.
+  match = asset.name.match(/^(\d{1,3})\.png$/);
+  if (match) {
+    return {
+      id: parseInt(match[1], 10),
+      name: asset.name,
+      url: asset.url,
+      priority: 2,
+    };
+  }
+
+  // Older preprocessed variants kept only as lower-priority fallbacks.
+  match = asset.name.match(/^(\d{1,3})-(?:pre|1)\.png$/i);
+  if (match) {
+    return {
+      id: parseInt(match[1], 10),
+      name: asset.name,
+      url: asset.url,
+      priority: 3,
+    };
+  }
+
+  return null;
+};
+
+const stageCandidateGroups = new Map<number, StageAssetCandidate[]>();
+
+for (const asset of assets) {
+  const candidate = getStageAssetCandidate(asset);
+  if (!candidate) continue;
+
+  const list = stageCandidateGroups.get(candidate.id) ?? [];
+  list.push(candidate);
+  stageCandidateGroups.set(candidate.id, list);
+}
+
+export const stageImageSets: StageImageSet[] = Array.from(stageCandidateGroups.entries())
+  .sort(([a], [b]) => a - b)
+  .map(([id, candidates]) => {
+    const ordered = [...candidates].sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.name.localeCompare(b.name);
+    });
+
+    return {
+      id,
+      primary: ordered[0]!.url,
+      sources: Array.from(new Set(ordered.map((entry) => entry.url))),
+    };
+  });
 
 export const referenceSpriteUrls = {
   floor: assetByName['floor.jpg'],

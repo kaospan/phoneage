@@ -23,7 +23,7 @@ const readBody = async (req) => {
   return Buffer.concat(chunks);
 };
 
-const pad2 = (n) => String(n).padStart(2, '0');
+const pad3 = (n) => String(n).padStart(3, '0');
 
 const readJson = async (req) => {
   const bytes = await readBody(req);
@@ -70,7 +70,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const filename = `${pad2(id)}.png`;
+      const filename = `level_${pad3(id)}.png`;
       const assetsDir = path.resolve(repoRoot, 'src', 'assets');
       const outPath = path.resolve(assetsDir, filename);
 

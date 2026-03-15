@@ -5,6 +5,48 @@ import type { DetectedGrid } from './gridDetection';
 // Centralized context/types to keep Fast Refresh stable.
 export type BulkContextType = 'column-left' | 'column-right' | 'row-top' | 'row-bottom';
 
+export type LevelMapperHistoryEntry =
+  | number[][]
+  | {
+      kind: 'layout';
+      grid: number[][];
+      rows: number;
+      cols: number;
+      imageScaleX: number;
+      imageScaleY: number;
+      imageOffsetY: number;
+      lockImageAspect: boolean;
+      gridOffsetX: number;
+      gridOffsetY: number;
+      gridFrameWidth: number | null;
+      gridFrameHeight: number | null;
+    };
+
+export interface LevelMapperDraft {
+  rows: number;
+  cols: number;
+  grid: number[][];
+  playerStart: { x: number; y: number } | null;
+  theme: ColorTheme | undefined;
+  timeLimitSeconds: number | null;
+  hourglassBonusByCell: Record<string, number>;
+  overlayEnabled: boolean;
+  overlayOpacity: number;
+  overlayStretch: boolean;
+  imageScaleX: number;
+  imageScaleY: number;
+  imageOffsetY: number;
+  lockImageAspect: boolean;
+  zoom: number;
+  gridOffsetX: number;
+  gridOffsetY: number;
+  gridFrameWidth: number | null;
+  gridFrameHeight: number | null;
+  undoStack: LevelMapperHistoryEntry[];
+  redoStack: LevelMapperHistoryEntry[];
+  updatedAt: number;
+}
+
 export interface LevelMapperContextValue {
   // Dimensions & grid
   rows: number;
@@ -90,16 +132,14 @@ export interface LevelMapperContextValue {
   // Save state
   isSaved: boolean;
   setIsSaved: (b: boolean) => void;
-  saveChanges: () => void;
+  saveChanges: () => Promise<void>;
   showUnsavedBanner: boolean;
+  restoreDraftForLevel: (levelId: number) => boolean;
 
   // Detection
   detectGrid: () => Promise<DetectedGrid | null>;
   snapToLockedCounts: () => Promise<DetectedGrid | null>;
-  detectCells: () => void;
-  detectGridAndCells: () => void;
-  useDetectCurrentCounts: boolean;
-  setUseDetectCurrentCounts: (b: boolean) => void;
+  detectCells: () => Promise<void>;
   lastGridDetection: DetectedGrid | null;
 
   // Bulk context menu
@@ -125,6 +165,7 @@ export interface LevelMapperContextValue {
   syncJsonInputToGrid: () => void;
   applyJsonInput: () => void;
   setLoadedSnapshot: (snapshot: {
+    levelId?: number | null;
     grid: number[][];
     playerStart: { x: number; y: number } | null;
     theme: ColorTheme | undefined;

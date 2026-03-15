@@ -1,6 +1,7 @@
 import { getAllLevels, isPlaceholderGrid, type ColorTheme } from '@/data/levels';
 import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
 import { LEVEL_IMAGE_SCALE_STORAGE_VERSION, OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
+import type { LevelMapperDraft } from './LevelMapperStore';
 
 /**
  * Persistence operations for level mapper
@@ -176,6 +177,7 @@ export const saveGridChanges = (
 
 const LEVEL_LAYOUT_OVERRIDE_PREFIX = 'level_layout_override_';
 const LEVEL_IMAGE_SCALE_PREFIX = 'level_mapper_image_scale_';
+const LEVEL_MAPPER_DRAFT_PREFIX = 'level_mapper_draft_';
 
 export const saveLevelLayoutOverride = (levelId: number, rows: number, cols: number): void => {
     if (typeof window === 'undefined') return;
@@ -258,6 +260,39 @@ export const saveLevelImageScale = (levelId: number, value: LevelImageScale): vo
             baseY: OVERLAY_IMAGE_SCALE_Y_BASE,
         };
         localStorage.setItem(`${LEVEL_IMAGE_SCALE_PREFIX}${levelId}`, JSON.stringify(out));
+    } catch {
+        // ignore
+    }
+};
+
+export const saveLevelMapperDraft = (levelId: number, draft: LevelMapperDraft): void => {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(`${LEVEL_MAPPER_DRAFT_PREFIX}${levelId}`, JSON.stringify(draft));
+    } catch {
+        // ignore
+    }
+};
+
+export const loadLevelMapperDraft = (levelId: number): LevelMapperDraft | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(`${LEVEL_MAPPER_DRAFT_PREFIX}${levelId}`);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        const maybeDraft = parsed as Partial<LevelMapperDraft>;
+        if (!Array.isArray(maybeDraft.grid) || maybeDraft.grid.length === 0) return null;
+        return maybeDraft as LevelMapperDraft;
+    } catch {
+        return null;
+    }
+};
+
+export const clearLevelMapperDraft = (levelId: number): void => {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.removeItem(`${LEVEL_MAPPER_DRAFT_PREFIX}${levelId}`);
     } catch {
         // ignore
     }

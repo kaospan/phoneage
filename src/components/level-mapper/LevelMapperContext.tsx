@@ -22,7 +22,9 @@ import {
     loadLevelLayoutOverride,
     saveLevelLayoutOverride,
     loadLevelImageScale,
-    saveLevelImageScale
+    saveLevelImageScale,
+    loadLevelMapperDraft,
+    saveLevelMapperDraft
 } from './persistenceOperations';
 import {
     useJsonSync,
@@ -36,6 +38,8 @@ import { getCellReferences as getStoredCellReferences, loadImageData } from '@/l
 import { normalizeMapperImage } from './imageNormalization';
 import { getAlignmentHints } from './alignmentProfile';
 import { getLevelImageUrl } from './levelImageStore';
+import { toast } from 'sonner';
+import type { LevelMapperDraft, LevelMapperHistoryEntry } from './LevelMapperStore';
 console.log('📦 LevelMapperContext.tsx loading...');
 
 // Sample interior pixels to avoid gridlines/adjacent cell bleed when matching sprites.
@@ -140,6 +144,70 @@ const parseGridJson = (value: string): number[][] => {
     return normalized;
 };
 
+const DRAFT_HISTORY_LIMIT = 80;
+
+const cloneGrid = (value: number[][]) => value.map((row) => [...row]);
+
+const isValidGrid = (value: unknown): value is number[][] => {
+    if (!Array.isArray(value) || value.length === 0) return false;
+    if (!value.every((row) => Array.isArray(row))) return false;
+    const width = (value[0] as unknown[]).length;
+    if (width === 0) return false;
+    return value.every((row) => (row as unknown[]).length === width);
+};
+
+const cloneHistoryEntry = (entry: LevelMapperHistoryEntry): LevelMapperHistoryEntry => {
+    if (Array.isArray(entry)) return cloneGrid(entry);
+    return {
+        ...entry,
+        grid: cloneGrid(entry.grid),
+    };
+};
+
+const normalizeHistoryEntry = (value: unknown): LevelMapperHistoryEntry | null => {
+    if (isValidGrid(value)) return cloneGrid(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const candidate = value as Partial<Extract<LevelMapperHistoryEntry, { kind: 'layout' }>>;
+    if (candidate.kind !== 'layout' || !isValidGrid(candidate.grid)) return null;
+    const rows = Math.max(1, Math.round(Number(candidate.rows) || candidate.grid.length));
+    const cols = Math.max(1, Math.round(Number(candidate.cols) || (candidate.grid[0]?.length ?? 0)));
+    const imageScaleX = Number(candidate.imageScaleX ?? 1);
+    const imageScaleY = Number(candidate.imageScaleY ?? 1);
+    const imageOffsetY = Number(candidate.imageOffsetY ?? 0);
+    const gridOffsetX = Number(candidate.gridOffsetX ?? 0);
+    const gridOffsetY = Number(candidate.gridOffsetY ?? 0);
+    const gridFrameWidth =
+        candidate.gridFrameWidth == null || !Number.isFinite(Number(candidate.gridFrameWidth))
+            ? null
+            : Math.max(1, Number(candidate.gridFrameWidth));
+    const gridFrameHeight =
+        candidate.gridFrameHeight == null || !Number.isFinite(Number(candidate.gridFrameHeight))
+            ? null
+            : Math.max(1, Number(candidate.gridFrameHeight));
+    return {
+        kind: 'layout',
+        grid: cloneGrid(candidate.grid),
+        rows,
+        cols,
+        imageScaleX: Number.isFinite(imageScaleX) ? imageScaleX : 1,
+        imageScaleY: Number.isFinite(imageScaleY) ? imageScaleY : 1,
+        imageOffsetY: Number.isFinite(imageOffsetY) ? imageOffsetY : 0,
+        lockImageAspect: Boolean(candidate.lockImageAspect ?? true),
+        gridOffsetX: Number.isFinite(gridOffsetX) ? gridOffsetX : 0,
+        gridOffsetY: Number.isFinite(gridOffsetY) ? gridOffsetY : 0,
+        gridFrameWidth,
+        gridFrameHeight,
+    };
+};
+
+const normalizeHistoryStack = (value: unknown): LevelMapperHistoryEntry[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map(normalizeHistoryEntry)
+        .filter((entry): entry is LevelMapperHistoryEntry => entry !== null)
+        .slice(-DRAFT_HISTORY_LIMIT);
+};
+
 export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     console.log('⚛️ LevelMapperProvider initializing...');
 
@@ -218,15 +286,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const prevSizeRef = useRef({ rows, cols });
         const skipAutoResizeRef = useRef(false);
         const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: BulkContextType } | null>(null);
-        type UndoLayoutSnapshot = {
-            kind: 'layout';
-            grid: number[][];
-            imageScaleX: number;
-            imageScaleY: number;
-            imageOffsetY: number;
-            lockImageAspect: boolean;
-        };
-        type UndoEntry = number[][] | UndoLayoutSnapshot;
+        type UndoLayoutSnapshot = Extract<LevelMapperHistoryEntry, { kind: 'layout' }>;
+        type UndoEntry = LevelMapperHistoryEntry;
         const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
         const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
         const [overlayEnabled, setOverlayEnabled] = useState(false);
@@ -236,9 +297,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [imageScaleY, setImageScaleY] = useState(1);
         const [imageOffsetY, setImageOffsetY] = useState(0);
         const [lockImageAspect, setLockImageAspect] = useState(true);
-        const [useDetectCurrentCounts, setUseDetectCurrentCounts] = useState(false);
         const [lastGridDetection, setLastGridDetection] = useState<ReturnType<typeof detectGridLines> | null>(null);
         const loadedSnapshotRef = useRef<null | {
+            levelId?: number | null;
             grid: number[][];
             playerStart: { x: number; y: number } | null;
             theme: ColorTheme | undefined;
@@ -258,6 +319,78 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             gridFrameWidth: number | null;
             gridFrameHeight: number | null;
         }>(null);
+        const currentLevelId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
+
+        const restoreDraftForLevel = (levelId: number) => {
+            const draft = loadLevelMapperDraft(levelId);
+            if (!draft || !isValidGrid(draft.grid)) return false;
+
+            const nextRows = Math.max(1, Math.round(Number(draft.rows) || draft.grid.length));
+            const nextCols = Math.max(1, Math.round(Number(draft.cols) || (draft.grid[0]?.length ?? 0)));
+            const nextGrid =
+                draft.grid.length === nextRows && (draft.grid[0]?.length ?? 0) === nextCols
+                    ? cloneGrid(draft.grid)
+                    : reshapeGridPreservingOverlap(draft.grid, nextRows, nextCols, 5);
+
+            skipAutoResizeRef.current = true;
+            prevSizeRef.current = { rows: nextRows, cols: nextCols };
+            setRows(nextRows);
+            setCols(nextCols);
+            setGrid(nextGrid);
+            setPlayerStart(
+                draft.playerStart &&
+                    Number.isInteger(draft.playerStart.x) &&
+                    Number.isInteger(draft.playerStart.y)
+                    ? {
+                        x: Math.max(0, Math.min(nextCols - 1, draft.playerStart.x)),
+                        y: Math.max(0, Math.min(nextRows - 1, draft.playerStart.y)),
+                    }
+                    : null
+            );
+            setTheme(draft.theme);
+            setTimeLimitSeconds(
+                draft.timeLimitSeconds != null && Number.isFinite(draft.timeLimitSeconds)
+                    ? Math.max(0, Math.round(draft.timeLimitSeconds))
+                    : null
+            );
+            setHourglassBonusByCell(clampHourglassBonusByCell(draft.hourglassBonusByCell ?? {}, nextRows, nextCols));
+            setOverlayEnabled(Boolean(draft.overlayEnabled));
+            setOverlayOpacity(
+                Number.isFinite(Number(draft.overlayOpacity))
+                    ? Math.max(0, Math.min(1, Number(draft.overlayOpacity)))
+                    : 0.5
+            );
+            setOverlayStretch(Boolean(draft.overlayStretch));
+            setImageScaleX(
+                Number.isFinite(Number(draft.imageScaleX))
+                    ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleX)))
+                    : 1
+            );
+            setImageScaleY(
+                Number.isFinite(Number(draft.imageScaleY))
+                    ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleY)))
+                    : 1
+            );
+            setImageOffsetY(
+                Number.isFinite(Number(draft.imageOffsetY))
+                    ? Math.max(0, Number(draft.imageOffsetY))
+                    : 0
+            );
+            setLockImageAspect(Boolean(draft.lockImageAspect ?? true));
+            setZoom(Number.isFinite(Number(draft.zoom)) ? Math.max(0.2, Math.min(6, Number(draft.zoom))) : 1);
+            setGridOffsetX(Number.isFinite(Number(draft.gridOffsetX)) ? Number(draft.gridOffsetX) : 0);
+            setGridOffsetY(Number.isFinite(Number(draft.gridOffsetY)) ? Number(draft.gridOffsetY) : 0);
+            setGridFrameWidth(
+                Number.isFinite(Number(draft.gridFrameWidth)) ? Math.max(1, Number(draft.gridFrameWidth)) : null
+            );
+            setGridFrameHeight(
+                Number.isFinite(Number(draft.gridFrameHeight)) ? Math.max(1, Number(draft.gridFrameHeight)) : null
+            );
+            setUndoStack(normalizeHistoryStack(draft.undoStack));
+            setRedoStack(normalizeHistoryStack(draft.redoStack));
+            setIsSaved(false);
+            return true;
+        };
 
         // Use custom hooks for side effects
         useJsonSync(grid, jsonInput, setJsonInput);
@@ -337,6 +470,65 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             saveLevelImageScale(lvl.id, { x: imageScaleX, y: imageScaleY, offsetY: imageOffsetY, lock: lockImageAspect });
         }, [importLevelIndex, allLevels, imageScaleX, imageScaleY, imageOffsetY, lockImageAspect]);
 
+        // Auto-persist the current per-level mapper draft, including undo/redo history,
+        // so refreshes/crashes do not lose manual work in progress.
+        useEffect(() => {
+            if (currentLevelId == null) return;
+            if (loadedSnapshotRef.current?.levelId !== currentLevelId) return;
+            const timer = window.setTimeout(() => {
+                const draft: LevelMapperDraft = {
+                    rows,
+                    cols,
+                    grid: cloneGrid(grid),
+                    playerStart: playerStart ? { ...playerStart } : null,
+                    theme,
+                    timeLimitSeconds,
+                    hourglassBonusByCell: { ...(hourglassBonusByCell ?? {}) },
+                    overlayEnabled,
+                    overlayOpacity,
+                    overlayStretch,
+                    imageScaleX,
+                    imageScaleY,
+                    imageOffsetY,
+                    lockImageAspect,
+                    zoom,
+                    gridOffsetX,
+                    gridOffsetY,
+                    gridFrameWidth,
+                    gridFrameHeight,
+                    undoStack: undoStack.slice(-DRAFT_HISTORY_LIMIT).map(cloneHistoryEntry),
+                    redoStack: redoStack.slice(-DRAFT_HISTORY_LIMIT).map(cloneHistoryEntry),
+                    updatedAt: Date.now(),
+                };
+                saveLevelMapperDraft(currentLevelId, draft);
+            }, 200);
+
+            return () => window.clearTimeout(timer);
+        }, [
+            currentLevelId,
+            rows,
+            cols,
+            grid,
+            playerStart,
+            theme,
+            timeLimitSeconds,
+            hourglassBonusByCell,
+            overlayEnabled,
+            overlayOpacity,
+            overlayStretch,
+            imageScaleX,
+            imageScaleY,
+            imageOffsetY,
+            lockImageAspect,
+            zoom,
+            gridOffsetX,
+            gridOffsetY,
+            gridFrameWidth,
+            gridFrameHeight,
+            undoStack,
+            redoStack,
+        ]);
+
         // Auto-load level on startup if one was previously imported.
         // For placeholder auto-build levels, load the image and keep the editor responsive
         // instead of running a heavy full image-to-grid build during mount.
@@ -356,8 +548,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         }
 
                         const storedUpload = await getLevelImageUrl(resolved.id);
+                        const normalizedURL = storedUpload ?? (resolved.image ? await normalizeMapperImage(resolved.image) : null);
+                        const savedScale = loadLevelImageScale(resolved.id);
                         const hasNonVoidCells = resolved.grid.some(row => row.some(cell => cell !== 5));
-                        if (!hasNonVoidCells && !resolved.image && !storedUpload) {
+                        if (!hasNonVoidCells && !normalizedURL) {
                             console.log(`Skipped auto-loading Level ${resolved.id} (empty/void grid)`);
                             clearImportLevel();
                             setImportLevelIndex(null);
@@ -374,26 +568,62 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         } else {
                             setTimeLimitSeconds(null);
                         }
-                        if (storedUpload) {
-                            setImageURL(storedUpload);
-                        setOverlayEnabled(true);
-                    } else if (resolved.image) {
-                        void normalizeMapperImage(resolved.image).then((normalizedURL) => {
-                            setImageURL(normalizedURL);
+                        setImageURL(normalizedURL);
+                        setOverlayEnabled(Boolean(normalizedURL));
+                        setGridOffsetX(0);
+                        setGridOffsetY(0);
+                        setGridFrameWidth(null);
+                        setGridFrameHeight(null);
+                        if (savedScale) {
+                            const x = Number(savedScale.x);
+                            const y = Number(savedScale.y);
+                            const offsetY = Number((savedScale as any).offsetY ?? 0);
+                            const lock = Boolean(savedScale.lock);
+                            if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
+                            if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+                            if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
+                            setLockImageAspect(lock);
+                        } else {
+                            setImageScaleX(1);
+                            setImageScaleY(1);
+                            setImageOffsetY(0);
+                            setLockImageAspect(true);
+                        }
+                        // Per-level image distortion is loaded via the effect above.
+                        setPlayerStart(resolved.playerStart ? { x: resolved.playerStart.x, y: resolved.playerStart.y } : null);
+                        setTheme(resolved.theme);
+                        setLoadedSnapshot({
+                            levelId: resolved.id,
+                            grid: resolved.grid,
+                            playerStart: resolved.playerStart ? { x: resolved.playerStart.x, y: resolved.playerStart.y } : null,
+                            theme: resolved.theme,
+                            timeLimitSeconds:
+                                typeof resolved.timeLimitSeconds === 'number' && Number.isFinite(resolved.timeLimitSeconds) && Number(resolved.timeLimitSeconds) > 0
+                                    ? Math.round(Number(resolved.timeLimitSeconds))
+                                    : null,
+                            hourglassBonusByCell: { ...(resolved.hourglassBonusByCell ?? {}) },
+                            imageURL: normalizedURL,
+                            overlayEnabled: Boolean(normalizedURL),
+                            overlayOpacity: 0.5,
+                            overlayStretch: true,
+                            imageScaleX: savedScale?.x ?? 1,
+                            imageScaleY: savedScale?.y ?? 1,
+                            imageOffsetY: Number((savedScale as any)?.offsetY ?? 0),
+                            lockImageAspect: savedScale?.lock ?? true,
+                            zoom: 1,
+                            gridOffsetX: 0,
+                            gridOffsetY: 0,
+                            gridFrameWidth: null,
+                            gridFrameHeight: null,
                         });
-                        setOverlayEnabled(true);
-                    } else {
-                        setImageURL(null);
-                        setOverlayEnabled(false);
-                    }
-                    setGridOffsetX(0);
-                    setGridOffsetY(0);
-                    setGridFrameWidth(null);
-                    setGridFrameHeight(null);
-                    // Per-level image distortion is loaded via the effect above.
-                    setPlayerStart(resolved.playerStart ? { x: resolved.playerStart.x, y: resolved.playerStart.y } : null);
-                    setTheme(resolved.theme);
                         console.log(`Auto-loaded Level ${resolved.id} from previous session`);
+                        if (restoreDraftForLevel(resolved.id)) {
+                            toast.info(`Restored autosaved draft for level ${resolved.id}.`, {
+                                position: 'bottom-right',
+                                duration: 3500,
+                                description: 'Undo/redo history was restored too.',
+                            });
+                        }
                     };
 
                     void loadLevelIntoMapper();
@@ -513,10 +743,16 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const createLayoutUndoEntry = (): UndoLayoutSnapshot => ({
             kind: 'layout',
             grid: grid.map((r) => [...r]),
+            rows,
+            cols,
             imageScaleX,
             imageScaleY,
             imageOffsetY,
             lockImageAspect,
+            gridOffsetX,
+            gridOffsetY,
+            gridFrameWidth,
+            gridFrameHeight,
         });
 
         const pushUndoSnapshot = () => {
@@ -536,11 +772,19 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             } else {
                 // Layout tweak: undo grid + layout fields.
                 setRedoStack((s) => [...s, createLayoutUndoEntry()]);
+                skipAutoResizeRef.current = true;
+                prevSizeRef.current = { rows: prev.rows, cols: prev.cols };
+                setRows(prev.rows);
+                setCols(prev.cols);
                 setGrid(prev.grid.map((r) => [...r]));
                 setImageScaleX(prev.imageScaleX);
                 setImageScaleY(prev.imageScaleY);
                 setImageOffsetY(prev.imageOffsetY);
                 setLockImageAspect(prev.lockImageAspect);
+                setGridOffsetX(prev.gridOffsetX);
+                setGridOffsetY(prev.gridOffsetY);
+                setGridFrameWidth(prev.gridFrameWidth);
+                setGridFrameHeight(prev.gridFrameHeight);
             }
 
             setUndoStack((s) => s.slice(0, -1));
@@ -556,11 +800,19 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setGrid(next.map((r) => [...r]));
             } else {
                 setUndoStack((s) => [...s, createLayoutUndoEntry()]);
+                skipAutoResizeRef.current = true;
+                prevSizeRef.current = { rows: next.rows, cols: next.cols };
+                setRows(next.rows);
+                setCols(next.cols);
                 setGrid(next.grid.map((r) => [...r]));
                 setImageScaleX(next.imageScaleX);
                 setImageScaleY(next.imageScaleY);
                 setImageOffsetY(next.imageOffsetY);
                 setLockImageAspect(next.lockImageAspect);
+                setGridOffsetX(next.gridOffsetX);
+                setGridOffsetY(next.gridOffsetY);
+                setGridFrameWidth(next.gridFrameWidth);
+                setGridFrameHeight(next.gridFrameHeight);
             }
 
             setRedoStack((s) => s.slice(0, -1));
@@ -646,6 +898,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         );
 
                         setLastGridDetection(result);
+                        pushUndoSnapshot();
 
                         const nextOffsetX = Math.max(0, Math.min(srcW - 1, Math.round(result.offsetX)));
                         const nextOffsetY = Math.max(0, Math.min(srcH - 1, Math.round(result.offsetY)));
@@ -673,6 +926,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
                 console.log(`✓ Grid detected: ${result.rows}x${result.cols} (conf ${result.confidence.toFixed(2)})`);
                 setLastGridDetection(result);
+                pushUndoSnapshot();
 
                 setRows(result.rows);
                 setCols(result.cols);
@@ -749,6 +1003,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 };
 
                 setLastGridDetection(result);
+                pushUndoSnapshot();
 
                 const nextOffsetX = Math.max(0, Math.min(srcW - 1, Math.round(result.offsetX)));
                 const nextOffsetY = Math.max(0, Math.min(srcH - 1, Math.round(result.offsetY)));
@@ -974,12 +1229,6 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
         };
 
-        const detectGridAndCells = () => {
-            void detectGrid().then(() => {
-                setTimeout(() => { void detectCells(); }, 300);
-            });
-        };
-
         const exportTS = async () => {
             try {
                 await exportGridToClipboard(grid);
@@ -1009,6 +1258,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         const setLoadedSnapshot = (snapshot: {
+            levelId?: number | null;
             grid: number[][];
             playerStart: { x: number; y: number } | null;
             theme: ColorTheme | undefined;
@@ -1071,7 +1321,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setIsSaved(true);
         };
 
-        const saveChanges = () => {
+        const saveChanges = async () => {
             const res = saveGridChanges(grid, playerStart, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
             setAllLevels(res.levels);
             // Keep editor state in sync with the *actual* persisted payload (e.g. start-marker cave conversion).
@@ -1084,12 +1334,37 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (res.levelId != null) {
                 saveLevelImageScale(res.levelId, { x: imageScaleX, y: imageScaleY, offsetY: imageOffsetY, lock: lockImageAspect });
                 saveLevelLayoutOverride(res.levelId, rows, cols);
+                saveLevelMapperDraft(res.levelId, {
+                    rows,
+                    cols,
+                    grid: cloneGrid(res.gridSaved),
+                    playerStart: playerStart ? { ...playerStart } : null,
+                    theme,
+                    timeLimitSeconds,
+                    hourglassBonusByCell: { ...(res.hourglassBonusByCellSaved ?? {}) },
+                    overlayEnabled,
+                    overlayOpacity,
+                    overlayStretch,
+                    imageScaleX,
+                    imageScaleY,
+                    imageOffsetY,
+                    lockImageAspect,
+                    zoom,
+                    gridOffsetX,
+                    gridOffsetY,
+                    gridFrameWidth,
+                    gridFrameHeight,
+                    undoStack: undoStack.slice(-DRAFT_HISTORY_LIMIT).map(cloneHistoryEntry),
+                    redoStack: redoStack.slice(-DRAFT_HISTORY_LIMIT).map(cloneHistoryEntry),
+                    updatedAt: Date.now(),
+                });
             }
 
             // Promote the current editor state (including rows/cols + overlay stretch tweaks) to be the new
             // "default" for this level's Reset Layout. This is what you want when you manually correct
             // the grid height/shape and then save.
             setLoadedSnapshot({
+                levelId: res.levelId,
                 grid: res.gridSaved,
                 playerStart,
                 theme,
@@ -1117,6 +1392,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
             // Dev-only: promote mapper saves into repo defaults (src/data/promoted-levels.json) so builds
             // use your manual corrections as the default level data.
+            let repoDefaultStatus: 'saved' | 'unavailable' | 'failed' | 'skipped' = 'skipped';
+            let repoDefaultMessage = '';
+
             if (import.meta.env.DEV && res.override === 'saved' && res.levelId != null) {
                 const levelId = res.levelId;
                 const writerUrl = (import.meta.env.VITE_LEVEL_WRITER_URL as string | undefined) ?? 'http://localhost:8787/write-level-default';
@@ -1143,23 +1421,64 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     payload.hourglassBonusByCell = res.hourglassBonusByCellSaved;
                 }
 
-                void fetch(`${writerUrl}?id=${levelId}&overwrite=1`, {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify(payload),
-                }).catch((err) => {
+                try {
+                    const response = await fetch(`${writerUrl}?id=${levelId}&overwrite=1`, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (response.ok) {
+                        repoDefaultStatus = 'saved';
+                    } else {
+                        const body = await response.json().catch(() => null);
+                        repoDefaultStatus = 'failed';
+                        repoDefaultMessage =
+                            typeof body?.error === 'string'
+                                ? body.error
+                                : `asset-writer responded with ${response.status}`;
+                    }
+                } catch (err) {
                     console.warn('level-default writer not available (skipping):', err);
-                });
+                    repoDefaultStatus = 'unavailable';
+                }
             }
 
             if (res.override === 'cleared' && res.levelId != null) {
-                alert(`Grid is empty. Cleared level ${res.levelId} override and reverted to its default map.`);
+                toast.info(`Grid is empty. Cleared level ${res.levelId} override and reverted to its default map.`, {
+                    position: 'bottom-right',
+                    duration: 4500,
+                });
             } else if (res.override === 'saved' && res.levelId != null) {
-                alert(
-                    `Changes saved for level ${res.levelId}.\n\nTip: To make this the repo default for builds, run \`npm run asset-writer\` while saving (dev-only).`
-                );
+                if (repoDefaultStatus === 'saved') {
+                    toast.success(`Changes saved for level ${res.levelId}. Repo default updated.`, {
+                        position: 'bottom-right',
+                        duration: 4200,
+                        description: 'asset-writer is running, so builds will use this updated default.',
+                    });
+                } else if (repoDefaultStatus === 'failed') {
+                    toast.warning(`Changes saved for level ${res.levelId}. Repo default was not updated.`, {
+                        position: 'bottom-right',
+                        duration: 5200,
+                        description: repoDefaultMessage,
+                    });
+                } else if (repoDefaultStatus === 'unavailable') {
+                    toast.success(`Changes saved for level ${res.levelId}.`, {
+                        position: 'bottom-right',
+                        duration: 5200,
+                        description: 'asset-writer was not detected, so only the browser-local mapper/game override was saved.',
+                    });
+                } else {
+                    toast.success(`Changes saved for level ${res.levelId}.`, {
+                        position: 'bottom-right',
+                        duration: 4000,
+                    });
+                }
             } else {
-                alert('Changes saved!');
+                toast.success('Changes saved!', {
+                    position: 'bottom-right',
+                    duration: 3500,
+                });
             }
         };
 
@@ -1239,12 +1558,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setIsSaved,
             saveChanges,
             showUnsavedBanner,
+            restoreDraftForLevel,
             detectGrid,
             snapToLockedCounts,
             detectCells,
-            detectGridAndCells,
-            useDetectCurrentCounts,
-            setUseDetectCurrentCounts,
             lastGridDetection,
             contextMenu,
             setContextMenu,

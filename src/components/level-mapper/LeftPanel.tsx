@@ -34,13 +34,12 @@ const getEditableGridForLevel = (levelId: number | null, levelGrid?: number[][])
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
     const {
         rows, cols, setRows, setCols,
-        showGrid, setShowGrid,
         importLevelIndex, setImportLevelIndex,
         compareLevelIndex, setCompareLevelIndex,
         overlayEnabled, setOverlayEnabled,
         allLevels, imageURL, setImageURL,
         setAllLevels,
-        detectGrid, snapToLockedCounts, detectCells, detectGridAndCells,
+        detectGrid, snapToLockedCounts, detectCells,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
@@ -49,7 +48,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
-        setLoadedSnapshot, resetToLoadedSnapshot
+        setLoadedSnapshot, resetToLoadedSnapshot, restoreDraftForLevel
     } = useLevelMapper();
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -263,6 +262,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         }
 
         setLoadedSnapshot({
+            levelId: lvl.id,
             grid: editable,
             playerStart: lvl.playerStart ? { x: lvl.playerStart.x, y: lvl.playerStart.y } : null,
             theme: lvl.theme,
@@ -284,16 +284,20 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             gridFrameWidth: null,
             gridFrameHeight: null,
         });
+
+        if (restoreDraftForLevel(lvl.id)) {
+            setAutoDetectStatus(`Restored autosaved draft for level ${lvl.id} with undo/redo history.`);
+        }
     };
 
     return (
         <div
-            className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border/60 bg-card/95 p-2.5 shadow-sm lg:w-auto"
+            className="relative flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm lg:w-auto"
             style={{ width, minWidth: min, maxWidth: max, maxHeight: '100%' }}
         >
             {/* File Upload - Always visible across all tabs */}
-            <div className="mb-2.5 shrink-0 border-b border-border/60 pb-2.5">
-                <div className="flex items-center gap-2 flex-wrap">
+            <div className="mb-2 shrink-0 border-b border-border/60 pb-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -546,13 +550,13 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             </Dialog>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col">
-                <TabsList className="mb-2 grid w-full shrink-0 grid-cols-3">
+                <TabsList className="mb-2 grid h-10 w-full shrink-0 grid-cols-3">
                     <TabsTrigger value="editor">Editor</TabsTrigger>
                     <TabsTrigger value="sprites">Capture</TabsTrigger>
                     <TabsTrigger value="references">References</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="editor" className="relative mt-0 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                <TabsContent value="editor" className="relative mt-0 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                     {/* Loading Overlay */}
                     {isDetecting && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center rounded bg-slate-950/70 backdrop-blur-sm">
@@ -565,10 +569,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         </div>
                     )}
 
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-1.5">
                         <label className="text-xs text-muted-foreground">Rows</label>
                         <input
-                            className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]"
+                            className="h-9 w-14 rounded border bg-background px-2 text-foreground [color-scheme:dark]"
                             type="number"
                             min={1}
                             value={rows}
@@ -580,7 +584,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         />
                         <label className="text-xs text-muted-foreground">Cols</label>
                         <input
-                            className="w-16 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]"
+                            className="h-9 w-14 rounded border bg-background px-2 text-foreground [color-scheme:dark]"
                             type="number"
                             min={1}
                             value={cols}
@@ -590,14 +594,14 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 setCols(next);
                             }}
                         />
-                        <div className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
+                        <div className="flex flex-wrap items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
                             <span className="text-xs text-muted-foreground">Rows</span>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowTop} title="Add a void row at the top">+Top</Button>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowBottom} title="Add a void row at the bottom">+Bot</Button>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeRowTop} title="Remove the top row">-Top</Button>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeRowBottom} title="Remove the bottom row">-Bot</Button>
                         </div>
-                        <div className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
+                        <div className="flex flex-wrap items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
                             <span className="text-xs text-muted-foreground">Cols</span>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={addColumnLeft} title="Add a void column on the left">+L</Button>
                             <Button size="sm" variant="outline" className="h-7 px-2" onClick={addColumnRight} title="Add a void column on the right">+R</Button>
@@ -614,7 +618,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             Reset Layout
                         </Button>
                         <select
-                            className="px-2 py-1 rounded border bg-background text-foreground text-xs [color-scheme:dark]"
+                            className="h-9 rounded border bg-background px-2 text-xs text-foreground [color-scheme:dark]"
                             value={importLevelIndex ?? ''}
                             onChange={(e) => {
                                 const val = e.target.value;
@@ -642,9 +646,15 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             variant="outline"
                             onClick={async () => {
                                 setIsDetecting(true);
-                                setDetectionProgress('Detecting cell types (fills void cells only)...');
+                                setDetectionProgress('Snapping grid to the screenshot before scanning...');
                                 try {
                                     await new Promise((resolve) => setTimeout(resolve, 50));
+                                    const snapResult = await snapToLockedCounts();
+                                    if (!snapResult) return;
+                                    setAutoDetectStatus(
+                                        `Snapped (kept ${rows}×${cols}) | Tile: ${Math.round(snapResult.cellWidth)}×${Math.round(snapResult.cellHeight)}px | Confidence: ${snapResult.confidence.toFixed(2)}`
+                                    );
+                                    setDetectionProgress('Scanning cell types into the aligned grid...');
                                     await detectCells();
                                 } finally {
                                     setIsDetecting(false);
@@ -652,9 +662,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 }
                             }}
                             disabled={!imageURL || isDetecting}
-                            title="Fast scan using saved reference sprites. Fills only void (unknown) cells so manual fixes are preserved."
+                            title="Snap the overlay/grid to the screenshot first, then scan saved reference sprites. Fills only void (unknown) cells so manual fixes are preserved."
                         >
-                            Scan Cell Types
+                            Align + Scan Cells
                         </Button>
                     </div>
                     {autoDetectStatus && (
@@ -662,7 +672,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             {autoDetectStatus}
                         </div>
                     )}
-                    <details className="mt-2 rounded border border-border/50 bg-background/30 p-2">
+                    <details className="mt-1.5 rounded border border-border/50 bg-background/30 p-2">
                         <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">
                             Advanced
                         </summary>
@@ -732,18 +742,18 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             {tileFitStatus === 'failed' && <span>Could not estimate tile size from this image. Try a cleaner crop or hit Auto-detect.</span>}
                         </div>
                     )}
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
                         Auto-detect finds the screenshot's tile grid and snaps rows/cols + frame. If it misses, adjust crop and re-run.
                     </div>
-                    <div className="mt-1 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    <div className="mt-1 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-100">
                         Resizing rows/cols or adding/removing edges changes the level layout. Use `Reset Layout` to snap back before saving if you resized by accident.
                     </div>
 
                     {/* Theme Selector */}
-                    <div className="flex items-center gap-2 flex-wrap mt-2 p-2 border rounded bg-muted/30">
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded border bg-muted/30 p-2">
                         <label className="text-xs font-semibold text-foreground">Color Theme:</label>
                         <select
-                            className="px-3 py-1.5 rounded border bg-background text-foreground text-sm flex-1 min-w-[120px] [color-scheme:dark]"
+                            className="h-9 min-w-[120px] flex-1 rounded border bg-background px-3 text-sm text-foreground [color-scheme:dark]"
                             value={theme || 'default'}
                             onChange={(e) => {
                                 const newTheme = e.target.value === 'default' ? undefined : e.target.value as ColorTheme;
@@ -769,10 +779,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     </div>
 
                     {/* Per-level timer */}
-                    <div className="flex items-center gap-2 flex-wrap mt-2 p-2 border rounded bg-muted/30">
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded border bg-muted/30 p-2">
                         <label className="text-xs font-semibold text-foreground whitespace-nowrap">Timer:</label>
                         <input
-                            className="w-28 px-3 py-1.5 rounded border bg-background text-foreground text-sm [color-scheme:dark]"
+                            className="h-9 w-24 rounded border bg-background px-3 text-sm text-foreground [color-scheme:dark]"
                             type="number"
                             inputMode="numeric"
                             min={0}
@@ -797,10 +807,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
 
                     {/* Bonus Time (+time) brush */}
                     {activeTile === 20 && (
-                        <div className="flex items-center gap-2 flex-wrap mt-2 p-2 border rounded bg-muted/30">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded border bg-muted/30 p-2">
                             <label className="text-xs font-semibold text-foreground whitespace-nowrap">Bonus Time:</label>
                             <input
-                                className="w-28 px-3 py-1.5 rounded border bg-background text-foreground text-sm [color-scheme:dark]"
+                                className="h-9 w-24 rounded border bg-background px-3 text-sm text-foreground [color-scheme:dark]"
                                 type="number"
                                 inputMode="numeric"
                                 min={1}
@@ -816,7 +826,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             <div className="text-[11px] text-muted-foreground">sec bonus (needs timer on)</div>
                         </div>
                     )}
-                    <div className="mt-2 relative">
+                    <div className="mt-1.5 relative">
                         {imageURL ? (
                             <div className="text-sm p-4 border rounded border-emerald-500/25 bg-emerald-500/10 text-emerald-100">
                                 ✅ Image loaded! Switch to <strong>Grid Editor</strong> tab to see the overlay.

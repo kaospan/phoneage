@@ -23,7 +23,7 @@ const CollapsedLeftPanel: React.FC<{ onExpand: () => void }> = ({ onExpand }) =>
     const themeLabel = THEME_LABELS[theme || 'default'] ?? 'Default (Brown)';
 
     return (
-        <div className="self-start w-[220px] max-h-full overflow-y-auto rounded-xl border border-border/60 bg-card/95 p-2.5 shadow-sm transition-all duration-300">
+        <div className="self-start w-[188px] max-h-full overflow-y-auto rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm transition-all duration-300">
             <div className="mb-2 flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tools</div>
                 <button
@@ -84,9 +84,9 @@ const LayoutInner: React.FC = () => {
         const unsavedToastIdRef = useRef<string | number | null>(null);
 
         // Local panel widths (UI only)
-        const [leftPanelWidth, setLeftPanelWidth] = useState(320);
-        const leftPanelMin = 260; const leftPanelMax = 680;
-        const [rightPanelWidth, setRightPanelWidth] = useState(300);
+        const [leftPanelWidth, setLeftPanelWidth] = useState(292);
+        const leftPanelMin = 252; const leftPanelMax = 640;
+        const [rightPanelWidth, setRightPanelWidth] = useState(288);
         const rightPanelMin = 260; const rightPanelMax = 560;
         const isResizingLeftRef = useRef(false);
         const isResizingRightRef = useRef(false);
@@ -136,11 +136,11 @@ const LayoutInner: React.FC = () => {
         }, [isSaved, saveChanges, showUnsavedBanner]);
 
         return (
-            <div className="w-full min-h-screen bg-background p-2 text-foreground md:p-2.5">
-                <div className="relative mx-auto flex min-h-[calc(100svh-1rem)] w-full flex-col gap-2.5 pt-1 lg:h-[calc(100svh-1.5rem)] lg:min-h-0 lg:flex-row lg:items-stretch">
+            <div className="w-full min-h-screen bg-background p-1.5 text-foreground md:p-2">
+                <div className="relative mx-auto flex min-h-[calc(100svh-0.75rem)] w-full min-w-0 flex-col gap-2 pt-0.5 lg:h-[calc(100svh-1rem)] lg:min-h-0 lg:flex-row lg:items-stretch">
                     {/* Left panel with collapse button */}
                     {!leftCollapsed && (
-                        <div className="relative min-h-0 transition-all duration-300">
+                        <div className="relative min-h-0 shrink-0 transition-all duration-300">
                             <LeftPanel width={leftPanelWidth} onStartResize={() => { isResizingLeftRef.current = true; }} min={leftPanelMin} max={leftPanelMax} />
                             <button
                                 onClick={() => setLeftCollapsed(true)}
@@ -161,7 +161,7 @@ const LayoutInner: React.FC = () => {
 
                     {/* Right panel with collapse button */}
                     {!rightCollapsed && (
-                        <div className="relative min-h-0 transition-all duration-300">
+                        <div className="relative min-h-0 shrink-0 transition-all duration-300">
                             <JsonPanel width={rightPanelWidth} onStartResize={() => { isResizingRightRef.current = true; }} min={rightPanelMin} max={rightPanelMax} />
                             <button
                                 onClick={() => setRightCollapsed(true)}
@@ -177,7 +177,7 @@ const LayoutInner: React.FC = () => {
                     {rightCollapsed && (
                         <button
                             onClick={() => setRightCollapsed(false)}
-                            className="self-start rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm hover:bg-muted transition-all duration-300"
+                            className="self-start rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm transition-all duration-300 hover:bg-muted"
                             title="Expand right panel"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
