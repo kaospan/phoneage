@@ -227,7 +227,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             gridFrameHeight: baseline.gridFrameHeight,
         });
 
-        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId, baseline.imageURL)) {
+        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId)) {
             setLoadedSnapshot({
                 levelId: baseline.levelId,
                 grid: baseline.grid,

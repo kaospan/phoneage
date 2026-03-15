@@ -37,7 +37,6 @@ import {
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { getAlignmentHints } from './alignmentProfile';
 import { resolveLevelMapperBaseline } from './levelBaseline';
-import { trimDetectedDosFooterBottomRow } from './footerGridTrim';
 import { toast } from 'sonner';
 import type { LevelMapperDraft, LevelMapperHistoryEntry } from './LevelMapperStore';
 console.log('📦 LevelMapperContext.tsx loading...');
@@ -210,39 +209,6 @@ const normalizeHistoryStack = (value: unknown): LevelMapperHistoryEntry[] => {
         .slice(-DRAFT_HISTORY_LIMIT);
 };
 
-const trimHistoryEntryForFooter = (
-    entry: LevelMapperHistoryEntry,
-    imageURL: string | null | undefined
-): LevelMapperHistoryEntry => {
-    if (Array.isArray(entry)) {
-        const trimmed = trimDetectedDosFooterBottomRow(
-            {
-                rows: entry.length,
-                cols: entry[0]?.length ?? 0,
-                grid: cloneGrid(entry),
-            },
-            imageURL
-        );
-        return cloneGrid(trimmed.grid);
-    }
-
-    const trimmed = trimDetectedDosFooterBottomRow(
-        {
-            rows: entry.rows,
-            cols: entry.cols,
-            grid: cloneGrid(entry.grid),
-        },
-        imageURL
-    );
-
-    return {
-        ...entry,
-        rows: trimmed.rows,
-        cols: trimmed.cols,
-        grid: cloneGrid(trimmed.grid),
-    };
-};
-
 export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     console.log('⚛️ LevelMapperProvider initializing...');
 
@@ -358,41 +324,23 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }>(null);
         const currentLevelId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
 
-        const restoreDraftForLevel = (levelId: number, imageURLOverride?: string | null) => {
+        const restoreDraftForLevel = (levelId: number) => {
             const draft = loadLevelMapperDraft(levelId);
             if (!draft || !isValidGrid(draft.grid)) return false;
 
-            const nextImageURL = imageURLOverride ?? imageURL;
-            const trimmedDraftState = trimDetectedDosFooterBottomRow(
-                {
-                    rows: Math.max(1, Math.round(Number(draft.rows) || draft.grid.length)),
-                    cols: Math.max(1, Math.round(Number(draft.cols) || (draft.grid[0]?.length ?? 0))),
-                    grid: cloneGrid(draft.grid),
-                    playerStart:
-                        draft.playerStart &&
-                        Number.isInteger(draft.playerStart.x) &&
-                        Number.isInteger(draft.playerStart.y)
-                            ? { x: draft.playerStart.x, y: draft.playerStart.y }
-                            : null,
-                    hourglassBonusByCell: { ...(draft.hourglassBonusByCell ?? {}) },
-                },
-                nextImageURL
-            );
-
-            const nextRows = Math.max(1, trimmedDraftState.rows);
-            const nextCols = Math.max(1, trimmedDraftState.cols);
+            const nextRows = Math.max(1, Math.round(Number(draft.rows) || draft.grid.length));
+            const nextCols = Math.max(1, Math.round(Number(draft.cols) || (draft.grid[0]?.length ?? 0)));
             const nextGrid =
-                trimmedDraftState.grid.length === nextRows && (trimmedDraftState.grid[0]?.length ?? 0) === nextCols
-                    ? cloneGrid(trimmedDraftState.grid)
-                    : reshapeGridPreservingOverlap(trimmedDraftState.grid, nextRows, nextCols, 5);
-
+                draft.grid.length === nextRows && (draft.grid[0]?.length ?? 0) === nextCols
+                    ? cloneGrid(draft.grid)
+                    : reshapeGridPreservingOverlap(draft.grid, nextRows, nextCols, 5);
             const nextPlayerStart =
-                trimmedDraftState.playerStart &&
-                Number.isInteger(trimmedDraftState.playerStart.x) &&
-                Number.isInteger(trimmedDraftState.playerStart.y)
+                draft.playerStart &&
+                Number.isInteger(draft.playerStart.x) &&
+                Number.isInteger(draft.playerStart.y)
                     ? {
-                        x: Math.max(0, Math.min(nextCols - 1, trimmedDraftState.playerStart.x)),
-                        y: Math.max(0, Math.min(nextRows - 1, trimmedDraftState.playerStart.y)),
+                        x: Math.max(0, Math.min(nextCols - 1, draft.playerStart.x)),
+                        y: Math.max(0, Math.min(nextRows - 1, draft.playerStart.y)),
                     }
                     : null;
             const nextTimeLimitSeconds =
@@ -400,7 +348,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     ? Math.max(0, Math.round(draft.timeLimitSeconds))
                     : null;
             const nextHourglassBonusByCell = clampHourglassBonusByCell(
-                trimmedDraftState.hourglassBonusByCell ?? {},
+                draft.hourglassBonusByCell ?? {},
                 nextRows,
                 nextCols
             );
@@ -436,12 +384,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 Number.isFinite(Number(draft.gridFrameWidth)) ? Math.max(1, Number(draft.gridFrameWidth)) : null;
             const nextGridFrameHeight =
                 Number.isFinite(Number(draft.gridFrameHeight)) ? Math.max(1, Number(draft.gridFrameHeight)) : null;
-            const nextUndoStack = normalizeHistoryStack(draft.undoStack)
-                .map((entry) => trimHistoryEntryForFooter(entry, nextImageURL))
-                .slice(-DRAFT_HISTORY_LIMIT);
-            const nextRedoStack = normalizeHistoryStack(draft.redoStack)
-                .map((entry) => trimHistoryEntryForFooter(entry, nextImageURL))
-                .slice(-DRAFT_HISTORY_LIMIT);
+            const nextUndoStack = normalizeHistoryStack(draft.undoStack);
+            const nextRedoStack = normalizeHistoryStack(draft.redoStack);
 
             skipAutoResizeRef.current = true;
             prevSizeRef.current = { rows: nextRows, cols: nextCols };
@@ -468,28 +412,6 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setUndoStack(nextUndoStack);
             setRedoStack(nextRedoStack);
             setIsSaved(false);
-
-            saveLevelMapperDraft(levelId, {
-                ...draft,
-                rows: nextRows,
-                cols: nextCols,
-                grid: cloneGrid(nextGrid),
-                playerStart: nextPlayerStart,
-                timeLimitSeconds: nextTimeLimitSeconds,
-                hourglassBonusByCell: { ...nextHourglassBonusByCell },
-                overlayOpacity: nextOverlayOpacity,
-                imageScaleX: nextImageScaleX,
-                imageScaleY: nextImageScaleY,
-                imageOffsetX: nextImageOffsetX,
-                imageOffsetY: nextImageOffsetY,
-                zoom: nextZoom,
-                gridOffsetX: nextGridOffsetX,
-                gridOffsetY: nextGridOffsetY,
-                gridFrameWidth: nextGridFrameWidth,
-                gridFrameHeight: nextGridFrameHeight,
-                undoStack: nextUndoStack.map(cloneHistoryEntry),
-                redoStack: nextRedoStack.map(cloneHistoryEntry),
-            });
             return true;
         };
 
@@ -703,7 +625,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setRedoStack([]);
                         setIsSaved(true);
                         console.log(`Auto-loaded Level ${baseline.levelId} from previous session`);
-                        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId, baseline.imageURL)) {
+                        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId)) {
                             setLoadedSnapshot({
                                 levelId: baseline.levelId,
                                 grid: baseline.grid,
