@@ -19,12 +19,12 @@ import {
     loadImportLevelIndex,
     saveImportLevelIndex,
     clearImportLevel,
-    loadLevelLayoutOverride,
     saveLevelLayoutOverride,
     loadLevelImageScale,
     saveLevelImageScale,
     loadLevelMapperDraft,
-    saveLevelMapperDraft
+    saveLevelMapperDraft,
+    saveLevelMapperSavedState
 } from './persistenceOperations';
 import {
     useJsonSync,
@@ -35,9 +35,8 @@ import {
     useSaveImportLevel
 } from './mapperHooks';
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
-import { normalizeMapperImage } from './imageNormalization';
 import { getAlignmentHints } from './alignmentProfile';
-import { getLevelImageUrl } from './levelImageStore';
+import { resolveLevelMapperBaseline } from './levelBaseline';
 import { toast } from 'sonner';
 import type { LevelMapperDraft, LevelMapperHistoryEntry } from './LevelMapperStore';
 console.log('📦 LevelMapperContext.tsx loading...');
@@ -487,6 +486,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         useEffect(() => {
             if (currentLevelId == null) return;
             if (loadedSnapshotRef.current?.levelId !== currentLevelId) return;
+            if (isSaved) return;
             const timer = window.setTimeout(() => {
                 const draft: LevelMapperDraft = {
                     rows,
@@ -541,102 +541,99 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             gridFrameHeight,
             undoStack,
             redoStack,
+            isSaved,
         ]);
 
         // Auto-load level on startup if one was previously imported.
         // For placeholder auto-build levels, load the image and keep the editor responsive
         // instead of running a heavy full image-to-grid build during mount.
         useEffect(() => {
-                    if (importLevelIndex !== null) {
+            if (importLevelIndex !== null) {
                 const lvl = allLevels[importLevelIndex];
                 if (lvl?.grid) {
                     const loadLevelIntoMapper = async () => {
-                        let resolved = lvl;
-
-                        if (resolved.autoBuild && isPlaceholderGrid(resolved.grid)) {
-                            const layout = loadLevelLayoutOverride(resolved.id) ?? { rows: 12, cols: 20 };
-                            resolved = {
-                                ...resolved,
-                                grid: voidGrid(layout.rows, layout.cols),
-                            };
-                        }
-
-                        const storedUpload = await getLevelImageUrl(resolved.id);
-                        const normalizedURL = storedUpload ?? (resolved.image ? await normalizeMapperImage(resolved.image) : null);
-                        const savedScale = loadLevelImageScale(resolved.id);
-                        const hasNonVoidCells = resolved.grid.some(row => row.some(cell => cell !== 5));
-                        if (!hasNonVoidCells && !normalizedURL) {
-                            console.log(`Skipped auto-loading Level ${resolved.id} (empty/void grid)`);
+                        const baseline = await resolveLevelMapperBaseline(lvl);
+                        const hasNonVoidCells = baseline.grid.some((row) => row.some((cell) => cell !== 5));
+                        if (!hasNonVoidCells && !baseline.imageURL) {
+                            console.log(`Skipped auto-loading Level ${baseline.levelId} (empty/void grid)`);
                             clearImportLevel();
                             setImportLevelIndex(null);
                             return;
                         }
 
-                        setRows(resolved.grid.length);
-                        setCols(resolved.grid[0]?.length || 0);
-                        setGrid(resolved.grid.map(row => [...row]));
-                        setHourglassBonusByCell({ ...(resolved.hourglassBonusByCell ?? {}) });
-                        if (typeof resolved.timeLimitSeconds === 'number' && Number.isFinite(resolved.timeLimitSeconds)) {
-                            const n = Math.max(0, Math.round(Number(resolved.timeLimitSeconds)));
-                            setTimeLimitSeconds(n > 0 ? n : null);
-                        } else {
-                            setTimeLimitSeconds(null);
-                        }
-                        setImageURL(normalizedURL);
-                        setOverlayEnabled(Boolean(normalizedURL));
-                        setGridOffsetX(0);
-                        setGridOffsetY(0);
-                        setGridFrameWidth(null);
-                        setGridFrameHeight(null);
-                        if (savedScale) {
-                            const x = Number(savedScale.x);
-                            const y = Number(savedScale.y);
-                            const offsetX = Number((savedScale as any).offsetX ?? 0);
-                            const offsetY = Number((savedScale as any).offsetY ?? 0);
-                            const lock = Boolean(savedScale.lock);
-                            if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
-                            if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
-                            if (Number.isFinite(offsetX)) setImageOffsetX(Math.max(0, offsetX));
-                            if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
-                            setLockImageAspect(lock);
-                        } else {
-                            setImageScaleX(1);
-                            setImageScaleY(1);
-                            setImageOffsetX(0);
-                            setImageOffsetY(0);
-                            setLockImageAspect(true);
-                        }
-                        // Per-level image distortion is loaded via the effect above.
-                        setPlayerStart(resolved.playerStart ? { x: resolved.playerStart.x, y: resolved.playerStart.y } : null);
-                        setTheme(resolved.theme);
+                        skipAutoResizeRef.current = true;
+                        prevSizeRef.current = { rows: baseline.rows, cols: baseline.cols };
+                        setRows(baseline.rows);
+                        setCols(baseline.cols);
+                        setGrid(cloneGrid(baseline.grid));
+                        setHourglassBonusByCell({ ...(baseline.hourglassBonusByCell ?? {}) });
+                        setTimeLimitSeconds(baseline.timeLimitSeconds);
+                        setImageURL(baseline.imageURL);
+                        setOverlayEnabled(baseline.overlayEnabled);
+                        setOverlayOpacity(baseline.overlayOpacity);
+                        setOverlayStretch(baseline.overlayStretch);
+                        setImageScaleX(baseline.imageScaleX);
+                        setImageScaleY(baseline.imageScaleY);
+                        setImageOffsetX(baseline.imageOffsetX);
+                        setImageOffsetY(baseline.imageOffsetY);
+                        setLockImageAspect(baseline.lockImageAspect);
+                        setZoom(baseline.zoom);
+                        setGridOffsetX(baseline.gridOffsetX);
+                        setGridOffsetY(baseline.gridOffsetY);
+                        setGridFrameWidth(baseline.gridFrameWidth);
+                        setGridFrameHeight(baseline.gridFrameHeight);
+                        setPlayerStart(baseline.playerStart ? { ...baseline.playerStart } : null);
+                        setTheme(baseline.theme);
                         setLoadedSnapshot({
-                            levelId: resolved.id,
-                            grid: resolved.grid,
-                            playerStart: resolved.playerStart ? { x: resolved.playerStart.x, y: resolved.playerStart.y } : null,
-                            theme: resolved.theme,
-                            timeLimitSeconds:
-                                typeof resolved.timeLimitSeconds === 'number' && Number.isFinite(resolved.timeLimitSeconds) && Number(resolved.timeLimitSeconds) > 0
-                                    ? Math.round(Number(resolved.timeLimitSeconds))
-                                    : null,
-                            hourglassBonusByCell: { ...(resolved.hourglassBonusByCell ?? {}) },
-                            imageURL: normalizedURL,
-                            overlayEnabled: Boolean(normalizedURL),
-                            overlayOpacity: 0.5,
-                            overlayStretch: true,
-                            imageScaleX: savedScale?.x ?? 1,
-                            imageScaleY: savedScale?.y ?? 1,
-                            imageOffsetX: Number((savedScale as any)?.offsetX ?? 0),
-                            imageOffsetY: Number((savedScale as any)?.offsetY ?? 0),
-                            lockImageAspect: savedScale?.lock ?? true,
-                            zoom: 1,
-                            gridOffsetX: 0,
-                            gridOffsetY: 0,
-                            gridFrameWidth: null,
-                            gridFrameHeight: null,
+                            levelId: baseline.levelId,
+                            grid: baseline.grid,
+                            playerStart: baseline.playerStart,
+                            theme: baseline.theme,
+                            timeLimitSeconds: baseline.timeLimitSeconds,
+                            hourglassBonusByCell: baseline.hourglassBonusByCell,
+                            imageURL: baseline.imageURL,
+                            overlayEnabled: baseline.overlayEnabled,
+                            overlayOpacity: baseline.overlayOpacity,
+                            overlayStretch: baseline.overlayStretch,
+                            imageScaleX: baseline.imageScaleX,
+                            imageScaleY: baseline.imageScaleY,
+                            imageOffsetX: baseline.imageOffsetX,
+                            imageOffsetY: baseline.imageOffsetY,
+                            lockImageAspect: baseline.lockImageAspect,
+                            zoom: baseline.zoom,
+                            gridOffsetX: baseline.gridOffsetX,
+                            gridOffsetY: baseline.gridOffsetY,
+                            gridFrameWidth: baseline.gridFrameWidth,
+                            gridFrameHeight: baseline.gridFrameHeight,
                         });
-                        console.log(`Auto-loaded Level ${resolved.id} from previous session`);
-                        if (restoreDraftForLevel(resolved.id)) {
-                            toast.info(`Restored autosaved draft for level ${resolved.id}.`, {
+                        setUndoStack([]);
+                        setRedoStack([]);
+                        setIsSaved(true);
+                        console.log(`Auto-loaded Level ${baseline.levelId} from previous session`);
+                        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId)) {
+                            setLoadedSnapshot({
+                                levelId: baseline.levelId,
+                                grid: baseline.grid,
+                                playerStart: baseline.playerStart,
+                                theme: baseline.theme,
+                                timeLimitSeconds: baseline.timeLimitSeconds,
+                                hourglassBonusByCell: baseline.hourglassBonusByCell,
+                                imageURL: baseline.imageURL,
+                                overlayEnabled: baseline.overlayEnabled,
+                                overlayOpacity: baseline.overlayOpacity,
+                                overlayStretch: baseline.overlayStretch,
+                                imageScaleX: baseline.imageScaleX,
+                                imageScaleY: baseline.imageScaleY,
+                                imageOffsetX: baseline.imageOffsetX,
+                                imageOffsetY: baseline.imageOffsetY,
+                                lockImageAspect: baseline.lockImageAspect,
+                                zoom: baseline.zoom,
+                                gridOffsetX: baseline.gridOffsetX,
+                                gridOffsetY: baseline.gridOffsetY,
+                                gridFrameWidth: baseline.gridFrameWidth,
+                                gridFrameHeight: baseline.gridFrameHeight,
+                            });
+                            toast.info(`Restored autosaved draft for level ${baseline.levelId}.`, {
                                 position: 'bottom-right',
                                 duration: 3500,
                                 description: 'Undo/redo history was restored too.',
@@ -1356,8 +1353,32 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             // Persist current overlay tweaks immediately. This avoids a race where a dev-only file write
             // triggers a Vite reload before the effect-based localStorage persistence runs.
             if (res.levelId != null) {
+                const savedAt = Date.now();
                 saveLevelImageScale(res.levelId, { x: imageScaleX, y: imageScaleY, offsetX: imageOffsetX, offsetY: imageOffsetY, lock: lockImageAspect });
                 saveLevelLayoutOverride(res.levelId, rows, cols);
+                saveLevelMapperSavedState(res.levelId, {
+                    rows,
+                    cols,
+                    grid: cloneGrid(res.gridSaved),
+                    playerStart: playerStart ? { ...playerStart } : null,
+                    theme,
+                    timeLimitSeconds,
+                    hourglassBonusByCell: { ...(res.hourglassBonusByCellSaved ?? {}) },
+                    overlayEnabled,
+                    overlayOpacity,
+                    overlayStretch,
+                    imageScaleX,
+                    imageScaleY,
+                    imageOffsetX,
+                    imageOffsetY,
+                    lockImageAspect,
+                    zoom,
+                    gridOffsetX,
+                    gridOffsetY,
+                    gridFrameWidth,
+                    gridFrameHeight,
+                    updatedAt: savedAt,
+                });
                 saveLevelMapperDraft(res.levelId, {
                     rows,
                     cols,
@@ -1381,7 +1402,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     gridFrameHeight,
                     undoStack: undoStack.slice(-DRAFT_HISTORY_LIMIT).map(cloneHistoryEntry),
                     redoStack: redoStack.slice(-DRAFT_HISTORY_LIMIT).map(cloneHistoryEntry),
-                    updatedAt: Date.now(),
+                    updatedAt: savedAt,
                 });
             }
 

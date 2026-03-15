@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, GraduationCap, Image as ImageIcon, Link2, Link2Off, Magnet, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
@@ -23,7 +23,7 @@ export const GridEditorPanel: React.FC = () => {
         pushUndo, pushUndoSnapshot,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         addMultipleColumns, addMultipleRows, contextMenu, setContextMenu,
-        showUnsavedBanner, isSaved: savedFlag, imageURL,
+        imageURL,
         canvasRef,
         playerStart, setPlayerStart,
         zoom, setZoom,
@@ -259,6 +259,45 @@ export const GridEditorPanel: React.FC = () => {
         cellHeight,
     ]);
 
+    const maybeSnapToGuideGrid = React.useCallback(() => {
+        if (!guideGrid || !alignment || !imageNaturalSize) return false;
+        if (guideGrid.rows !== rows || guideGrid.cols !== cols) return false;
+        if (alignment.avg > 1.4 || alignment.max > 3) return false;
+
+        const nextOffsetX = Math.max(0, Math.min(imageNaturalSize.width - 1, Math.round(guideGrid.offsetX)));
+        const nextOffsetY = Math.max(0, Math.min(imageNaturalSize.height - 1, Math.round(guideGrid.offsetY)));
+        const nextFrameWidth = Math.min(imageNaturalSize.width, Math.max(1, Math.round(guideGrid.cellWidth * cols)));
+        const nextFrameHeight = Math.min(imageNaturalSize.height, Math.max(1, Math.round(guideGrid.cellHeight * rows)));
+
+        const changed =
+            nextOffsetX !== gridOffsetX ||
+            nextOffsetY !== gridOffsetY ||
+            nextFrameWidth !== (gridFrameWidth ?? imageNaturalSize.width) ||
+            nextFrameHeight !== (gridFrameHeight ?? imageNaturalSize.height);
+
+        if (!changed) return false;
+
+        setGridOffsetX(nextOffsetX);
+        setGridOffsetY(nextOffsetY);
+        setGridFrameWidth(nextFrameWidth);
+        setGridFrameHeight(nextFrameHeight);
+        return true;
+    }, [
+        alignment,
+        cols,
+        gridFrameHeight,
+        gridFrameWidth,
+        gridOffsetX,
+        gridOffsetY,
+        guideGrid,
+        imageNaturalSize,
+        rows,
+        setGridFrameHeight,
+        setGridFrameWidth,
+        setGridOffsetX,
+        setGridOffsetY,
+    ]);
+
     const autoFitImageScaleY = React.useCallback(() => {
         if (!guideGrid || !imageNaturalSize) return;
         // Find scaleY that makes the detected tile height line up with the grid's cellHeight.
@@ -304,7 +343,8 @@ export const GridEditorPanel: React.FC = () => {
     const endResizeImageX = React.useCallback(() => {
         resizeXStartRef.current = null;
         setIsResizingImageX(false);
-    }, []);
+        maybeSnapToGuideGrid();
+    }, [maybeSnapToGuideGrid]);
 
     const beginResizeImageY = React.useCallback((clientY: number, direction: 1 | -1) => {
         pushUndoSnapshot();
@@ -338,27 +378,8 @@ export const GridEditorPanel: React.FC = () => {
     const endResizeImageY = React.useCallback(() => {
         resizeYStartRef.current = null;
         setIsResizingImageY(false);
-    }, []);
-
-    const snapToGuideGrid = React.useCallback(() => {
-        if (!guideGrid || !imageNaturalSize) return;
-        if (guideGrid.rows !== rows || guideGrid.cols !== cols) {
-            alert(`Detected ${guideGrid.rows}×${guideGrid.cols}, but current grid is ${rows}×${cols}. Run Auto-detect (or adjust rows/cols) first, then snap.`);
-            return;
-        }
-
-        const imgW = imageNaturalSize.width;
-        const imgH = imageNaturalSize.height;
-        const nextOffsetX = Math.max(0, Math.min(imgW - 1, Math.round(guideGrid.offsetX)));
-        const nextOffsetY = Math.max(0, Math.min(imgH - 1, Math.round(guideGrid.offsetY)));
-        const nextFrameWidth = Math.min(imgW, Math.max(1, Math.round(guideGrid.cellWidth * cols)));
-        const nextFrameHeight = Math.min(imgH, Math.max(1, Math.round(guideGrid.cellHeight * rows)));
-
-        setGridOffsetX(nextOffsetX);
-        setGridOffsetY(nextOffsetY);
-        setGridFrameWidth(nextFrameWidth);
-        setGridFrameHeight(nextFrameHeight);
-    }, [guideGrid, imageNaturalSize, rows, cols, setGridOffsetX, setGridOffsetY, setGridFrameWidth, setGridFrameHeight]);
+        maybeSnapToGuideGrid();
+    }, [maybeSnapToGuideGrid]);
 
     const cropInsets = React.useMemo(() => {
         if (!imageNaturalSize) return null;
@@ -378,6 +399,8 @@ export const GridEditorPanel: React.FC = () => {
         bottom?: number;
     }) => {
         if (!imageNaturalSize || !cropInsets) return;
+        pushUndoSnapshot();
+        markUnsaved();
 
         const left = Math.max(0, Math.min(imageNaturalSize.width - 1, Math.round(next.left ?? cropInsets.left)));
         const top = Math.max(0, Math.min(imageNaturalSize.height - 1, Math.round(next.top ?? cropInsets.top)));
@@ -391,7 +414,7 @@ export const GridEditorPanel: React.FC = () => {
         setGridOffsetY(top);
         setGridFrameWidth(frameWidth);
         setGridFrameHeight(frameHeight);
-    }, [cropInsets, imageNaturalSize, setGridFrameHeight, setGridFrameWidth, setGridOffsetX, setGridOffsetY]);
+    }, [cropInsets, imageNaturalSize, markUnsaved, pushUndoSnapshot, setGridFrameHeight, setGridFrameWidth, setGridOffsetX, setGridOffsetY]);
 
     const beginPaint = (r: number, c: number) => {
         if (isDragMode) return;
@@ -466,6 +489,8 @@ export const GridEditorPanel: React.FC = () => {
 
     const startGridDrag = (clientX: number, clientY: number) => {
         if (!isDragMode || !imageURL) return;
+        pushUndoSnapshot();
+        markUnsaved();
         setIsDraggingGrid(true);
         dragStartRef.current = {
             x: clientX,
@@ -489,6 +514,7 @@ export const GridEditorPanel: React.FC = () => {
 
     const endGridDrag = () => {
         setIsDraggingGrid(false);
+        maybeSnapToGuideGrid();
     };
 
     const onWheelZoom = (e: React.WheelEvent) => {
@@ -561,27 +587,6 @@ export const GridEditorPanel: React.FC = () => {
         }
     };
 
-    const learnAlignmentFromCurrent = React.useCallback(() => {
-        if (!imageNaturalSize) {
-            alert('Load an image first.');
-            return;
-        }
-        if (rows <= 0 || cols <= 0) {
-            alert('Invalid grid size.');
-            return;
-        }
-
-        const frameW = gridFrameWidth ?? imageNaturalSize.width;
-        const frameH = gridFrameHeight ?? imageNaturalSize.height;
-        const cellW = frameW / cols;
-        const cellH = frameH / rows;
-
-        const next = updateAlignmentProfile({ cellWidthPx: cellW, cellHeightPx: cellH, cols, rows });
-        alert(
-            `Learned cell size ≈ ${next.cellWidthPx.toFixed(2)}×${next.cellHeightPx.toFixed(2)}px (${next.samples} sample${next.samples === 1 ? '' : 's'})`
-        );
-    }, [cols, gridFrameHeight, gridFrameWidth, imageNaturalSize, rows]);
-
     const cropCurrentMap = () => {
         if (!imageNaturalSize) {
             alert('Load an aligned image first');
@@ -628,7 +633,12 @@ export const GridEditorPanel: React.FC = () => {
                 console.error('Failed to learn from current map before saving:', error);
             }
         }
-        saveChanges();
+        if (imageNaturalSize && rows > 0 && cols > 0) {
+            const frameW = gridFrameWidth ?? imageNaturalSize.width;
+            const frameH = gridFrameHeight ?? imageNaturalSize.height;
+            updateAlignmentProfile({ cellWidthPx: frameW / cols, cellHeightPx: frameH / rows, cols, rows });
+        }
+        await saveChanges();
         trustedCellsRef.current.clear();
     };
 
@@ -725,18 +735,6 @@ export const GridEditorPanel: React.FC = () => {
                             {guideStatus === 'ready' && (alignment?.aligned ? '✓' : '≈')}
                             {guideStatus === 'ready' && alignment ? ` ${alignment.avg.toFixed(2)} / ${alignment.max.toFixed(2)}px` : ''}
                         </span>
-                    )}
-                    {imageURL && overlayEnabled && showAlignmentGuide && guideStatus === 'ready' && guideGrid && (
-                        <Button
-                            size="icon"
-                            variant="outline"
-                            className={compactIconButtonClass}
-                            onClick={snapToGuideGrid}
-                            title="Snap grid frame/offset to detected floor-tile grid"
-                            aria-label="Snap to detected grid"
-                        >
-                            <Magnet />
-                        </Button>
                     )}
                     <Button
                         size="icon"
@@ -1024,16 +1022,6 @@ export const GridEditorPanel: React.FC = () => {
                         <>
                             <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={learnCurrentMap} title="Learn references from the corrected map" aria-label="Learn from map">
                                 <Scan />
-                            </Button>
-                            <Button
-                                size="icon"
-                                variant="outline"
-                                className={compactIconButtonClass}
-                                onClick={learnAlignmentFromCurrent}
-                                title="Learn grid alignment (cell size) from this corrected level to improve auto-detect on other levels"
-                                aria-label="Learn alignment"
-                            >
-                                <GraduationCap />
                             </Button>
                             <div className="flex items-center gap-2">
                                 <label className="flex items-center gap-1 text-xs text-muted-foreground" title="How many void cells to keep around the outside when cropping">

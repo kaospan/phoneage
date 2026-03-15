@@ -10,33 +10,17 @@ import { themes, type ColorTheme } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
 import { detectGridLines } from './gridDetection';
 import { getAlignmentHints } from './alignmentProfile';
-import { loadLevelImageScale, loadLevelLayoutOverride } from './persistenceOperations';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLevels';
-import { getLevelImageUrl, putLevelImage } from './levelImageStore';
+import { putLevelImage } from './levelImageStore';
 import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT } from '@/lib/uiSettings';
-const isPlaceholderGrid = (levelGrid?: number[][]) => {
-    if (!levelGrid || levelGrid.length === 0) return true;
-    if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
-    return levelGrid.every((row) => row.every((cell) => cell === 5));
-};
-
-const getEditableGridForLevel = (levelId: number | null, levelGrid?: number[][]) => {
-    if (!isPlaceholderGrid(levelGrid)) {
-        return levelGrid?.map((row) => [...row]) ?? voidGrid(12, 20);
-    }
-    const layout = levelId ? loadLevelLayoutOverride(levelId) : null;
-    const r = layout?.rows ?? 12;
-    const c = layout?.cols ?? 20;
-    return voidGrid(r, c);
-};
-
+import { resolveLevelMapperBaseline } from './levelBaseline';
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
     const {
         rows, cols, setRows, setCols,
         importLevelIndex, setImportLevelIndex,
         compareLevelIndex, setCompareLevelIndex,
-        overlayEnabled, setOverlayEnabled,
+        overlayEnabled, setOverlayEnabled, setOverlayOpacity, setOverlayStretch,
         allLevels, imageURL, setImageURL,
         setAllLevels,
         detectGrid, snapToLockedCounts, detectCells,
@@ -193,104 +177,80 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         }
     };
 
-    const resolveLevelForMapper = async (levelIndex: number) => {
-        const lvl = allLevels[levelIndex];
-        if (!lvl) return null;
-        if (lvl.autoBuild && isPlaceholderGrid(lvl.grid)) {
-            return {
-                ...lvl,
-                grid: getEditableGridForLevel(lvl.id, lvl.grid),
-            };
-        }
-
-        return lvl;
-    };
-
     const loadLevelByIndex = async (idx: number) => {
-        const lvl = await resolveLevelForMapper(idx);
+        const lvl = allLevels[idx];
         if (!lvl?.grid) return;
 
-        const editable = getEditableGridForLevel(lvl.id, lvl.grid);
-        setRows(editable.length);
-        setCols(editable[0]?.length || 0);
-        setGrid(editable);
-        setHourglassBonusByCell({ ...(lvl.hourglassBonusByCell ?? {}) });
-
-        // Prefer a user-uploaded screenshot saved in the mapper, otherwise fall back to bundled assets.
-        const storedUpload = await getLevelImageUrl(lvl.id);
-        const normalizedURL = storedUpload ?? (lvl.image ? await normalizeMapperImage(lvl.image) : null);
-        setImageURL(normalizedURL);
-        setOverlayEnabled(Boolean(normalizedURL));
-
-        setGridOffsetX(0);
-        setGridOffsetY(0);
-        setGridFrameWidth(null);
-        setGridFrameHeight(null);
-        setZoom(1);
-
-        // Restore any saved per-level overlay image distortion for precise alignment.
-        const savedScale = loadLevelImageScale(lvl.id);
-        if (savedScale) {
-            const x = Number(savedScale.x);
-            const y = Number(savedScale.y);
-            const offsetX = Number((savedScale as any).offsetX ?? 0);
-            const offsetY = Number((savedScale as any).offsetY ?? 0);
-            const lock = Boolean(savedScale.lock);
-            if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
-            if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
-            if (Number.isFinite(offsetX)) setImageOffsetX(Math.max(0, offsetX));
-            if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
-            setLockImageAspect(lock);
-        } else {
-            setImageScaleX(1);
-            setImageScaleY(1);
-            setImageOffsetX(0);
-            setImageOffsetY(0);
-            setLockImageAspect(true);
-        }
-
-        if (lvl.playerStart) {
-            setPlayerStart({ x: lvl.playerStart.x, y: lvl.playerStart.y });
-        } else {
-            setPlayerStart(null);
-        }
-        if (lvl.theme) {
-            setTheme(lvl.theme);
-        }
-        if (typeof lvl.timeLimitSeconds === 'number' && Number.isFinite(lvl.timeLimitSeconds)) {
-            const n = Math.max(0, Math.round(Number(lvl.timeLimitSeconds)));
-            setTimeLimitSeconds(n > 0 ? n : null);
-        } else {
-            setTimeLimitSeconds(null);
-        }
+        const baseline = await resolveLevelMapperBaseline(lvl);
+        setRows(baseline.rows);
+        setCols(baseline.cols);
+        setGrid(baseline.grid.map((row) => [...row]));
+        setHourglassBonusByCell({ ...(baseline.hourglassBonusByCell ?? {}) });
+        setImageURL(baseline.imageURL);
+        setOverlayEnabled(baseline.overlayEnabled);
+        setOverlayOpacity(baseline.overlayOpacity);
+        setOverlayStretch(baseline.overlayStretch);
+        setGridOffsetX(baseline.gridOffsetX);
+        setGridOffsetY(baseline.gridOffsetY);
+        setGridFrameWidth(baseline.gridFrameWidth);
+        setGridFrameHeight(baseline.gridFrameHeight);
+        setZoom(baseline.zoom);
+        setImageScaleX(baseline.imageScaleX);
+        setImageScaleY(baseline.imageScaleY);
+        setImageOffsetX(baseline.imageOffsetX);
+        setImageOffsetY(baseline.imageOffsetY);
+        setLockImageAspect(baseline.lockImageAspect);
+        setPlayerStart(baseline.playerStart ? { ...baseline.playerStart } : null);
+        setTheme(baseline.theme);
+        setTimeLimitSeconds(baseline.timeLimitSeconds);
 
         setLoadedSnapshot({
-            levelId: lvl.id,
-            grid: editable,
-            playerStart: lvl.playerStart ? { x: lvl.playerStart.x, y: lvl.playerStart.y } : null,
-            theme: lvl.theme,
-            timeLimitSeconds: (typeof lvl.timeLimitSeconds === 'number' && Number.isFinite(lvl.timeLimitSeconds) && Number(lvl.timeLimitSeconds) > 0)
-                ? Math.round(Number(lvl.timeLimitSeconds))
-                : null,
-            hourglassBonusByCell: { ...(lvl.hourglassBonusByCell ?? {}) },
-            imageURL: normalizedURL,
-            overlayEnabled: Boolean(normalizedURL),
-            overlayOpacity: 0.5,
-            overlayStretch: true,
-            imageScaleX: savedScale?.x ?? 1,
-            imageScaleY: savedScale?.y ?? 1,
-            imageOffsetX: Number((savedScale as any)?.offsetX ?? 0),
-            imageOffsetY: Number((savedScale as any)?.offsetY ?? 0),
-            lockImageAspect: savedScale?.lock ?? true,
-            zoom: 1,
-            gridOffsetX: 0,
-            gridOffsetY: 0,
-            gridFrameWidth: null,
-            gridFrameHeight: null,
+            levelId: baseline.levelId,
+            grid: baseline.grid,
+            playerStart: baseline.playerStart,
+            theme: baseline.theme,
+            timeLimitSeconds: baseline.timeLimitSeconds,
+            hourglassBonusByCell: baseline.hourglassBonusByCell,
+            imageURL: baseline.imageURL,
+            overlayEnabled: baseline.overlayEnabled,
+            overlayOpacity: baseline.overlayOpacity,
+            overlayStretch: baseline.overlayStretch,
+            imageScaleX: baseline.imageScaleX,
+            imageScaleY: baseline.imageScaleY,
+            imageOffsetX: baseline.imageOffsetX,
+            imageOffsetY: baseline.imageOffsetY,
+            lockImageAspect: baseline.lockImageAspect,
+            zoom: baseline.zoom,
+            gridOffsetX: baseline.gridOffsetX,
+            gridOffsetY: baseline.gridOffsetY,
+            gridFrameWidth: baseline.gridFrameWidth,
+            gridFrameHeight: baseline.gridFrameHeight,
         });
 
-        if (restoreDraftForLevel(lvl.id)) {
-            setAutoDetectStatus(`Restored autosaved draft for level ${lvl.id} with undo/redo history.`);
+        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId)) {
+            setLoadedSnapshot({
+                levelId: baseline.levelId,
+                grid: baseline.grid,
+                playerStart: baseline.playerStart,
+                theme: baseline.theme,
+                timeLimitSeconds: baseline.timeLimitSeconds,
+                hourglassBonusByCell: baseline.hourglassBonusByCell,
+                imageURL: baseline.imageURL,
+                overlayEnabled: baseline.overlayEnabled,
+                overlayOpacity: baseline.overlayOpacity,
+                overlayStretch: baseline.overlayStretch,
+                imageScaleX: baseline.imageScaleX,
+                imageScaleY: baseline.imageScaleY,
+                imageOffsetX: baseline.imageOffsetX,
+                imageOffsetY: baseline.imageOffsetY,
+                lockImageAspect: baseline.lockImageAspect,
+                zoom: baseline.zoom,
+                gridOffsetX: baseline.gridOffsetX,
+                gridOffsetY: baseline.gridOffsetY,
+                gridFrameWidth: baseline.gridFrameWidth,
+                gridFrameHeight: baseline.gridFrameHeight,
+            });
+            setAutoDetectStatus(`Restored autosaved draft for level ${baseline.levelId} with undo/redo history.`);
         }
     };
 

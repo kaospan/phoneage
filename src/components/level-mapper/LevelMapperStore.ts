@@ -49,6 +49,30 @@ export interface LevelMapperDraft {
   updatedAt: number;
 }
 
+export interface LevelMapperSavedState {
+  rows: number;
+  cols: number;
+  grid: number[][];
+  playerStart: { x: number; y: number } | null;
+  theme: ColorTheme | undefined;
+  timeLimitSeconds: number | null;
+  hourglassBonusByCell: Record<string, number>;
+  overlayEnabled: boolean;
+  overlayOpacity: number;
+  overlayStretch: boolean;
+  imageScaleX: number;
+  imageScaleY: number;
+  imageOffsetX: number;
+  imageOffsetY: number;
+  lockImageAspect: boolean;
+  zoom: number;
+  gridOffsetX: number;
+  gridOffsetY: number;
+  gridFrameWidth: number | null;
+  gridFrameHeight: number | null;
+  updatedAt: number;
+}
+
 export interface LevelMapperContextValue {
   // Dimensions & grid
   rows: number;
