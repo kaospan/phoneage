@@ -14,6 +14,7 @@ export type LevelMapperHistoryEntry =
       cols: number;
       imageScaleX: number;
       imageScaleY: number;
+      imageOffsetX: number;
       imageOffsetY: number;
       lockImageAspect: boolean;
       gridOffsetX: number;
@@ -35,6 +36,7 @@ export interface LevelMapperDraft {
   overlayStretch: boolean;
   imageScaleX: number;
   imageScaleY: number;
+  imageOffsetX: number;
   imageOffsetY: number;
   lockImageAspect: boolean;
   zoom: number;
@@ -108,6 +110,9 @@ export interface LevelMapperContextValue {
   setImageScaleX: (n: number) => void;
   imageScaleY: number;
   setImageScaleY: (n: number) => void;
+  // Extra overlay image horizontal translation (in source image pixels), used to anchor stretch from left/right.
+  imageOffsetX: number;
+  setImageOffsetX: (n: number) => void;
   // Extra overlay image vertical translation (in source image pixels), used to anchor stretch from top/bottom.
   imageOffsetY: number;
   setImageOffsetY: (n: number) => void;
@@ -178,6 +183,7 @@ export interface LevelMapperContextValue {
     overlayStretch: boolean;
     imageScaleX: number;
     imageScaleY: number;
+    imageOffsetX?: number;
     imageOffsetY?: number;
     lockImageAspect: boolean;
     zoom: number;

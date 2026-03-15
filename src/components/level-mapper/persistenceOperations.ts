@@ -212,6 +212,7 @@ export type LevelImageScale = {
     // Effective Y scale = y * OVERLAY_IMAGE_SCALE_Y_BASE
     y: number;
     lock: boolean;
+    offsetX?: number;
     offsetY?: number;
     // Optional versioning for future migrations.
     v?: number;
@@ -227,6 +228,7 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
         if (!parsed || typeof parsed !== 'object') return null;
         const x = Number((parsed as any).x ?? 1);
         const yRaw = Number((parsed as any).y ?? 1);
+        const offsetX = Number((parsed as any).offsetX ?? 0);
         const offsetY = Number((parsed as any).offsetY ?? 0);
         const lock = Boolean((parsed as any).lock ?? true);
         const v = Number((parsed as any).v ?? 1);
@@ -242,6 +244,7 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
             x,
             y,
             lock,
+            offsetX: Number.isFinite(offsetX) ? offsetX : 0,
             offsetY: Number.isFinite(offsetY) ? offsetY : 0,
             v: LEVEL_IMAGE_SCALE_STORAGE_VERSION,
             baseY: OVERLAY_IMAGE_SCALE_Y_BASE,

@@ -15,7 +15,7 @@ export const GridEditorPanel: React.FC = () => {
         compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
         importLevelIndex,
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity,
-        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
+        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         lastGridDetection,
         exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
         hourglassBrushSeconds, setHourglassBonusByCell,
@@ -36,7 +36,9 @@ export const GridEditorPanel: React.FC = () => {
     const [isDragMode, setIsDragMode] = React.useState(false);
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
     const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
+    const [isResizingImageX, setIsResizingImageX] = React.useState(false);
     const [isResizingImageY, setIsResizingImageY] = React.useState(false);
+    const resizeXStartRef = React.useRef<{ x: number; scaleX: number; offsetX: number; direction: 1 | -1; rightPx?: number } | null>(null);
     const resizeYStartRef = React.useRef<{ y: number; scaleY: number; offsetY: number; direction: 1 | -1; bottomPx?: number } | null>(null);
     // Track cells the user manually painted/confirmed so learning can use trusted labels only.
     const trustedCellsRef = React.useRef<Set<string>>(new Set());
@@ -200,7 +202,9 @@ export const GridEditorPanel: React.FC = () => {
     const scaledDisplayHeight = displaySize.height * effectiveImageScaleY;
     const overlayScaleX = imageNaturalSize ? scaledDisplayWidth / imageNaturalSize.width : 1;
     const overlayScaleY = imageNaturalSize ? scaledDisplayHeight / imageNaturalSize.height : 1;
+    const imageLeftPx = imageOffsetX * overlayScaleX;
     const imageTopPx = imageOffsetY * overlayScaleY;
+    const imageRightPx = imageLeftPx + scaledDisplayWidth;
     const imageBottomPx = imageTopPx + scaledDisplayHeight;
     const displayOffsetX = gridOffsetX * overlayScaleX;
     const displayOffsetY = gridOffsetY * overlayScaleY;
@@ -269,6 +273,38 @@ export const GridEditorPanel: React.FC = () => {
         setLockImageAspect(false);
         setImageScaleY(Number(next.toFixed(3)));
     }, [guideGrid, imageNaturalSize, displaySize.height, cellHeight, markUnsaved, pushUndoSnapshot, setImageScaleY, setLockImageAspect]);
+
+    const beginResizeImageX = React.useCallback((clientX: number, direction: 1 | -1) => {
+        pushUndoSnapshot();
+        markUnsaved();
+        setLockImageAspect(false);
+        const rightPx = direction === -1 && imageNaturalSize ? (imageOffsetX + imageNaturalSize.width) * overlayScaleX : undefined;
+        resizeXStartRef.current = { x: clientX, scaleX: imageScaleX, offsetX: imageOffsetX, direction, rightPx };
+        setIsResizingImageX(true);
+    }, [imageScaleX, imageOffsetX, imageNaturalSize, markUnsaved, overlayScaleX, pushUndoSnapshot, setLockImageAspect]);
+
+    const moveResizeImageX = React.useCallback((clientX: number) => {
+        const start = resizeXStartRef.current;
+        if (!start) return;
+        const dx = (clientX - start.x) * start.direction;
+        const denom = Math.max(1, scaledDisplayWidth);
+        const next = start.scaleX * (1 + dx / denom);
+        const clamped = Math.max(0.85, Math.min(1.15, next));
+        setImageScaleX(Number(clamped.toFixed(3)));
+        if (start.direction === -1 && start.rightPx != null && imageNaturalSize && displaySize.width > 0) {
+            const imgW = imageNaturalSize.width;
+            const nextOverlayScaleX = (displaySize.width * clamped) / imgW;
+            if (Number.isFinite(nextOverlayScaleX) && nextOverlayScaleX > 0) {
+                const nextOffsetX = start.rightPx / nextOverlayScaleX - imgW;
+                setImageOffsetX(Math.max(0, Number(nextOffsetX.toFixed(2))));
+            }
+        }
+    }, [scaledDisplayWidth, imageNaturalSize, displaySize.width, setImageOffsetX, setImageScaleX]);
+
+    const endResizeImageX = React.useCallback(() => {
+        resizeXStartRef.current = null;
+        setIsResizingImageX(false);
+    }, []);
 
     const beginResizeImageY = React.useCallback((clientY: number, direction: 1 | -1) => {
         pushUndoSnapshot();
@@ -601,7 +637,7 @@ export const GridEditorPanel: React.FC = () => {
     const rulerSizePx = RULER_SIZE_PX;
     const gridRightPx = displayOffsetX + cols * cellWidth;
     const gridBottomPx = displayOffsetY + rows * cellHeight;
-    const contentWidthPx = Math.max(scaledDisplayWidth, gridRightPx, cols * cellWidth);
+    const contentWidthPx = Math.max(imageRightPx, gridRightPx, cols * cellWidth);
     const contentHeightPx = Math.max(imageBottomPx, gridBottomPx, rows * cellHeight);
     const imageMetaItems =
         overlayEnabled && imageNaturalSize
@@ -877,6 +913,8 @@ export const GridEditorPanel: React.FC = () => {
                                     markUnsaved();
                                     setImageScaleX(1);
                                     setImageScaleY(1);
+                                    setImageOffsetX(0);
+                                    setImageOffsetY(0);
                                     setLockImageAspect(true);
                                 }}
                                 aria-label="Reset image scale"
@@ -1160,8 +1198,9 @@ export const GridEditorPanel: React.FC = () => {
                                     <img
                                         src={imageURL}
                                         alt="overlay"
-                                        className="absolute left-0 pointer-events-none"
+                                        className="absolute pointer-events-none"
                                         style={{
+                                            left: `${imageLeftPx}px`,
                                             opacity: overlayOpacity,
                                             top: `${imageTopPx}px`,
                                             width: `${scaledDisplayWidth}px`,
@@ -1177,7 +1216,89 @@ export const GridEditorPanel: React.FC = () => {
                                     <div
                                         className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
                                         style={{
-                                            left: `${Math.max(0, scaledDisplayWidth / 2)}px`,
+                                            left: `${imageLeftPx}px`,
+                                            top: `${Math.max(0, imageTopPx + scaledDisplayHeight / 2)}px`,
+                                            transform: "translate(0, -50%)",
+                                            width: 22,
+                                            height: 22,
+                                            zIndex: 30,
+                                            cursor: "ew-resize",
+                                            touchAction: "none",
+                                        }}
+                                        title="Drag to stretch/compress the overlay image horizontally (grid stays fixed)."
+                                        onPointerDown={(e) => {
+                                            e.preventDefault();
+                                            e.currentTarget.setPointerCapture(e.pointerId);
+                                            beginResizeImageX(e.clientX, -1);
+                                        }}
+                                        onPointerMove={(e) => {
+                                            if (!isResizingImageX) return;
+                                            e.preventDefault();
+                                            moveResizeImageX(e.clientX);
+                                        }}
+                                        onPointerUp={(e) => {
+                                            e.preventDefault();
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageX();
+                                        }}
+                                        onPointerCancel={(e) => {
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageX();
+                                        }}
+                                    >
+                                        <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                )}
+                                {overlayEnabled && imageURL && (
+                                    <div
+                                        className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
+                                        style={{
+                                            left: `${Math.max(0, imageRightPx)}px`,
+                                            top: `${Math.max(0, imageTopPx + scaledDisplayHeight / 2)}px`,
+                                            transform: "translate(-50%, -50%)",
+                                            width: 22,
+                                            height: 22,
+                                            zIndex: 30,
+                                            cursor: "ew-resize",
+                                            touchAction: "none",
+                                        }}
+                                        title="Drag to stretch/compress the overlay image horizontally (grid stays fixed)."
+                                        onPointerDown={(e) => {
+                                            e.preventDefault();
+                                            e.currentTarget.setPointerCapture(e.pointerId);
+                                            beginResizeImageX(e.clientX, 1);
+                                        }}
+                                        onPointerMove={(e) => {
+                                            if (!isResizingImageX) return;
+                                            e.preventDefault();
+                                            moveResizeImageX(e.clientX);
+                                        }}
+                                        onPointerUp={(e) => {
+                                            e.preventDefault();
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageX();
+                                        }}
+                                        onPointerCancel={(e) => {
+                                            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                                e.currentTarget.releasePointerCapture(e.pointerId);
+                                            }
+                                            endResizeImageX();
+                                        }}
+                                    >
+                                        <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                )}
+                                {overlayEnabled && imageURL && (
+                                    <div
+                                        className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
+                                        style={{
+                                            left: `${Math.max(0, imageLeftPx + scaledDisplayWidth / 2)}px`,
                                             top: `${imageTopPx}px`,
                                             transform: "translate(-50%, 0)",
                                             width: 22,
@@ -1218,7 +1339,7 @@ export const GridEditorPanel: React.FC = () => {
                                     <div
                                         className="absolute flex items-center justify-center rounded border border-border/60 bg-background/70 backdrop-blur-sm shadow-sm"
                                         style={{
-                                            left: `${Math.max(0, scaledDisplayWidth / 2)}px`,
+                                            left: `${Math.max(0, imageLeftPx + scaledDisplayWidth / 2)}px`,
                                             top: `${Math.max(0, imageBottomPx)}px`,
                                             transform: "translate(-50%, -50%)",
                                             width: 22,

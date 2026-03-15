@@ -173,6 +173,7 @@ const normalizeHistoryEntry = (value: unknown): LevelMapperHistoryEntry | null =
     const cols = Math.max(1, Math.round(Number(candidate.cols) || (candidate.grid[0]?.length ?? 0)));
     const imageScaleX = Number(candidate.imageScaleX ?? 1);
     const imageScaleY = Number(candidate.imageScaleY ?? 1);
+    const imageOffsetX = Number(candidate.imageOffsetX ?? 0);
     const imageOffsetY = Number(candidate.imageOffsetY ?? 0);
     const gridOffsetX = Number(candidate.gridOffsetX ?? 0);
     const gridOffsetY = Number(candidate.gridOffsetY ?? 0);
@@ -191,6 +192,7 @@ const normalizeHistoryEntry = (value: unknown): LevelMapperHistoryEntry | null =
         cols,
         imageScaleX: Number.isFinite(imageScaleX) ? imageScaleX : 1,
         imageScaleY: Number.isFinite(imageScaleY) ? imageScaleY : 1,
+        imageOffsetX: Number.isFinite(imageOffsetX) ? imageOffsetX : 0,
         imageOffsetY: Number.isFinite(imageOffsetY) ? imageOffsetY : 0,
         lockImageAspect: Boolean(candidate.lockImageAspect ?? true),
         gridOffsetX: Number.isFinite(gridOffsetX) ? gridOffsetX : 0,
@@ -295,6 +297,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [overlayStretch, setOverlayStretch] = useState(true);
         const [imageScaleX, setImageScaleX] = useState(1);
         const [imageScaleY, setImageScaleY] = useState(1);
+        const [imageOffsetX, setImageOffsetX] = useState(0);
         const [imageOffsetY, setImageOffsetY] = useState(0);
         const [lockImageAspect, setLockImageAspect] = useState(true);
         const [lastGridDetection, setLastGridDetection] = useState<ReturnType<typeof detectGridLines> | null>(null);
@@ -311,6 +314,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             overlayStretch: boolean;
             imageScaleX: number;
             imageScaleY: number;
+            imageOffsetX: number;
             imageOffsetY: number;
             lockImageAspect: boolean;
             zoom: number;
@@ -370,6 +374,11 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 Number.isFinite(Number(draft.imageScaleY))
                     ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleY)))
                     : 1
+            );
+            setImageOffsetX(
+                Number.isFinite(Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
+                    ? Math.max(0, Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
+                    : 0
             );
             setImageOffsetY(
                 Number.isFinite(Number(draft.imageOffsetY))
@@ -448,15 +457,18 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (saved) {
                 const x = Number(saved.x);
                 const y = Number(saved.y);
+                const offsetX = Number((saved as any).offsetX ?? 0);
                 const offsetY = Number((saved as any).offsetY ?? 0);
                 const lock = Boolean(saved.lock);
                 if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
                 if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+                if (Number.isFinite(offsetX)) setImageOffsetX(Math.max(0, offsetX));
                 if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
                 setLockImageAspect(lock);
             } else {
                 setImageScaleX(1);
                 setImageScaleY(1);
+                setImageOffsetX(0);
                 setImageOffsetY(0);
                 setLockImageAspect(true);
             }
@@ -467,8 +479,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (importLevelIndex === null) return;
             const lvl = allLevels[importLevelIndex];
             if (!lvl) return;
-            saveLevelImageScale(lvl.id, { x: imageScaleX, y: imageScaleY, offsetY: imageOffsetY, lock: lockImageAspect });
-        }, [importLevelIndex, allLevels, imageScaleX, imageScaleY, imageOffsetY, lockImageAspect]);
+            saveLevelImageScale(lvl.id, { x: imageScaleX, y: imageScaleY, offsetX: imageOffsetX, offsetY: imageOffsetY, lock: lockImageAspect });
+        }, [importLevelIndex, allLevels, imageScaleX, imageScaleY, imageOffsetX, imageOffsetY, lockImageAspect]);
 
         // Auto-persist the current per-level mapper draft, including undo/redo history,
         // so refreshes/crashes do not lose manual work in progress.
@@ -489,6 +501,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     overlayStretch,
                     imageScaleX,
                     imageScaleY,
+                    imageOffsetX,
                     imageOffsetY,
                     lockImageAspect,
                     zoom,
@@ -518,6 +531,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             overlayStretch,
             imageScaleX,
             imageScaleY,
+            imageOffsetX,
             imageOffsetY,
             lockImageAspect,
             zoom,
@@ -577,15 +591,18 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         if (savedScale) {
                             const x = Number(savedScale.x);
                             const y = Number(savedScale.y);
+                            const offsetX = Number((savedScale as any).offsetX ?? 0);
                             const offsetY = Number((savedScale as any).offsetY ?? 0);
                             const lock = Boolean(savedScale.lock);
                             if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
                             if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+                            if (Number.isFinite(offsetX)) setImageOffsetX(Math.max(0, offsetX));
                             if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
                             setLockImageAspect(lock);
                         } else {
                             setImageScaleX(1);
                             setImageScaleY(1);
+                            setImageOffsetX(0);
                             setImageOffsetY(0);
                             setLockImageAspect(true);
                         }
@@ -608,6 +625,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                             overlayStretch: true,
                             imageScaleX: savedScale?.x ?? 1,
                             imageScaleY: savedScale?.y ?? 1,
+                            imageOffsetX: Number((savedScale as any)?.offsetX ?? 0),
                             imageOffsetY: Number((savedScale as any)?.offsetY ?? 0),
                             lockImageAspect: savedScale?.lock ?? true,
                             zoom: 1,
@@ -747,6 +765,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             cols,
             imageScaleX,
             imageScaleY,
+            imageOffsetX,
             imageOffsetY,
             lockImageAspect,
             gridOffsetX,
@@ -779,6 +798,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setGrid(prev.grid.map((r) => [...r]));
                 setImageScaleX(prev.imageScaleX);
                 setImageScaleY(prev.imageScaleY);
+                setImageOffsetX(prev.imageOffsetX);
                 setImageOffsetY(prev.imageOffsetY);
                 setLockImageAspect(prev.lockImageAspect);
                 setGridOffsetX(prev.gridOffsetX);
@@ -807,6 +827,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setGrid(next.grid.map((r) => [...r]));
                 setImageScaleX(next.imageScaleX);
                 setImageScaleY(next.imageScaleY);
+                setImageOffsetX(next.imageOffsetX);
                 setImageOffsetY(next.imageOffsetY);
                 setLockImageAspect(next.lockImageAspect);
                 setGridOffsetX(next.gridOffsetX);
@@ -1270,6 +1291,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             overlayStretch: boolean;
             imageScaleX: number;
             imageScaleY: number;
+            imageOffsetX?: number;
             imageOffsetY?: number;
             lockImageAspect: boolean;
             zoom: number;
@@ -1280,6 +1302,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }) => {
             loadedSnapshotRef.current = {
                 ...snapshot,
+                imageOffsetX: Number.isFinite(snapshot.imageOffsetX as any) ? Number(snapshot.imageOffsetX) : 0,
                 imageOffsetY: Number.isFinite(snapshot.imageOffsetY as any) ? Number(snapshot.imageOffsetY) : 0,
                 grid: snapshot.grid.map((row) => [...row]),
                 playerStart: snapshot.playerStart ? { ...snapshot.playerStart } : null,
@@ -1309,6 +1332,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setOverlayStretch(snapshot.overlayStretch);
             setImageScaleX(snapshot.imageScaleX);
             setImageScaleY(snapshot.imageScaleY);
+            setImageOffsetX(snapshot.imageOffsetX ?? 0);
             setImageOffsetY(snapshot.imageOffsetY ?? 0);
             setLockImageAspect(snapshot.lockImageAspect);
             setZoom(snapshot.zoom);
@@ -1332,7 +1356,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             // Persist current overlay tweaks immediately. This avoids a race where a dev-only file write
             // triggers a Vite reload before the effect-based localStorage persistence runs.
             if (res.levelId != null) {
-                saveLevelImageScale(res.levelId, { x: imageScaleX, y: imageScaleY, offsetY: imageOffsetY, lock: lockImageAspect });
+                saveLevelImageScale(res.levelId, { x: imageScaleX, y: imageScaleY, offsetX: imageOffsetX, offsetY: imageOffsetY, lock: lockImageAspect });
                 saveLevelLayoutOverride(res.levelId, rows, cols);
                 saveLevelMapperDraft(res.levelId, {
                     rows,
@@ -1347,6 +1371,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     overlayStretch,
                     imageScaleX,
                     imageScaleY,
+                    imageOffsetX,
                     imageOffsetY,
                     lockImageAspect,
                     zoom,
@@ -1376,6 +1401,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 overlayStretch,
                 imageScaleX,
                 imageScaleY,
+                imageOffsetX,
                 imageOffsetY,
                 lockImageAspect,
                 zoom,
@@ -1539,6 +1565,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setImageScaleX,
             imageScaleY,
             setImageScaleY,
+            imageOffsetX,
+            setImageOffsetX,
             imageOffsetY,
             setImageOffsetY,
             lockImageAspect,
