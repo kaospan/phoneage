@@ -37,6 +37,7 @@ import {
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { getAlignmentHints } from './alignmentProfile';
 import { resolveLevelMapperBaseline } from './levelBaseline';
+import { trimDetectedDosFooterBottomRow } from './footerGridTrim';
 import { toast } from 'sonner';
 import type { LevelMapperDraft, LevelMapperHistoryEntry } from './LevelMapperStore';
 console.log('📦 LevelMapperContext.tsx loading...');
@@ -209,6 +210,39 @@ const normalizeHistoryStack = (value: unknown): LevelMapperHistoryEntry[] => {
         .slice(-DRAFT_HISTORY_LIMIT);
 };
 
+const trimHistoryEntryForFooter = (
+    entry: LevelMapperHistoryEntry,
+    imageURL: string | null | undefined
+): LevelMapperHistoryEntry => {
+    if (Array.isArray(entry)) {
+        const trimmed = trimDetectedDosFooterBottomRow(
+            {
+                rows: entry.length,
+                cols: entry[0]?.length ?? 0,
+                grid: cloneGrid(entry),
+            },
+            imageURL
+        );
+        return cloneGrid(trimmed.grid);
+    }
+
+    const trimmed = trimDetectedDosFooterBottomRow(
+        {
+            rows: entry.rows,
+            cols: entry.cols,
+            grid: cloneGrid(entry.grid),
+        },
+        imageURL
+    );
+
+    return {
+        ...entry,
+        rows: trimmed.rows,
+        cols: trimmed.cols,
+        grid: cloneGrid(trimmed.grid),
+    };
+};
+
 export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     console.log('⚛️ LevelMapperProvider initializing...');
 
@@ -324,79 +358,138 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }>(null);
         const currentLevelId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
 
-        const restoreDraftForLevel = (levelId: number) => {
+        const restoreDraftForLevel = (levelId: number, imageURLOverride?: string | null) => {
             const draft = loadLevelMapperDraft(levelId);
             if (!draft || !isValidGrid(draft.grid)) return false;
 
-            const nextRows = Math.max(1, Math.round(Number(draft.rows) || draft.grid.length));
-            const nextCols = Math.max(1, Math.round(Number(draft.cols) || (draft.grid[0]?.length ?? 0)));
+            const nextImageURL = imageURLOverride ?? imageURL;
+            const trimmedDraftState = trimDetectedDosFooterBottomRow(
+                {
+                    rows: Math.max(1, Math.round(Number(draft.rows) || draft.grid.length)),
+                    cols: Math.max(1, Math.round(Number(draft.cols) || (draft.grid[0]?.length ?? 0))),
+                    grid: cloneGrid(draft.grid),
+                    playerStart:
+                        draft.playerStart &&
+                        Number.isInteger(draft.playerStart.x) &&
+                        Number.isInteger(draft.playerStart.y)
+                            ? { x: draft.playerStart.x, y: draft.playerStart.y }
+                            : null,
+                    hourglassBonusByCell: { ...(draft.hourglassBonusByCell ?? {}) },
+                },
+                nextImageURL
+            );
+
+            const nextRows = Math.max(1, trimmedDraftState.rows);
+            const nextCols = Math.max(1, trimmedDraftState.cols);
             const nextGrid =
-                draft.grid.length === nextRows && (draft.grid[0]?.length ?? 0) === nextCols
-                    ? cloneGrid(draft.grid)
-                    : reshapeGridPreservingOverlap(draft.grid, nextRows, nextCols, 5);
+                trimmedDraftState.grid.length === nextRows && (trimmedDraftState.grid[0]?.length ?? 0) === nextCols
+                    ? cloneGrid(trimmedDraftState.grid)
+                    : reshapeGridPreservingOverlap(trimmedDraftState.grid, nextRows, nextCols, 5);
+
+            const nextPlayerStart =
+                trimmedDraftState.playerStart &&
+                Number.isInteger(trimmedDraftState.playerStart.x) &&
+                Number.isInteger(trimmedDraftState.playerStart.y)
+                    ? {
+                        x: Math.max(0, Math.min(nextCols - 1, trimmedDraftState.playerStart.x)),
+                        y: Math.max(0, Math.min(nextRows - 1, trimmedDraftState.playerStart.y)),
+                    }
+                    : null;
+            const nextTimeLimitSeconds =
+                draft.timeLimitSeconds != null && Number.isFinite(draft.timeLimitSeconds)
+                    ? Math.max(0, Math.round(draft.timeLimitSeconds))
+                    : null;
+            const nextHourglassBonusByCell = clampHourglassBonusByCell(
+                trimmedDraftState.hourglassBonusByCell ?? {},
+                nextRows,
+                nextCols
+            );
+            const nextOverlayOpacity =
+                Number.isFinite(Number(draft.overlayOpacity))
+                    ? Math.max(0, Math.min(1, Number(draft.overlayOpacity)))
+                    : 0.5;
+            const nextImageScaleX =
+                Number.isFinite(Number(draft.imageScaleX))
+                    ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleX)))
+                    : 1;
+            const nextImageScaleY =
+                Number.isFinite(Number(draft.imageScaleY))
+                    ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleY)))
+                    : 1;
+            const nextImageOffsetX =
+                Number.isFinite(Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
+                    ? Math.max(0, Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
+                    : 0;
+            const nextImageOffsetY =
+                Number.isFinite(Number(draft.imageOffsetY))
+                    ? Math.max(0, Number(draft.imageOffsetY))
+                    : 0;
+            const nextZoom =
+                Number.isFinite(Number(draft.zoom))
+                    ? Math.max(0.2, Math.min(6, Number(draft.zoom)))
+                    : 1;
+            const nextGridOffsetX =
+                Number.isFinite(Number(draft.gridOffsetX)) ? Number(draft.gridOffsetX) : 0;
+            const nextGridOffsetY =
+                Number.isFinite(Number(draft.gridOffsetY)) ? Number(draft.gridOffsetY) : 0;
+            const nextGridFrameWidth =
+                Number.isFinite(Number(draft.gridFrameWidth)) ? Math.max(1, Number(draft.gridFrameWidth)) : null;
+            const nextGridFrameHeight =
+                Number.isFinite(Number(draft.gridFrameHeight)) ? Math.max(1, Number(draft.gridFrameHeight)) : null;
+            const nextUndoStack = normalizeHistoryStack(draft.undoStack)
+                .map((entry) => trimHistoryEntryForFooter(entry, nextImageURL))
+                .slice(-DRAFT_HISTORY_LIMIT);
+            const nextRedoStack = normalizeHistoryStack(draft.redoStack)
+                .map((entry) => trimHistoryEntryForFooter(entry, nextImageURL))
+                .slice(-DRAFT_HISTORY_LIMIT);
 
             skipAutoResizeRef.current = true;
             prevSizeRef.current = { rows: nextRows, cols: nextCols };
             setRows(nextRows);
             setCols(nextCols);
             setGrid(nextGrid);
-            setPlayerStart(
-                draft.playerStart &&
-                    Number.isInteger(draft.playerStart.x) &&
-                    Number.isInteger(draft.playerStart.y)
-                    ? {
-                        x: Math.max(0, Math.min(nextCols - 1, draft.playerStart.x)),
-                        y: Math.max(0, Math.min(nextRows - 1, draft.playerStart.y)),
-                    }
-                    : null
-            );
+            setPlayerStart(nextPlayerStart);
             setTheme(draft.theme);
-            setTimeLimitSeconds(
-                draft.timeLimitSeconds != null && Number.isFinite(draft.timeLimitSeconds)
-                    ? Math.max(0, Math.round(draft.timeLimitSeconds))
-                    : null
-            );
-            setHourglassBonusByCell(clampHourglassBonusByCell(draft.hourglassBonusByCell ?? {}, nextRows, nextCols));
+            setTimeLimitSeconds(nextTimeLimitSeconds);
+            setHourglassBonusByCell(nextHourglassBonusByCell);
             setOverlayEnabled(Boolean(draft.overlayEnabled));
-            setOverlayOpacity(
-                Number.isFinite(Number(draft.overlayOpacity))
-                    ? Math.max(0, Math.min(1, Number(draft.overlayOpacity)))
-                    : 0.5
-            );
+            setOverlayOpacity(nextOverlayOpacity);
             setOverlayStretch(Boolean(draft.overlayStretch));
-            setImageScaleX(
-                Number.isFinite(Number(draft.imageScaleX))
-                    ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleX)))
-                    : 1
-            );
-            setImageScaleY(
-                Number.isFinite(Number(draft.imageScaleY))
-                    ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleY)))
-                    : 1
-            );
-            setImageOffsetX(
-                Number.isFinite(Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
-                    ? Math.max(0, Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
-                    : 0
-            );
-            setImageOffsetY(
-                Number.isFinite(Number(draft.imageOffsetY))
-                    ? Math.max(0, Number(draft.imageOffsetY))
-                    : 0
-            );
+            setImageScaleX(nextImageScaleX);
+            setImageScaleY(nextImageScaleY);
+            setImageOffsetX(nextImageOffsetX);
+            setImageOffsetY(nextImageOffsetY);
             setLockImageAspect(Boolean(draft.lockImageAspect ?? true));
-            setZoom(Number.isFinite(Number(draft.zoom)) ? Math.max(0.2, Math.min(6, Number(draft.zoom))) : 1);
-            setGridOffsetX(Number.isFinite(Number(draft.gridOffsetX)) ? Number(draft.gridOffsetX) : 0);
-            setGridOffsetY(Number.isFinite(Number(draft.gridOffsetY)) ? Number(draft.gridOffsetY) : 0);
-            setGridFrameWidth(
-                Number.isFinite(Number(draft.gridFrameWidth)) ? Math.max(1, Number(draft.gridFrameWidth)) : null
-            );
-            setGridFrameHeight(
-                Number.isFinite(Number(draft.gridFrameHeight)) ? Math.max(1, Number(draft.gridFrameHeight)) : null
-            );
-            setUndoStack(normalizeHistoryStack(draft.undoStack));
-            setRedoStack(normalizeHistoryStack(draft.redoStack));
+            setZoom(nextZoom);
+            setGridOffsetX(nextGridOffsetX);
+            setGridOffsetY(nextGridOffsetY);
+            setGridFrameWidth(nextGridFrameWidth);
+            setGridFrameHeight(nextGridFrameHeight);
+            setUndoStack(nextUndoStack);
+            setRedoStack(nextRedoStack);
             setIsSaved(false);
+
+            saveLevelMapperDraft(levelId, {
+                ...draft,
+                rows: nextRows,
+                cols: nextCols,
+                grid: cloneGrid(nextGrid),
+                playerStart: nextPlayerStart,
+                timeLimitSeconds: nextTimeLimitSeconds,
+                hourglassBonusByCell: { ...nextHourglassBonusByCell },
+                overlayOpacity: nextOverlayOpacity,
+                imageScaleX: nextImageScaleX,
+                imageScaleY: nextImageScaleY,
+                imageOffsetX: nextImageOffsetX,
+                imageOffsetY: nextImageOffsetY,
+                zoom: nextZoom,
+                gridOffsetX: nextGridOffsetX,
+                gridOffsetY: nextGridOffsetY,
+                gridFrameWidth: nextGridFrameWidth,
+                gridFrameHeight: nextGridFrameHeight,
+                undoStack: nextUndoStack.map(cloneHistoryEntry),
+                redoStack: nextRedoStack.map(cloneHistoryEntry),
+            });
             return true;
         };
 
@@ -610,7 +703,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setRedoStack([]);
                         setIsSaved(true);
                         console.log(`Auto-loaded Level ${baseline.levelId} from previous session`);
-                        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId)) {
+                        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId, baseline.imageURL)) {
                             setLoadedSnapshot({
                                 levelId: baseline.levelId,
                                 grid: baseline.grid,

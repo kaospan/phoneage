@@ -3,6 +3,7 @@ import { voidGrid } from '@/lib/levelgrid';
 import { normalizeMapperImage } from './imageNormalization';
 import { getLevelImageUrl } from './levelImageStore';
 import { getDefaultOverlayImageScale } from './overlayDefaults';
+import { trimDetectedDosFooterBottomRow } from './footerGridTrim';
 import {
   loadLevelImageScale,
   loadLevelLayoutOverride,
@@ -61,47 +62,56 @@ export const resolveLevelMapperBaseline = async (
   const draft = loadLevelMapperDraft(level.id);
 
   if (savedState) {
+    const normalizedSavedState = trimDetectedDosFooterBottomRow(
+      {
+        ...savedState,
+        grid: cloneGrid(savedState.grid),
+        playerStart: savedState.playerStart ? { ...savedState.playerStart } : null,
+        hourglassBonusByCell: { ...(savedState.hourglassBonusByCell ?? {}) },
+      },
+      normalizedURL
+    );
     return {
       levelId: level.id,
-      rows: savedState.rows,
-      cols: savedState.cols,
-      grid: cloneGrid(savedState.grid),
-      playerStart: savedState.playerStart ? { ...savedState.playerStart } : null,
-      theme: savedState.theme,
-      timeLimitSeconds: sanitizeTimeLimit(savedState.timeLimitSeconds),
-      hourglassBonusByCell: { ...(savedState.hourglassBonusByCell ?? {}) },
+      rows: normalizedSavedState.rows,
+      cols: normalizedSavedState.cols,
+      grid: cloneGrid(normalizedSavedState.grid),
+      playerStart: normalizedSavedState.playerStart ? { ...normalizedSavedState.playerStart } : null,
+      theme: normalizedSavedState.theme,
+      timeLimitSeconds: sanitizeTimeLimit(normalizedSavedState.timeLimitSeconds),
+      hourglassBonusByCell: { ...(normalizedSavedState.hourglassBonusByCell ?? {}) },
       imageURL: normalizedURL,
-      overlayEnabled: savedState.overlayEnabled ?? Boolean(normalizedURL),
+      overlayEnabled: normalizedSavedState.overlayEnabled ?? Boolean(normalizedURL),
       overlayOpacity:
-        Number.isFinite(Number(savedState.overlayOpacity))
-          ? Math.max(0, Math.min(1, Number(savedState.overlayOpacity)))
+        Number.isFinite(Number(normalizedSavedState.overlayOpacity))
+          ? Math.max(0, Math.min(1, Number(normalizedSavedState.overlayOpacity)))
           : 0.5,
-      overlayStretch: Boolean(savedState.overlayStretch ?? true),
+      overlayStretch: Boolean(normalizedSavedState.overlayStretch ?? true),
       imageScaleX:
-        Number.isFinite(Number(savedState.imageScaleX))
-          ? Math.max(0.85, Math.min(1.15, Number(savedState.imageScaleX)))
+        Number.isFinite(Number(normalizedSavedState.imageScaleX))
+          ? Math.max(0.85, Math.min(1.15, Number(normalizedSavedState.imageScaleX)))
           : 1,
       imageScaleY:
-        Number.isFinite(Number(savedState.imageScaleY))
-          ? Math.max(0.85, Math.min(1.15, Number(savedState.imageScaleY)))
+        Number.isFinite(Number(normalizedSavedState.imageScaleY))
+          ? Math.max(0.85, Math.min(1.15, Number(normalizedSavedState.imageScaleY)))
           : 1,
       imageOffsetX:
-        Number.isFinite(Number(savedState.imageOffsetX)) ? Math.max(0, Number(savedState.imageOffsetX)) : 0,
+        Number.isFinite(Number(normalizedSavedState.imageOffsetX)) ? Math.max(0, Number(normalizedSavedState.imageOffsetX)) : 0,
       imageOffsetY:
-        Number.isFinite(Number(savedState.imageOffsetY)) ? Math.max(0, Number(savedState.imageOffsetY)) : 0,
-      lockImageAspect: Boolean(savedState.lockImageAspect ?? true),
-      zoom: Number.isFinite(Number(savedState.zoom)) ? Math.max(0.2, Math.min(6, Number(savedState.zoom))) : 1,
-      gridOffsetX: Number.isFinite(Number(savedState.gridOffsetX)) ? Number(savedState.gridOffsetX) : 0,
-      gridOffsetY: Number.isFinite(Number(savedState.gridOffsetY)) ? Number(savedState.gridOffsetY) : 0,
+        Number.isFinite(Number(normalizedSavedState.imageOffsetY)) ? Math.max(0, Number(normalizedSavedState.imageOffsetY)) : 0,
+      lockImageAspect: Boolean(normalizedSavedState.lockImageAspect ?? true),
+      zoom: Number.isFinite(Number(normalizedSavedState.zoom)) ? Math.max(0.2, Math.min(6, Number(normalizedSavedState.zoom))) : 1,
+      gridOffsetX: Number.isFinite(Number(normalizedSavedState.gridOffsetX)) ? Number(normalizedSavedState.gridOffsetX) : 0,
+      gridOffsetY: Number.isFinite(Number(normalizedSavedState.gridOffsetY)) ? Number(normalizedSavedState.gridOffsetY) : 0,
       gridFrameWidth:
-        savedState.gridFrameWidth == null || !Number.isFinite(Number(savedState.gridFrameWidth))
+        normalizedSavedState.gridFrameWidth == null || !Number.isFinite(Number(normalizedSavedState.gridFrameWidth))
           ? null
-          : Math.max(1, Number(savedState.gridFrameWidth)),
+          : Math.max(1, Number(normalizedSavedState.gridFrameWidth)),
       gridFrameHeight:
-        savedState.gridFrameHeight == null || !Number.isFinite(Number(savedState.gridFrameHeight))
+        normalizedSavedState.gridFrameHeight == null || !Number.isFinite(Number(normalizedSavedState.gridFrameHeight))
           ? null
-          : Math.max(1, Number(savedState.gridFrameHeight)),
-      shouldRestoreDraft: Boolean(draft && (draft.updatedAt ?? 0) > (savedState.updatedAt ?? 0)),
+          : Math.max(1, Number(normalizedSavedState.gridFrameHeight)),
+      shouldRestoreDraft: Boolean(draft && (draft.updatedAt ?? 0) > (normalizedSavedState.updatedAt ?? 0)),
     };
   }
 
@@ -114,16 +124,26 @@ export const resolveLevelMapperBaseline = async (
       : cloneGrid(level.grid);
   const savedScale = loadLevelImageScale(level.id);
   const defaultScale = getDefaultOverlayImageScale(level.id);
+  const normalizedFallback = trimDetectedDosFooterBottomRow(
+    {
+      rows: editableGrid.length,
+      cols: editableGrid[0]?.length ?? 0,
+      grid: editableGrid,
+      playerStart: level.playerStart ? { ...level.playerStart } : null,
+      hourglassBonusByCell: { ...(level.hourglassBonusByCell ?? {}) },
+    },
+    normalizedURL
+  );
 
   return {
     levelId: level.id,
-    rows: editableGrid.length,
-    cols: editableGrid[0]?.length ?? 0,
-    grid: editableGrid,
-    playerStart: level.playerStart ? { ...level.playerStart } : null,
+    rows: normalizedFallback.rows,
+    cols: normalizedFallback.cols,
+    grid: normalizedFallback.grid,
+    playerStart: normalizedFallback.playerStart ? { ...normalizedFallback.playerStart } : null,
     theme: level.theme,
     timeLimitSeconds: sanitizeTimeLimit(level.timeLimitSeconds ?? null),
-    hourglassBonusByCell: { ...(level.hourglassBonusByCell ?? {}) },
+    hourglassBonusByCell: { ...(normalizedFallback.hourglassBonusByCell ?? {}) },
     imageURL: normalizedURL,
     overlayEnabled: Boolean(normalizedURL),
     overlayOpacity: 0.5,

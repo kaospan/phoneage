@@ -163,7 +163,7 @@ export interface LevelMapperContextValue {
   setIsSaved: (b: boolean) => void;
   saveChanges: () => Promise<void>;
   showUnsavedBanner: boolean;
-  restoreDraftForLevel: (levelId: number) => boolean;
+  restoreDraftForLevel: (levelId: number, imageURLOverride?: string | null) => boolean;
 
   // Detection
   detectGrid: () => Promise<DetectedGrid | null>;

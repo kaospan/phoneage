@@ -14,6 +14,10 @@ const loadImage = async (imageURL: string): Promise<HTMLImageElement> => {
 const ANALYSIS_MAX_DIM = 900;
 const normalizedCache = new Map<string, string>();
 const normalizedInFlight = new Map<string, Promise<string>>();
+type NormalizedImageMetadata = {
+    hudFooterDetected: boolean;
+};
+const normalizationMetadata = new Map<string, NormalizedImageMetadata>();
 
 const NEAR_BLACK = 10;
 
@@ -343,6 +347,22 @@ const canvasToObjectURL = async (canvas: HTMLCanvasElement): Promise<string> => 
     return URL.createObjectURL(blob);
 };
 
+const setNormalizationMetadata = (
+    sourceUrl: string,
+    normalizedUrl: string,
+    metadata: NormalizedImageMetadata
+) => {
+    normalizationMetadata.set(sourceUrl, metadata);
+    normalizationMetadata.set(normalizedUrl, metadata);
+};
+
+export const getImageNormalizationMetadata = (
+    imageURL: string | null | undefined
+): NormalizedImageMetadata | null => {
+    if (!imageURL) return null;
+    return normalizationMetadata.get(imageURL) ?? null;
+};
+
 export const normalizeMapperImage = async (imageURL: string): Promise<string> => {
     const cached = normalizedCache.get(imageURL);
     if (cached) return cached;
@@ -427,7 +447,10 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
             const borderDidCrop =
                 cropLeft !== 0 || cropTop !== 0 || croppedWidth !== rotatedCanvas.width || croppedHeight !== rotatedCanvas.height;
             const hudDidCrop = finalHeight !== croppedHeight;
-            if (!shouldRotate && !borderDidCrop && !hudDidCrop) return imageURL;
+            if (!shouldRotate && !borderDidCrop && !hudDidCrop) {
+                setNormalizationMetadata(imageURL, imageURL, { hudFooterDetected: false });
+                return imageURL;
+            }
 
             const finalCanvas = document.createElement('canvas');
             finalCanvas.width = croppedWidth;
@@ -436,8 +459,11 @@ export const normalizeMapperImage = async (imageURL: string): Promise<string> =>
             if (!finalCtx) return imageURL;
             finalCtx.drawImage(workingCanvas, 0, 0, croppedWidth, finalHeight, 0, 0, croppedWidth, finalHeight);
 
-            return await canvasToObjectURL(finalCanvas);
+            const normalizedUrl = await canvasToObjectURL(finalCanvas);
+            setNormalizationMetadata(imageURL, normalizedUrl, { hudFooterDetected: hudDidCrop });
+            return normalizedUrl;
         } catch {
+            setNormalizationMetadata(imageURL, imageURL, { hudFooterDetected: false });
             return imageURL;
         }
     })();
