@@ -706,6 +706,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             <option value="lava">Lava (Red)</option>
                             <option value="crystal">Crystal (Purple)</option>
                             <option value="neon">Neon (Cyberpunk)</option>
+                            <option value="snow">Snow (White)</option>
+                            <option value="gray">Gray (Neutral)</option>
+                            <option value="slate">Slate (Cool Gray)</option>
                         </select>
                         {theme && theme !== 'default' && (
                             <div

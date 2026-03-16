@@ -14,7 +14,17 @@ import promotedLevelDefaultsRaw from '@/data/promoted-levels.json';
 
 export type ArrowDirection = 'up' | 'right' | 'down' | 'left';
 
-export type ColorTheme = 'default' | 'ocean' | 'forest' | 'sunset' | 'lava' | 'crystal' | 'neon';
+export type ColorTheme =
+  | 'default'
+  | 'ocean'
+  | 'forest'
+  | 'sunset'
+  | 'lava'
+  | 'crystal'
+  | 'neon'
+  | 'snow'
+  | 'gray'
+  | 'slate';
 
 export interface ThemeColors {
   floor: string;
@@ -105,6 +115,39 @@ export const themes: Record<ColorTheme, ThemeColors> = {
     player: '#ffffff',
     ambient: '#1a1a2e',
     background: 'from-gray-900 to-purple-900'
+  },
+  snow: {
+    floor: '#f8fafc',
+    wall: '#cbd5e1',
+    stone: '#94a3b8',
+    cave: '#475569',
+    arrow: '#38bdf8',
+    breakable: '#60a5fa',
+    player: '#0f766e',
+    ambient: '#ffffff',
+    background: 'from-slate-50 to-sky-100'
+  },
+  gray: {
+    floor: '#d4d4d8',
+    wall: '#a1a1aa',
+    stone: '#71717a',
+    cave: '#3f3f46',
+    arrow: '#e4e4e7',
+    breakable: '#94a3b8',
+    player: '#facc15',
+    ambient: '#f5f5f5',
+    background: 'from-zinc-100 to-stone-300'
+  },
+  slate: {
+    floor: '#cbd5e1',
+    wall: '#64748b',
+    stone: '#334155',
+    cave: '#0f172a',
+    arrow: '#7dd3fc',
+    breakable: '#94a3b8',
+    player: '#fde68a',
+    ambient: '#f8fafc',
+    background: 'from-slate-100 to-slate-400'
   }
 };
 
