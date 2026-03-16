@@ -624,36 +624,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setUndoStack([]);
                         setRedoStack([]);
                         setIsSaved(true);
-                        console.log(`Auto-loaded Level ${baseline.levelId} from previous session`);
-                        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId)) {
-                            setLoadedSnapshot({
-                                levelId: baseline.levelId,
-                                grid: baseline.grid,
-                                playerStart: baseline.playerStart,
-                                theme: baseline.theme,
-                                timeLimitSeconds: baseline.timeLimitSeconds,
-                                hourglassBonusByCell: baseline.hourglassBonusByCell,
-                                imageURL: baseline.imageURL,
-                                overlayEnabled: baseline.overlayEnabled,
-                                overlayOpacity: baseline.overlayOpacity,
-                                overlayStretch: baseline.overlayStretch,
-                                imageScaleX: baseline.imageScaleX,
-                                imageScaleY: baseline.imageScaleY,
-                                imageOffsetX: baseline.imageOffsetX,
-                                imageOffsetY: baseline.imageOffsetY,
-                                lockImageAspect: baseline.lockImageAspect,
-                                zoom: baseline.zoom,
-                                gridOffsetX: baseline.gridOffsetX,
-                                gridOffsetY: baseline.gridOffsetY,
-                                gridFrameWidth: baseline.gridFrameWidth,
-                                gridFrameHeight: baseline.gridFrameHeight,
-                            });
-                            toast.info(`Restored autosaved draft for level ${baseline.levelId}.`, {
-                                position: 'bottom-right',
-                                duration: 3500,
-                                description: 'Undo/redo history was restored too.',
-                            });
-                        }
+                        console.log(`Auto-loaded Level ${baseline.levelId} from saved/default mapper baseline`);
                     };
 
                     void loadLevelIntoMapper();

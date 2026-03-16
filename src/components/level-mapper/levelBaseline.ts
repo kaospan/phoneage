@@ -6,7 +6,6 @@ import { getDefaultOverlayImageScale } from './overlayDefaults';
 import {
   loadLevelImageScale,
   loadLevelLayoutOverride,
-  loadLevelMapperDraft,
   loadLevelMapperSavedState,
 } from './persistenceOperations';
 
@@ -35,7 +34,6 @@ export interface ResolvedLevelMapperBaseline {
   gridOffsetY: number;
   gridFrameWidth: number | null;
   gridFrameHeight: number | null;
-  shouldRestoreDraft: boolean;
 }
 
 const isPlaceholderGrid = (levelGrid?: number[][]) => {
@@ -58,7 +56,6 @@ export const resolveLevelMapperBaseline = async (
   const storedUpload = await getLevelImageUrl(level.id);
   const normalizedURL = storedUpload ?? (level.image ? await normalizeMapperImage(level.image) : null);
   const savedState = loadLevelMapperSavedState(level.id);
-  const draft = loadLevelMapperDraft(level.id);
 
   if (savedState) {
     return {
@@ -101,7 +98,6 @@ export const resolveLevelMapperBaseline = async (
         savedState.gridFrameHeight == null || !Number.isFinite(Number(savedState.gridFrameHeight))
           ? null
           : Math.max(1, Number(savedState.gridFrameHeight)),
-      shouldRestoreDraft: Boolean(draft && (draft.updatedAt ?? 0) > (savedState.updatedAt ?? 0)),
     };
   }
 
@@ -138,6 +134,5 @@ export const resolveLevelMapperBaseline = async (
     gridOffsetY: 0,
     gridFrameWidth: null,
     gridFrameHeight: null,
-    shouldRestoreDraft: Boolean(draft),
   };
 };

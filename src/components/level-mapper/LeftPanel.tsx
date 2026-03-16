@@ -32,7 +32,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
-        setLoadedSnapshot, resetToLoadedSnapshot, restoreDraftForLevel
+        setLoadedSnapshot, resetToLoadedSnapshot
     } = useLevelMapper();
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -226,32 +226,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             gridFrameWidth: baseline.gridFrameWidth,
             gridFrameHeight: baseline.gridFrameHeight,
         });
-
-        if (baseline.shouldRestoreDraft && restoreDraftForLevel(baseline.levelId)) {
-            setLoadedSnapshot({
-                levelId: baseline.levelId,
-                grid: baseline.grid,
-                playerStart: baseline.playerStart,
-                theme: baseline.theme,
-                timeLimitSeconds: baseline.timeLimitSeconds,
-                hourglassBonusByCell: baseline.hourglassBonusByCell,
-                imageURL: baseline.imageURL,
-                overlayEnabled: baseline.overlayEnabled,
-                overlayOpacity: baseline.overlayOpacity,
-                overlayStretch: baseline.overlayStretch,
-                imageScaleX: baseline.imageScaleX,
-                imageScaleY: baseline.imageScaleY,
-                imageOffsetX: baseline.imageOffsetX,
-                imageOffsetY: baseline.imageOffsetY,
-                lockImageAspect: baseline.lockImageAspect,
-                zoom: baseline.zoom,
-                gridOffsetX: baseline.gridOffsetX,
-                gridOffsetY: baseline.gridOffsetY,
-                gridFrameWidth: baseline.gridFrameWidth,
-                gridFrameHeight: baseline.gridFrameHeight,
-            });
-            setAutoDetectStatus(`Restored autosaved draft for level ${baseline.levelId} with undo/redo history.`);
-        }
     };
 
     return (
