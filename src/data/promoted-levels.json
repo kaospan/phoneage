@@ -10865,7 +10865,8 @@
       "x": 19,
       "y": 4
     },
-    "theme": "ocean"
+    "theme": "ocean",
+    "timeLimitSeconds": 250
   },
   {
     "id": 40,
@@ -11143,7 +11144,8 @@
       "x": 9,
       "y": 5
     },
-    "theme": "lava"
+    "theme": "lava",
+    "timeLimitSeconds": 105
   },
   {
     "id": 41,
