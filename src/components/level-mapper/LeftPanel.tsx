@@ -208,6 +208,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             levelId: baseline.levelId,
             grid: baseline.grid,
             playerStart: baseline.playerStart,
+            provenance: baseline.provenance,
             theme: baseline.theme,
             timeLimitSeconds: baseline.timeLimitSeconds,
             hourglassBonusByCell: baseline.hourglassBonusByCell,

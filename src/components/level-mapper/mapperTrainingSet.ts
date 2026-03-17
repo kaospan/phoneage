@@ -1,5 +1,4 @@
 import { getAllLevels, isPlaceholderGrid } from '@/data/levels';
-import { loadLevelMapperSavedState } from './persistenceOperations';
 import { resolveLevelMapperBaseline } from './levelBaseline';
 
 const TRAIN_LEVEL_MIN = 1;
@@ -34,8 +33,14 @@ export type MapperTrainingSet = {
   medianCellHeight?: number;
   medianAspectRatio?: number;
   medianBorderRatio?: number;
+  minCellWidth?: number;
+  maxCellWidth?: number;
+  minCellHeight?: number;
+  maxCellHeight?: number;
+  alignmentTolerancePx?: number;
   preferredRows?: number;
   preferredCols?: number;
+  commonLayouts: Array<{ rows: number; cols: number; count: number }>;
 };
 
 export type MapperTrainingHints = {
@@ -77,6 +82,13 @@ const mode = (values: number[]) => {
     }
   }
   return bestValue;
+};
+
+const quantile = (values: number[], p: number) => {
+  if (values.length === 0) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.round((sorted.length - 1) * p)));
+  return sorted[index];
 };
 
 const computeBuildKey = () => {
@@ -281,16 +293,17 @@ const buildTrainingSet = async (): Promise<MapperTrainingSet> => {
   const learnedLevels: number[] = [];
 
   for (const level of levels) {
-    const savedState = loadLevelMapperSavedState(level.id);
-    if (!savedState?.gridFrameWidth || !savedState?.gridFrameHeight) continue;
-
     const baseline = await resolveLevelMapperBaseline(level);
     if (!baseline.imageURL) continue;
-    if (!baseline.gridFrameWidth || !baseline.gridFrameHeight) continue;
     if (isPlaceholderGrid(baseline.grid)) continue;
 
-    const cellWidth = baseline.gridFrameWidth / Math.max(1, baseline.cols);
-    const cellHeight = baseline.gridFrameHeight / Math.max(1, baseline.rows);
+    const image = await loadImage(baseline.imageURL);
+    const frameWidth = baseline.gridFrameWidth ?? image.width;
+    const frameHeight = baseline.gridFrameHeight ?? image.height;
+    const frameOffsetX = Number.isFinite(baseline.gridOffsetX) ? baseline.gridOffsetX : 0;
+    const frameOffsetY = Number.isFinite(baseline.gridOffsetY) ? baseline.gridOffsetY : 0;
+    const cellWidth = frameWidth / Math.max(1, baseline.cols);
+    const cellHeight = frameHeight / Math.max(1, baseline.rows);
     if (!Number.isFinite(cellWidth) || !Number.isFinite(cellHeight) || cellWidth <= 0 || cellHeight <= 0) continue;
 
     geometrySamples.push({
@@ -302,7 +315,6 @@ const buildTrainingSet = async (): Promise<MapperTrainingSet> => {
       aspectRatio: cellWidth / Math.max(1e-6, cellHeight),
     });
 
-    const image = await loadImage(baseline.imageURL);
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
     canvas.height = image.height;
@@ -328,10 +340,10 @@ const buildTrainingSet = async (): Promise<MapperTrainingSet> => {
       for (const { row, col } of selected) {
         const insetX = Math.min(cellWidth * SAMPLE_INSET_RATIO, Math.max(1, cellWidth / 5));
         const insetY = Math.min(cellHeight * SAMPLE_INSET_RATIO, Math.max(1, cellHeight / 5));
-        const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(baseline.gridOffsetX + col * cellWidth + insetX)));
-        const x1 = Math.max(x0 + 1, Math.min(image.width, Math.ceil(baseline.gridOffsetX + (col + 1) * cellWidth - insetX)));
-        const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(baseline.gridOffsetY + row * cellHeight + insetY)));
-        const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(baseline.gridOffsetY + (row + 1) * cellHeight - insetY)));
+        const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(frameOffsetX + col * cellWidth + insetX)));
+        const x1 = Math.max(x0 + 1, Math.min(image.width, Math.ceil(frameOffsetX + (col + 1) * cellWidth - insetX)));
+        const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(frameOffsetY + row * cellHeight + insetY)));
+        const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(frameOffsetY + (row + 1) * cellHeight - insetY)));
         const signature = createTileSignatureFromRegion(pixels, image.width, image.height, x0, y0, x1, y1);
         signatures.push({
           ...signature,
@@ -345,6 +357,14 @@ const buildTrainingSet = async (): Promise<MapperTrainingSet> => {
   }
 
   const prunedSignatures = pruneSignatureMap(signatures);
+  const layoutCounts = new Map<string, { rows: number; cols: number; count: number }>();
+  for (const sample of geometrySamples) {
+    const key = `${sample.rows}x${sample.cols}`;
+    const existing = layoutCounts.get(key) ?? { rows: sample.rows, cols: sample.cols, count: 0 };
+    existing.count += 1;
+    layoutCounts.set(key, existing);
+  }
+  const commonLayouts = Array.from(layoutCounts.values()).sort((a, b) => b.count - a.count);
   return {
     learnedLevels,
     geometrySamples,
@@ -353,8 +373,22 @@ const buildTrainingSet = async (): Promise<MapperTrainingSet> => {
     medianCellHeight: median(geometrySamples.map((sample) => sample.cellHeight)),
     medianAspectRatio: median(geometrySamples.map((sample) => sample.aspectRatio)),
     medianBorderRatio: median(prunedSignatures.map((signature) => signature.borderRatio)),
+    minCellWidth: quantile(geometrySamples.map((sample) => sample.cellWidth), 0.15),
+    maxCellWidth: quantile(geometrySamples.map((sample) => sample.cellWidth), 0.85),
+    minCellHeight: quantile(geometrySamples.map((sample) => sample.cellHeight), 0.15),
+    maxCellHeight: quantile(geometrySamples.map((sample) => sample.cellHeight), 0.85),
+    alignmentTolerancePx: Math.max(
+      1,
+      Math.round(
+        Math.min(
+          median(geometrySamples.map((sample) => sample.cellWidth)) ?? 8,
+          median(geometrySamples.map((sample) => sample.cellHeight)) ?? 8
+        ) * 0.12
+      )
+    ),
     preferredRows: mode(geometrySamples.map((sample) => sample.rows)),
     preferredCols: mode(geometrySamples.map((sample) => sample.cols)),
+    commonLayouts,
   };
 };
 

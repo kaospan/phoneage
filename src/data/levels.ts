@@ -26,6 +26,8 @@ export type ColorTheme =
   | 'gray'
   | 'slate';
 
+export type LevelProvenance = 'user-edited' | 'ai-detected';
+
 export interface ThemeColors {
   floor: string;
   wall: string;
@@ -156,6 +158,7 @@ export interface Level {
   grid: number[][];
   playerStart: { x: number; y: number };
   cavePos: { x: number; y: number };
+  provenance?: LevelProvenance;
   theme?: ColorTheme;
   /**
    * Optional per-level countdown timer (in seconds). When set to a positive number,
@@ -192,6 +195,7 @@ type PromotedLevelDefault = Pick<
   | 'grid'
   | 'playerStart'
   | 'cavePos'
+  | 'provenance'
   | 'theme'
   | 'timeLimitSeconds'
   | 'hourglassBonusByCell'
@@ -228,6 +232,12 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
     if (cx < 0 || cy < 0 || cy >= rows || cx >= cols) continue;
 
     const theme = typeof e.theme === 'string' && (e.theme as string) in themes ? (e.theme as ColorTheme) : undefined;
+    const provenance =
+      e.provenance === 'user-edited' || e.provenance === 'ai-detected'
+        ? (e.provenance as LevelProvenance)
+        : id >= 1 && id <= 35
+          ? 'user-edited'
+          : undefined;
     const timeLimitSeconds =
       e.timeLimitSeconds === undefined ? undefined : Math.max(1, Math.min(86400, Math.round(Number(e.timeLimitSeconds))));
 
@@ -239,6 +249,7 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
       grid: grid as number[][],
       playerStart: { x: psx, y: psy },
       cavePos: { x: cx, y: cy },
+      ...(provenance ? { provenance } : {}),
       ...(theme ? { theme } : {}),
       ...(Number.isFinite(timeLimitSeconds) ? { timeLimitSeconds } : {}),
       ...(hourglassBonusByCell ? { hourglassBonusByCell } : {}),
@@ -490,6 +501,7 @@ export const getAllLevels = (): Level[] => {
           grid: def.grid.map((row) => [...row]),
           playerStart: def.playerStart ?? { x: 0, y: 0 },
           cavePos: def.cavePos ?? { x: 0, y: 0 },
+          provenance: def.provenance,
           theme: def.theme,
           autoBuild: false,
         });
@@ -513,6 +525,9 @@ export const getAllLevels = (): Level[] => {
            const result: Level = { ...l, grid: nextGrid };
            if (parsed.playerStart) {
              result.playerStart = parsed.playerStart;
+           }
+           if (parsed.provenance === 'user-edited' || parsed.provenance === 'ai-detected') {
+             result.provenance = parsed.provenance as LevelProvenance;
            }
            if (parsed.theme) {
              // Theme is optional; only accept known theme keys.

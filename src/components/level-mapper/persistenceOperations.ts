@@ -1,4 +1,4 @@
-import { getAllLevels, isPlaceholderGrid, type ColorTheme } from '@/data/levels';
+import { getAllLevels, isPlaceholderGrid, type ColorTheme, type LevelProvenance } from '@/data/levels';
 import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
 import { LEVEL_IMAGE_SCALE_STORAGE_VERSION, OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 import type { LevelMapperDraft, LevelMapperSavedState } from './LevelMapperStore';
@@ -23,6 +23,7 @@ import type { LevelMapperDraft, LevelMapperSavedState } from './LevelMapperStore
 export const saveGridChanges = (
     grid: number[][],
     playerStart: { x: number; y: number } | null,
+    provenance: LevelProvenance | undefined,
     theme: ColorTheme | undefined,
     timeLimitSeconds: number | null,
     hourglassBonusByCell: Record<string, number>,
@@ -106,6 +107,7 @@ export const saveGridChanges = (
             ...(prev ?? {}),
             grid: gridToSave,
             playerStart,
+            provenance: provenance ?? 'user-edited',
             ...(theme !== undefined ? { theme } : {}),
             // Preserve semantics: null means "no timer".
             timeLimitSeconds,

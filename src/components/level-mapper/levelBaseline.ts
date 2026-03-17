@@ -1,4 +1,4 @@
-import { getAllLevels, type ColorTheme } from '@/data/levels';
+import { getAllLevels, type ColorTheme, type LevelProvenance } from '@/data/levels';
 import { voidGrid } from '@/lib/levelgrid';
 import { normalizeMapperImage } from './imageNormalization';
 import { getLevelImageUrl } from './levelImageStore';
@@ -17,6 +17,7 @@ export interface ResolvedLevelMapperBaseline {
   cols: number;
   grid: number[][];
   playerStart: { x: number; y: number } | null;
+  provenance: LevelProvenance | undefined;
   theme: ColorTheme | undefined;
   timeLimitSeconds: number | null;
   hourglassBonusByCell: Record<string, number>;
@@ -64,6 +65,7 @@ export const resolveLevelMapperBaseline = async (
       cols: savedState.cols,
       grid: cloneGrid(savedState.grid),
       playerStart: savedState.playerStart ? { ...savedState.playerStart } : null,
+      provenance: savedState.provenance ?? level.provenance,
       theme: savedState.theme,
       timeLimitSeconds: sanitizeTimeLimit(savedState.timeLimitSeconds),
       hourglassBonusByCell: { ...(savedState.hourglassBonusByCell ?? {}) },
@@ -117,6 +119,7 @@ export const resolveLevelMapperBaseline = async (
     cols: editableGrid[0]?.length ?? 0,
     grid: editableGrid,
     playerStart: level.playerStart ? { ...level.playerStart } : null,
+    provenance: level.provenance,
     theme: level.theme,
     timeLimitSeconds: sanitizeTimeLimit(level.timeLimitSeconds ?? null),
     hourglassBonusByCell: { ...(level.hourglassBonusByCell ?? {}) },

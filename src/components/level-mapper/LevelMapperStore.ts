@@ -1,5 +1,5 @@
 import { createContext, type Dispatch, type RefObject, type SetStateAction } from 'react';
-import { getAllLevels, type ColorTheme } from '@/data/levels';
+import { getAllLevels, type ColorTheme, type LevelProvenance } from '@/data/levels';
 import type { DetectedGrid } from './gridDetection';
 
 // Centralized context/types to keep Fast Refresh stable.
@@ -28,6 +28,7 @@ export interface LevelMapperDraft {
   cols: number;
   grid: number[][];
   playerStart: { x: number; y: number } | null;
+  provenance?: LevelProvenance;
   theme: ColorTheme | undefined;
   timeLimitSeconds: number | null;
   hourglassBonusByCell: Record<string, number>;
@@ -54,6 +55,7 @@ export interface LevelMapperSavedState {
   cols: number;
   grid: number[][];
   playerStart: { x: number; y: number } | null;
+  provenance?: LevelProvenance;
   theme: ColorTheme | undefined;
   timeLimitSeconds: number | null;
   hourglassBonusByCell: Record<string, number>;
@@ -94,6 +96,7 @@ export interface LevelMapperContextValue {
 
   // Player start position
   playerStart: { x: number; y: number } | null;
+  currentLevelProvenance: LevelProvenance | undefined;
   setPlayerStart: (pos: { x: number; y: number } | null) => void;
 
   // Theme
@@ -197,6 +200,7 @@ export interface LevelMapperContextValue {
     levelId?: number | null;
     grid: number[][];
     playerStart: { x: number; y: number } | null;
+    provenance?: LevelProvenance;
     theme: ColorTheme | undefined;
     timeLimitSeconds: number | null;
     // Per-cell hourglass bonuses keyed by "x,y" (column,row). Used only for tile id 20.

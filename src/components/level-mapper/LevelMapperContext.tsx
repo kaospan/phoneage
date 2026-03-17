@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getAllLevels, type ColorTheme } from '@/data/levels';
+import { getAllLevels, type ColorTheme, type LevelProvenance } from '@/data/levels';
 import { emptyGrid, formatGridRowsOneLine, voidGrid } from '@/lib/levelgrid';
 import { detectGridLines } from './gridDetection';
 import { LevelMapperContext, type BulkContextType, type LevelMapperContextValue } from './LevelMapperStore';
@@ -37,13 +37,13 @@ import {
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { getAlignmentHints } from './alignmentProfile';
 import { resolveLevelMapperBaseline } from './levelBaseline';
+import { detectDeterministicGridWithTraining } from './geometryGridFitter';
 import {
     createTileSignatureFromImageData,
     createTileSignatureFromRegion,
     getMapperTrainingHints,
     getMapperTrainingSet,
     invalidateMapperTrainingSetCache,
-    refineDetectedGridWithTraining,
     tileSignatureSimilarity,
     type TileSignature,
 } from './mapperTrainingSet';
@@ -260,6 +260,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
         });
         const [playerStart, setPlayerStart] = useState<{ x: number; y: number } | null>(null);
+        const [currentLevelProvenance, setCurrentLevelProvenance] = useState<LevelProvenance | undefined>(undefined);
         const [theme, setTheme] = useState<ColorTheme | undefined>(undefined);
         const [timeLimitSeconds, setTimeLimitSeconds] = useState<number | null>(() => {
             if (typeof window === 'undefined') return null;
@@ -314,6 +315,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             levelId?: number | null;
             grid: number[][];
             playerStart: { x: number; y: number } | null;
+            provenance?: LevelProvenance;
             theme: ColorTheme | undefined;
             timeLimitSeconds: number | null;
             hourglassBonusByCell: Record<string, number>;
@@ -357,6 +359,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 draft.timeLimitSeconds != null && Number.isFinite(draft.timeLimitSeconds)
                     ? Math.max(0, Math.round(draft.timeLimitSeconds))
                     : null;
+            const nextProvenance =
+                draft.provenance === 'user-edited' || draft.provenance === 'ai-detected'
+                    ? draft.provenance
+                    : undefined;
             const nextHourglassBonusByCell = clampHourglassBonusByCell(
                 draft.hourglassBonusByCell ?? {},
                 nextRows,
@@ -403,6 +409,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setCols(nextCols);
             setGrid(nextGrid);
             setPlayerStart(nextPlayerStart);
+            setCurrentLevelProvenance(nextProvenance);
             setTheme(draft.theme);
             setTimeLimitSeconds(nextTimeLimitSeconds);
             setHourglassBonusByCell(nextHourglassBonusByCell);
@@ -518,6 +525,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     cols,
                     grid: cloneGrid(grid),
                     playerStart: playerStart ? { ...playerStart } : null,
+                    provenance: currentLevelProvenance,
                     theme,
                     timeLimitSeconds,
                     hourglassBonusByCell: { ...(hourglassBonusByCell ?? {}) },
@@ -548,6 +556,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             cols,
             grid,
             playerStart,
+            currentLevelProvenance,
             theme,
             timeLimitSeconds,
             hourglassBonusByCell,
@@ -608,11 +617,13 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setGridFrameWidth(baseline.gridFrameWidth);
                         setGridFrameHeight(baseline.gridFrameHeight);
                         setPlayerStart(baseline.playerStart ? { ...baseline.playerStart } : null);
+                        setCurrentLevelProvenance(baseline.provenance);
                         setTheme(baseline.theme);
                         setLoadedSnapshot({
                             levelId: baseline.levelId,
                             grid: baseline.grid,
                             playerStart: baseline.playerStart,
+                            provenance: baseline.provenance,
                             theme: baseline.theme,
                             timeLimitSeconds: baseline.timeLimitSeconds,
                             hourglassBonusByCell: baseline.hourglassBonusByCell,
@@ -896,13 +907,15 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 }
 
                 const detectionHints = await loadDetectionHints();
-                // Auto-detect always ignores the "Lock current rows/cols" toggle.
-                const detectedBase = detectGridLines(imageCanvas, false, rows, cols, detectionHints);
-                const refinedDetection =
-                    detectedBase ? await refineDetectedGridWithTraining(imageCanvas, detectedBase) : null;
-                const detected = detectedBase && refinedDetection
-                    ? { ...detectedBase, ...refinedDetection.candidate }
-                    : detectedBase;
+                // Primary path: deterministic lattice fit learned from corrected levels 1–35.
+                const detected =
+                    (await detectDeterministicGridWithTraining(imageCanvas, {
+                        useCurrentCounts: false,
+                        currentRows: rows,
+                        currentCols: cols,
+                        hints: detectionHints,
+                    })) ??
+                    detectGridLines(imageCanvas, false, rows, cols, detectionHints);
                 if (!detected) {
                     setLastGridDetection(null);
                     console.error('❌ Grid detection failed');
@@ -915,12 +928,14 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 const lowConfidenceLayoutChange =
                     detected.confidence < 0.35 && (detected.rows !== rows || detected.cols !== cols);
                 if (lowConfidenceLayoutChange) {
-                    const snappedBase = detectGridLines(imageCanvas, true, rows, cols, detectionHints);
-                    const snappedRefined =
-                        snappedBase ? await refineDetectedGridWithTraining(imageCanvas, snappedBase) : null;
-                    const snapped = snappedBase && snappedRefined
-                        ? { ...snappedBase, ...snappedRefined.candidate }
-                        : snappedBase;
+                    const snapped =
+                        (await detectDeterministicGridWithTraining(imageCanvas, {
+                            useCurrentCounts: true,
+                            currentRows: rows,
+                            currentCols: cols,
+                            hints: detectionHints,
+                        })) ??
+                        detectGridLines(imageCanvas, true, rows, cols, detectionHints);
                     if (snapped) {
                         const scaleBackX = srcW / Math.max(1, imageCanvas.width);
                         const scaleBackY = srcH / Math.max(1, imageCanvas.height);
@@ -1027,12 +1042,14 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 ctx.drawImage(image, 0, 0, w, h);
 
                 const detectionHints = await loadDetectionHints();
-                const detectedBase = detectGridLines(imageCanvas, true, rows, cols, detectionHints);
-                const refinedDetection =
-                    detectedBase ? await refineDetectedGridWithTraining(imageCanvas, detectedBase) : null;
-                const detected = detectedBase && refinedDetection
-                    ? { ...detectedBase, ...refinedDetection.candidate }
-                    : detectedBase;
+                const detected =
+                    (await detectDeterministicGridWithTraining(imageCanvas, {
+                        useCurrentCounts: true,
+                        currentRows: rows,
+                        currentCols: cols,
+                        hints: detectionHints,
+                    })) ??
+                    detectGridLines(imageCanvas, true, rows, cols, detectionHints);
                 if (!detected) {
                     alert('Snap failed. Try adjusting the crop so the board edges are cleaner.');
                     return null;
@@ -1124,11 +1141,35 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 ctx.drawImage(image, 0, 0);
                 const imageData = ctx.getImageData(0, 0, image.width, image.height);
                 const data = imageData.data;
-                const frameWidth = gridFrameWidth ?? image.width;
-                const frameHeight = gridFrameHeight ?? image.height;
-                const cellWidth = frameWidth / cols;
-                const cellHeight = frameHeight / rows;
-                console.log(`📊 Image size: ${image.width}x${image.height}, Grid: ${rows}x${cols}, Frame: ${frameWidth}x${frameHeight}`);
+                let activeGridOffsetX = gridOffsetX;
+                let activeGridOffsetY = gridOffsetY;
+                let activeGridFrameWidth = gridFrameWidth ?? image.width;
+                let activeGridFrameHeight = gridFrameHeight ?? image.height;
+
+                const detectionHints = await loadDetectionHints();
+                const lockedFit = await detectDeterministicGridWithTraining(sampleCanvas, {
+                    useCurrentCounts: true,
+                    currentRows: rows,
+                    currentCols: cols,
+                    hints: detectionHints,
+                });
+
+                if (lockedFit) {
+                    activeGridOffsetX = Math.max(0, Math.min(image.width - 1, Math.round(lockedFit.offsetX)));
+                    activeGridOffsetY = Math.max(0, Math.min(image.height - 1, Math.round(lockedFit.offsetY)));
+                    activeGridFrameWidth = Math.min(image.width, Math.max(1, Math.round(lockedFit.cellWidth * cols)));
+                    activeGridFrameHeight = Math.min(image.height, Math.max(1, Math.round(lockedFit.cellHeight * rows)));
+                    setGridOffsetX(activeGridOffsetX);
+                    setGridOffsetY(activeGridOffsetY);
+                    setGridFrameWidth(activeGridFrameWidth);
+                    setGridFrameHeight(activeGridFrameHeight);
+                    setLastGridDetection(lockedFit);
+                    setIsSaved(false);
+                }
+
+                const cellWidth = activeGridFrameWidth / cols;
+                const cellHeight = activeGridFrameHeight / rows;
+                console.log(`📊 Image size: ${image.width}x${image.height}, Grid: ${rows}x${cols}, Frame: ${activeGridFrameWidth}x${activeGridFrameHeight}`);
 
                 const gridAllVoid = grid.every((row) => row.every((cell) => cell === 5));
                 const gridAllFloor = grid.length > 0 && grid.every((row) => row.every((cell) => cell === 0));
@@ -1179,10 +1220,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
                                 const insetX = Math.min(cellWidth * CELL_SAMPLE_INSET_RATIO, Math.max(1, cellWidth / 4));
                                 const insetY = Math.min(cellHeight * CELL_SAMPLE_INSET_RATIO, Math.max(1, cellHeight / 4));
-                                const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(gridOffsetX + c * cellWidth + insetX)));
-                                const x1 = Math.max(x0 + 1, Math.min(image.width, Math.ceil(gridOffsetX + (c + 1) * cellWidth - insetX)));
-                                const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(gridOffsetY + r * cellHeight + insetY)));
-                                const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(gridOffsetY + (r + 1) * cellHeight - insetY)));
+                                const x0 = Math.max(0, Math.min(image.width - 1, Math.floor(activeGridOffsetX + c * cellWidth + insetX)));
+                                const x1 = Math.max(x0 + 1, Math.min(image.width, Math.ceil(activeGridOffsetX + (c + 1) * cellWidth - insetX)));
+                                const y0 = Math.max(0, Math.min(image.height - 1, Math.floor(activeGridOffsetY + r * cellHeight + insetY)));
+                                const y1 = Math.max(y0 + 1, Math.min(image.height, Math.ceil(activeGridOffsetY + (r + 1) * cellHeight - insetY)));
 
                                 newGrid[r][c] = classifyCellFast(x0, y0, x1, y1);
                                 processedCells++;
@@ -1250,6 +1291,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             levelId?: number | null;
             grid: number[][];
             playerStart: { x: number; y: number } | null;
+            provenance?: LevelProvenance;
             theme: ColorTheme | undefined;
             timeLimitSeconds: number | null;
             hourglassBonusByCell?: Record<string, number>;
@@ -1274,6 +1316,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 imageOffsetY: Number.isFinite(snapshot.imageOffsetY as any) ? Number(snapshot.imageOffsetY) : 0,
                 grid: snapshot.grid.map((row) => [...row]),
                 playerStart: snapshot.playerStart ? { ...snapshot.playerStart } : null,
+                provenance: snapshot.provenance,
                 hourglassBonusByCell: { ...(snapshot.hourglassBonusByCell ?? {}) },
             };
         };
@@ -1291,6 +1334,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setCols(snapshot.grid[0]?.length ?? 0);
             setGrid(snapshot.grid.map((row) => [...row]));
             setPlayerStart(snapshot.playerStart ? { ...snapshot.playerStart } : null);
+            setCurrentLevelProvenance(snapshot.provenance);
             setTheme(snapshot.theme);
             setTimeLimitSeconds(snapshot.timeLimitSeconds ?? null);
             setHourglassBonusByCell({ ...(snapshot.hourglassBonusByCell ?? {}) });
@@ -1314,11 +1358,13 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         };
 
         const saveChanges = async () => {
-            const res = saveGridChanges(grid, playerStart, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
+            const nextProvenance: LevelProvenance = 'user-edited';
+            const res = saveGridChanges(grid, playerStart, nextProvenance, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
             setAllLevels(res.levels);
             // Keep editor state in sync with the *actual* persisted payload (e.g. start-marker cave conversion).
             setGrid(res.gridSaved.map((row) => [...row]));
             setHourglassBonusByCell({ ...(res.hourglassBonusByCellSaved ?? {}) });
+            setCurrentLevelProvenance(nextProvenance);
             setIsSaved(true);
 
             // Persist current overlay tweaks immediately. This avoids a race where a dev-only file write
@@ -1332,6 +1378,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     cols,
                     grid: cloneGrid(res.gridSaved),
                     playerStart: playerStart ? { ...playerStart } : null,
+                    provenance: nextProvenance,
                     theme,
                     timeLimitSeconds,
                     hourglassBonusByCell: { ...(res.hourglassBonusByCellSaved ?? {}) },
@@ -1355,6 +1402,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     cols,
                     grid: cloneGrid(res.gridSaved),
                     playerStart: playerStart ? { ...playerStart } : null,
+                    provenance: nextProvenance,
                     theme,
                     timeLimitSeconds,
                     hourglassBonusByCell: { ...(res.hourglassBonusByCellSaved ?? {}) },
@@ -1384,6 +1432,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 levelId: res.levelId,
                 grid: res.gridSaved,
                 playerStart,
+                provenance: nextProvenance,
                 theme,
                 timeLimitSeconds,
                 hourglassBonusByCell: res.hourglassBonusByCellSaved,
@@ -1430,6 +1479,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     grid: res.gridSaved,
                     playerStart: playerStart ?? { x: 0, y: 0 },
                     cavePos: findCavePos(res.gridSaved),
+                    provenance: nextProvenance,
                 };
                 if (theme !== undefined) payload.theme = theme;
                 if (timeLimitSeconds != null && Number.isFinite(timeLimitSeconds) && timeLimitSeconds > 0) {
@@ -1529,6 +1579,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             hourglassBrushSeconds,
             setHourglassBrushSeconds,
             playerStart,
+            currentLevelProvenance,
             setPlayerStart,
             theme,
             setTheme,
