@@ -37,6 +37,16 @@ import {
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { getAlignmentHints } from './alignmentProfile';
 import { resolveLevelMapperBaseline } from './levelBaseline';
+import {
+    createTileSignatureFromImageData,
+    createTileSignatureFromRegion,
+    getMapperTrainingHints,
+    getMapperTrainingSet,
+    invalidateMapperTrainingSetCache,
+    refineDetectedGridWithTraining,
+    tileSignatureSimilarity,
+    type TileSignature,
+} from './mapperTrainingSet';
 import { toast } from 'sonner';
 import type { LevelMapperDraft, LevelMapperHistoryEntry } from './LevelMapperStore';
 console.log('📦 LevelMapperContext.tsx loading...');
@@ -825,9 +835,24 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         const referenceSigCacheRef = useRef<{
             key: string;
-            sigSize: number;
-            refs: Array<{ tileType: number; sig: Uint8Array }>;
+            refs: TileSignature[];
         } | null>(null);
+
+        const loadDetectionHints = async () => {
+            const storedHints = getAlignmentHints();
+            try {
+                const learnedHints = await getMapperTrainingHints();
+                return {
+                    hintCellWidth: learnedHints.hintCellWidth ?? storedHints.hintCellWidth,
+                    hintCellHeight: learnedHints.hintCellHeight ?? storedHints.hintCellHeight,
+                    preferredCols: learnedHints.preferredCols ?? storedHints.preferredCols,
+                    preferredRows: learnedHints.preferredRows ?? storedHints.preferredRows,
+                };
+            } catch (error) {
+                console.warn('Falling back to stored alignment hints:', error);
+                return storedHints;
+            }
+        };
 
         const detectGrid = async () => {
             try {
@@ -870,8 +895,14 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     ctx.drawImage(preview, 0, 0);
                 }
 
+                const detectionHints = await loadDetectionHints();
                 // Auto-detect always ignores the "Lock current rows/cols" toggle.
-                const detected = detectGridLines(imageCanvas, false, rows, cols, getAlignmentHints());
+                const detectedBase = detectGridLines(imageCanvas, false, rows, cols, detectionHints);
+                const refinedDetection =
+                    detectedBase ? await refineDetectedGridWithTraining(imageCanvas, detectedBase) : null;
+                const detected = detectedBase && refinedDetection
+                    ? { ...detectedBase, ...refinedDetection.candidate }
+                    : detectedBase;
                 if (!detected) {
                     setLastGridDetection(null);
                     console.error('❌ Grid detection failed');
@@ -884,7 +915,12 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 const lowConfidenceLayoutChange =
                     detected.confidence < 0.35 && (detected.rows !== rows || detected.cols !== cols);
                 if (lowConfidenceLayoutChange) {
-                    const snapped = detectGridLines(imageCanvas, true, rows, cols, getAlignmentHints());
+                    const snappedBase = detectGridLines(imageCanvas, true, rows, cols, detectionHints);
+                    const snappedRefined =
+                        snappedBase ? await refineDetectedGridWithTraining(imageCanvas, snappedBase) : null;
+                    const snapped = snappedBase && snappedRefined
+                        ? { ...snappedBase, ...snappedRefined.candidate }
+                        : snappedBase;
                     if (snapped) {
                         const scaleBackX = srcW / Math.max(1, imageCanvas.width);
                         const scaleBackY = srcH / Math.max(1, imageCanvas.height);
@@ -990,7 +1026,13 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 if (!ctx) throw new Error('Failed to create canvas context for grid snap');
                 ctx.drawImage(image, 0, 0, w, h);
 
-                const detected = detectGridLines(imageCanvas, true, rows, cols, getAlignmentHints());
+                const detectionHints = await loadDetectionHints();
+                const detectedBase = detectGridLines(imageCanvas, true, rows, cols, detectionHints);
+                const refinedDetection =
+                    detectedBase ? await refineDetectedGridWithTraining(imageCanvas, detectedBase) : null;
+                const detected = detectedBase && refinedDetection
+                    ? { ...detectedBase, ...refinedDetection.candidate }
+                    : detectedBase;
                 if (!detected) {
                     alert('Snap failed. Try adjusting the crop so the board edges are cleaner.');
                     return null;
@@ -1036,80 +1078,30 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
 
             try {
-                const sigSize = 8; // 8x8 luma signature, fast and scale-tolerant
-                const signatureFromImageData = (img: ImageData) => {
-                    const out = new Uint8Array(sigSize * sigSize);
-                    const d = img.data;
-                    const w = img.width;
-                    const h = img.height;
-                    let k = 0;
-                    for (let yy = 0; yy < sigSize; yy += 1) {
-                        const y = Math.max(0, Math.min(h - 1, Math.floor(((yy + 0.5) * h) / sigSize)));
-                        for (let xx = 0; xx < sigSize; xx += 1) {
-                            const x = Math.max(0, Math.min(w - 1, Math.floor(((xx + 0.5) * w) / sigSize)));
-                            const idx = (y * w + x) * 4;
-                            const r = d[idx], g = d[idx + 1], b = d[idx + 2];
-                            out[k++] = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
-                        }
-                    }
-                    return out;
-                };
-
-                const signatureFromRegion = (data: Uint8ClampedArray, imgW: number, imgH: number, x0: number, y0: number, x1: number, y1: number) => {
-                    const out = new Uint8Array(sigSize * sigSize);
-                    const rw = Math.max(1, x1 - x0);
-                    const rh = Math.max(1, y1 - y0);
-                    let k = 0;
-                    for (let yy = 0; yy < sigSize; yy += 1) {
-                        const y = Math.max(0, Math.min(imgH - 1, Math.floor(y0 + ((yy + 0.5) * rh) / sigSize)));
-                        const row = y * imgW;
-                        for (let xx = 0; xx < sigSize; xx += 1) {
-                            const x = Math.max(0, Math.min(imgW - 1, Math.floor(x0 + ((xx + 0.5) * rw) / sigSize)));
-                            const idx = (row + x) * 4;
-                            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-                            out[k++] = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
-                        }
-                    }
-                    return out;
-                };
-
-                const sigDistance = (a: Uint8Array, b: Uint8Array) => {
-                    let s = 0;
-                    for (let i = 0; i < a.length; i += 1) s += Math.abs(a[i] - b[i]);
-                    return s;
-                };
-
-                const summarizeSig = (sig: Uint8Array) => {
-                    let sum = 0;
-                    let sum2 = 0;
-                    for (let i = 0; i < sig.length; i += 1) {
-                        const v = sig[i];
-                        sum += v;
-                        sum2 += v * v;
-                    }
-                    const n = sig.length;
-                    const mean = sum / n;
-                    const varr = Math.max(0, sum2 / n - mean * mean);
-                    return { mean, std: Math.sqrt(varr) };
-                };
-
+                const trainingSet = await getMapperTrainingSet();
                 const storedRefs = getStoredCellReferences();
-                const cacheKey = storedRefs.map((r) => `${r.id}:${r.tileType}:${r.timestamp}`).join('|');
-                let refSigs: Array<{ tileType: number; sig: Uint8Array }> = [];
+                const cacheKey =
+                    `${storedRefs.map((r) => `${r.id}:${r.tileType}:${r.timestamp}`).join('|')}` +
+                    `|train:${trainingSet.learnedLevels.join(',')}:${trainingSet.signatures.length}`;
+                let refSigs: TileSignature[] = [];
                 const cached = referenceSigCacheRef.current;
-                if (cached && cached.key === cacheKey && cached.sigSize === sigSize) {
+                if (cached && cached.key === cacheKey) {
                     refSigs = cached.refs;
                 } else {
+                    refSigs.push(...trainingSet.signatures);
                     for (const ref of storedRefs) {
                         const img = await loadImageData(ref.imageData);
                         if (!img) continue;
-                        refSigs.push({ tileType: ref.tileType, sig: signatureFromImageData(img) });
+                        refSigs.push({
+                            ...createTileSignatureFromImageData(img),
+                            tileType: ref.tileType,
+                        });
                     }
-                    referenceSigCacheRef.current = { key: cacheKey, sigSize, refs: refSigs };
+                    referenceSigCacheRef.current = { key: cacheKey, refs: refSigs };
                 }
 
                 if (refSigs.length === 0) {
-                    alert('No reference sprites saved yet. Go to References tab and capture/upload a few cell sprites first.');
+                    alert('No learned references are available yet. Save a few corrected levels first, or add manual reference sprites.');
                     return;
                 }
 
@@ -1152,28 +1144,21 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 let processedCells = 0;
 
                 const classifyCellFast = (x0: number, y0: number, x1: number, y1: number): number => {
-                    const sig = signatureFromRegion(data, image.width, image.height, x0, y0, x1, y1);
-                    const stats = summarizeSig(sig);
-
-                    // Quick void fallback when there's no good reference match.
-                    const voidish = stats.mean < 45 && stats.std < 22;
-
+                    const signature = createTileSignatureFromRegion(data, image.width, image.height, x0, y0, x1, y1);
                     let bestType: number | null = null;
-                    let bestDist = Infinity;
+                    let bestSimilarity = Number.NEGATIVE_INFINITY;
                     for (const ref of refSigs) {
-                        const d = sigDistance(sig, ref.sig);
-                        if (d < bestDist) {
-                            bestDist = d;
+                        const similarity = tileSignatureSimilarity(signature, ref);
+                        if (similarity > bestSimilarity) {
+                            bestSimilarity = similarity;
                             bestType = ref.tileType;
                         }
                     }
-
-                    // Convert to similarity in 0..1 range (approx).
-                    const similarity = bestType === null ? 0 : 1 - bestDist / (255 * sig.length);
-                    const minSimilarity = voidish ? 0.86 : 0.78;
-                    if (bestType !== null && similarity >= minSimilarity) return bestType;
-                    if (voidish) return 5;
-                    return 5; // unknown: leave as void so the user can fill blanks
+                    const borderTarget = trainingSet.medianBorderRatio ?? signature.borderRatio;
+                    const borderDelta = Math.abs(signature.borderRatio - borderTarget);
+                    const minSimilarity = borderDelta > 0.18 ? 0.54 : 0.42;
+                    if (bestType !== null && bestSimilarity >= minSimilarity) return bestType;
+                    return 5;
                 };
 
                 // Process in batches using requestAnimationFrame
@@ -1513,6 +1498,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     duration: 3500,
                 });
             }
+
+            invalidateMapperTrainingSetCache();
         };
 
         const pushUndo = () => { setUndoStack(s => [...s, grid.map(r => [...r])]); setRedoStack([]); setIsSaved(false); };

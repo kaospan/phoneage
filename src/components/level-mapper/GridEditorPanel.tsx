@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDownUp, ArrowLeftRight, Copy, Crosshair, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scan, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Crosshair, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
@@ -21,7 +21,7 @@ export const GridEditorPanel: React.FC = () => {
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         lastGridDetection,
-        exportTS, saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
+        saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
         hourglassBrushSeconds, setHourglassBonusByCell,
         rows, cols, grid, activeTile, setGrid, setRows, setCols,
         pushUndo, pushUndoSnapshot,
@@ -1082,9 +1082,6 @@ export const GridEditorPanel: React.FC = () => {
                     )}
                     {imageURL && overlayEnabled && (
                         <>
-                            <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={learnCurrentMap} title="Learn references from the corrected map" aria-label="Learn from map">
-                                <Scan />
-                            </Button>
                             <div className="flex items-center gap-2">
                                 <label className="flex items-center gap-1 text-xs text-muted-foreground" title="How many void cells to keep around the outside when cropping">
                                     <span>Void margin</span>
@@ -1103,10 +1100,7 @@ export const GridEditorPanel: React.FC = () => {
                             </div>
                         </>
                     )}
-                    <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={exportTS} title="Copy JSON" aria-label="Copy JSON">
-                        <Copy />
-                    </Button>
-                    <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={() => { pushUndo(); setGrid(g => { const width = g[0]?.length || cols; return g.map(r => r.map(() => 5)); }); }} title="Fill all cells with Void" aria-label="All void">
+                    <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={() => { pushUndo(); setGrid(g => g.map(r => r.map(() => 5))); }} title="Fill all cells with Void" aria-label="All void">
                         <Trash2 />
                     </Button>
                     <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2 py-1">
