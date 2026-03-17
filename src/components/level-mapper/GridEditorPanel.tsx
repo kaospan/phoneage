@@ -752,6 +752,20 @@ export const GridEditorPanel: React.FC = () => {
                         <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={redo} disabled={!canRedo} title="Redo" aria-label="Redo">
                             <Redo2 />
                         </Button>
+                        <Button
+                            size="sm"
+                            variant="default"
+                            className="h-9 px-3.5 font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-900/30 disabled:text-emerald-100/60"
+                            onClick={() => { void saveCurrentMap(); }}
+                            disabled={isSaved}
+                            title={isSaved ? "Saved" : "Save changes (also learns references if overlay is loaded)"}
+                            aria-label="Save Changes"
+                        >
+                            <span className="flex items-center gap-2">
+                                <Save className="h-4 w-4" />
+                                {isSaved ? 'Saved' : 'Save Changes'}
+                            </span>
+                        </Button>
                     </div>
                 </div>
                 <div className="mt-1 grid gap-1">
@@ -1124,20 +1138,6 @@ export const GridEditorPanel: React.FC = () => {
                                 </Button>
                             </>
                         )}
-                        <Button
-                            size="sm"
-                            variant="default"
-                            className="h-9 px-3.5 font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-900/30 disabled:text-emerald-100/60"
-                            onClick={() => { void saveCurrentMap(); }}
-                            disabled={isSaved}
-                            title={isSaved ? "Saved" : "Save changes (also learns references if overlay is loaded)"}
-                            aria-label="Save Changes"
-                        >
-                            <span className="flex items-center gap-2">
-                                <Save className="h-4 w-4" />
-                                {isSaved ? 'Saved' : 'Save Changes'}
-                            </span>
-                        </Button>
                     </div>
                 </div>
                 {isDragMode && (
