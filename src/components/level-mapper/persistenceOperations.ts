@@ -233,7 +233,7 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
         const yRaw = Number((parsed as any).y ?? 1);
         const offsetX = Number((parsed as any).offsetX ?? 0);
         const offsetY = Number((parsed as any).offsetY ?? 0);
-        const lock = Boolean((parsed as any).lock ?? true);
+        const lock = Boolean((parsed as any).lock ?? false);
         const v = Number((parsed as any).v ?? 1);
         if (!Number.isFinite(x) || !Number.isFinite(yRaw)) return null;
 

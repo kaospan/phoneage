@@ -11,6 +11,7 @@ import {
     extractCellImageData,
 } from '@/lib/spriteMatching';
 import { assessSingleCellReference } from './referenceQuality';
+import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
 interface SpriteCaptureProps {
     imageURL: string | null;
@@ -20,6 +21,10 @@ interface SpriteCaptureProps {
     gridOffsetY: number;
     gridFrameWidth: number | null;
     gridFrameHeight: number | null;
+    imageScaleX: number;
+    imageScaleY: number;
+    imageOffsetX: number;
+    imageOffsetY: number;
     grid?: number[][];
     setGrid?: React.Dispatch<React.SetStateAction<number[][]>>;
     onCapture: (cellData: {
@@ -43,6 +48,10 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
     gridOffsetY,
     gridFrameWidth,
     gridFrameHeight,
+    imageScaleX,
+    imageScaleY,
+    imageOffsetX,
+    imageOffsetY,
     grid,
     setGrid,
     onCapture,
@@ -63,6 +72,8 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
     const scanAbortRef = React.useRef<{ abort: boolean } | null>(null);
     const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
     const [autoScanEnabled, setAutoScanEnabled] = useState(false);
+    const previewViewportRef = React.useRef<HTMLDivElement | null>(null);
+    const [displaySize, setDisplaySize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
     useEffect(() => {
         latestGridRef.current = grid;
@@ -137,6 +148,25 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
             cancelled = true;
         };
     }, [imageURL, tempCanvas]);
+
+    useEffect(() => {
+        if (!imageSize || !previewViewportRef.current) {
+            setDisplaySize({ width: 0, height: 0 });
+            return;
+        }
+
+        const updateDisplaySize = () => {
+            const viewportWidth = Math.max(240, previewViewportRef.current?.clientWidth ?? 0);
+            const baseWidth = Math.max(1, Math.min(imageSize.width, viewportWidth));
+            const baseHeight = Math.max(1, Math.round(baseWidth * (imageSize.height / imageSize.width)));
+            setDisplaySize({ width: baseWidth, height: baseHeight });
+        };
+
+        updateDisplaySize();
+        const resizeObserver = new ResizeObserver(() => updateDisplaySize());
+        resizeObserver.observe(previewViewportRef.current);
+        return () => resizeObserver.disconnect();
+    }, [imageSize]);
 
     const getCellDimensions = () => {
         if (!imageSize) return null;
@@ -391,20 +421,52 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
         console.log(`✓ Saved cell [${row},${col}] as type ${tileType} (${TILE_TYPES.find(t => t.id === tileType)?.name})`);
     };
 
-    const overlayFrame = React.useMemo(() => {
-        if (!imageSize) return null;
-        const frameWidth = gridFrameWidth ?? imageSize.width;
-        const frameHeight = gridFrameHeight ?? imageSize.height;
-        if (imageSize.width <= 0 || imageSize.height <= 0) return null;
+    const previewMetrics = React.useMemo(() => {
+        if (!imageSize || displaySize.width <= 0 || displaySize.height <= 0) return null;
 
-        const clampPct = (value: number) => Math.max(0, Math.min(100, value));
-        const leftPct = clampPct((gridOffsetX / imageSize.width) * 100);
-        const topPct = clampPct((gridOffsetY / imageSize.height) * 100);
-        const widthPct = clampPct((frameWidth / imageSize.width) * 100);
-        const heightPct = clampPct((frameHeight / imageSize.height) * 100);
+        const naturalFrameWidth = gridFrameWidth ?? imageSize.width;
+        const naturalFrameHeight = gridFrameHeight ?? imageSize.height;
+        const baseOverlayScaleX = displaySize.width / imageSize.width;
+        const baseOverlayScaleY = displaySize.height / imageSize.height;
+        const effectiveImageScaleY = imageScaleY * OVERLAY_IMAGE_SCALE_Y_BASE;
+        const scaledDisplayWidth = displaySize.width * imageScaleX;
+        const scaledDisplayHeight = displaySize.height * effectiveImageScaleY;
+        const overlayScaleX = scaledDisplayWidth / imageSize.width;
+        const overlayScaleY = scaledDisplayHeight / imageSize.height;
+        const imageLeftPx = imageOffsetX * overlayScaleX;
+        const imageTopPx = imageOffsetY * overlayScaleY;
+        const gridLeftPx = gridOffsetX * overlayScaleX;
+        const gridTopPx = gridOffsetY * overlayScaleY;
+        const gridWidthPx = naturalFrameWidth * baseOverlayScaleX;
+        const gridHeightPx = naturalFrameHeight * baseOverlayScaleY;
+        const contentWidth = Math.max(gridLeftPx + gridWidthPx, imageLeftPx + scaledDisplayWidth);
+        const contentHeight = Math.max(gridTopPx + gridHeightPx, imageTopPx + scaledDisplayHeight);
 
-        return { leftPct, topPct, widthPct, heightPct };
-    }, [imageSize, gridFrameWidth, gridFrameHeight, gridOffsetX, gridOffsetY]);
+        return {
+            imageLeftPx,
+            imageTopPx,
+            scaledDisplayWidth,
+            scaledDisplayHeight,
+            gridLeftPx,
+            gridTopPx,
+            gridWidthPx,
+            gridHeightPx,
+            contentWidth,
+            contentHeight,
+        };
+    }, [
+        displaySize.height,
+        displaySize.width,
+        gridFrameHeight,
+        gridFrameWidth,
+        gridOffsetX,
+        gridOffsetY,
+        imageOffsetX,
+        imageOffsetY,
+        imageScaleX,
+        imageScaleY,
+        imageSize,
+    ]);
 
     if (!imageURL) {
         return (
@@ -533,75 +595,91 @@ export const SpriteCapture: React.FC<SpriteCaptureProps> = ({
             {/* Capture Grid */}
             <Card className="p-4 space-y-3">
                 <Label>Click Cell to Capture:</Label>
-                <div className="relative inline-block">
-                    <img
-                        src={imageURL}
-                        alt="Level screenshot"
-                        className="max-w-full h-auto border rounded"
-                        style={{ display: 'block' }}
-                    />
+                <div ref={previewViewportRef} className="w-full overflow-auto rounded-lg border bg-background/40 p-2">
                     <div
-                        className="absolute grid"
+                        className="relative"
                         style={{
-                            left: overlayFrame ? `${overlayFrame.leftPct}%` : '0%',
-                            top: overlayFrame ? `${overlayFrame.topPct}%` : '0%',
-                            width: overlayFrame ? `${overlayFrame.widthPct}%` : '100%',
-                            height: overlayFrame ? `${overlayFrame.heightPct}%` : '100%',
-                            gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                            gridTemplateRows: `repeat(${rows}, 1fr)`
+                            width: previewMetrics ? `${previewMetrics.contentWidth}px` : undefined,
+                            height: previewMetrics ? `${previewMetrics.contentHeight}px` : undefined,
+                            minWidth: imageSize ? `${Math.min(imageSize.width, displaySize.width || imageSize.width)}px` : undefined,
+                            minHeight: imageSize ? `${Math.min(imageSize.height, displaySize.height || imageSize.height)}px` : undefined,
                         }}
                     >
-                        {Array.from({ length: rows }).map((_, r) =>
-                            Array.from({ length: cols }).map((_, c) => {
-                                const isHovered = hoveredCell?.row === r && hoveredCell?.col === c;
-                                const wasSaved = lastSaved === `${r},${c}`;
+                        <img
+                            src={imageURL}
+                            alt="Level screenshot"
+                            className="absolute border rounded"
+                            style={{
+                                display: 'block',
+                                left: previewMetrics ? `${previewMetrics.imageLeftPx}px` : 0,
+                                top: previewMetrics ? `${previewMetrics.imageTopPx}px` : 0,
+                                width: previewMetrics ? `${previewMetrics.scaledDisplayWidth}px` : '100%',
+                                height: previewMetrics ? `${previewMetrics.scaledDisplayHeight}px` : 'auto',
+                                maxWidth: 'none',
+                            }}
+                        />
+                        <div
+                            className="absolute grid"
+                            style={{
+                                left: previewMetrics ? `${previewMetrics.gridLeftPx}px` : '0px',
+                                top: previewMetrics ? `${previewMetrics.gridTopPx}px` : '0px',
+                                width: previewMetrics ? `${previewMetrics.gridWidthPx}px` : '100%',
+                                height: previewMetrics ? `${previewMetrics.gridHeightPx}px` : '100%',
+                                gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                                gridTemplateRows: `repeat(${rows}, 1fr)`,
+                            }}
+                        >
+                            {Array.from({ length: rows }).map((_, r) =>
+                                Array.from({ length: cols }).map((_, c) => {
+                                    const isHovered = hoveredCell?.row === r && hoveredCell?.col === c;
+                                    const wasSaved = lastSaved === `${r},${c}`;
 
-                                // Check if cell matches filter type
-                                const cellDetectedType = detectedGrid.get(`${r},${c}`);
-                                const highlightType = isHovered ? detectedType : cellDetectedType;
-                                let chrome = 'outline outline-1 outline-transparent';
-                                let shouldHighlight = false;
+                                    const cellDetectedType = detectedGrid.get(`${r},${c}`);
+                                    const highlightType = isHovered ? detectedType : cellDetectedType;
+                                    let chrome = 'outline outline-1 outline-transparent';
+                                    let shouldHighlight = false;
 
-                                if (wasSaved) {
-                                    chrome = 'outline outline-2 outline-green-500';
-                                } else if (isHovered && !isDetecting) {
-                                    if (detectedType !== null) {
-                                        if (filterType === 'all' || detectedType === filterType) {
-                                            shouldHighlight = true;
-                                            chrome = 'outline outline-2 outline-blue-500';
+                                    if (wasSaved) {
+                                        chrome = 'outline outline-2 outline-green-500';
+                                    } else if (isHovered && !isDetecting) {
+                                        if (detectedType !== null) {
+                                            if (filterType === 'all' || detectedType === filterType) {
+                                                shouldHighlight = true;
+                                                chrome = 'outline outline-2 outline-blue-500';
+                                            } else {
+                                                chrome = 'outline outline-1 outline-gray-400/50';
+                                            }
                                         } else {
-                                            chrome = 'outline outline-1 outline-gray-400/50';
+                                            chrome = 'outline outline-2 outline-rose-500';
                                         }
-                                    } else {
-                                        chrome = 'outline outline-2 outline-rose-500';
+                                    } else if (filterType !== 'all' && cellDetectedType !== filterType) {
+                                        chrome = 'outline outline-1 outline-transparent';
+                                    } else if (filterType !== 'all' && cellDetectedType === filterType) {
+                                        shouldHighlight = true;
+                                        chrome = 'outline outline-2 outline-blue-500/70';
                                     }
-                                } else if (filterType !== 'all' && cellDetectedType !== filterType) {
-                                    chrome = 'outline outline-1 outline-transparent';
-                                } else if (filterType !== 'all' && cellDetectedType === filterType) {
-                                    shouldHighlight = true;
-                                    chrome = 'outline outline-2 outline-blue-500/70';
-                                }
 
-                                return (
-                                    <button
-                                        key={`${r}-${c}`}
-                                        onMouseEnter={() => handleCellHover(r, c)}
-                                        onMouseLeave={() => {
-                                            setHoveredCell(null);
-                                            setDetectedType(null);
-                                        }}
-                                        onClick={() => handleCellClick(r, c)}
-                                        className={`transition-colors hover:opacity-80 ${chrome}`}
-                                        style={{
-                                            backgroundColor: shouldHighlight && highlightType !== null && !wasSaved
-                                                ? `${TILE_TYPES.find(t => t.id === highlightType)?.color ?? '#000000'}80`
-                                                : undefined
-                                        }}
-                                        title={`Cell [${r}, ${c}]${wasSaved ? ' - Saved!' : ''}`}
-                                    />
-                                );
-                            })
-                        )}
+                                    return (
+                                        <button
+                                            key={`${r}-${c}`}
+                                            onMouseEnter={() => handleCellHover(r, c)}
+                                            onMouseLeave={() => {
+                                                setHoveredCell(null);
+                                                setDetectedType(null);
+                                            }}
+                                            onClick={() => handleCellClick(r, c)}
+                                            className={`transition-colors hover:opacity-80 ${chrome}`}
+                                            style={{
+                                                backgroundColor: shouldHighlight && highlightType !== null && !wasSaved
+                                                    ? `${TILE_TYPES.find(t => t.id === highlightType)?.color ?? '#000000'}80`
+                                                    : undefined
+                                            }}
+                                            title={`Cell [${r}, ${c}]${wasSaved ? ' - Saved!' : ''}`}
+                                        />
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
                 </div>
             </Card>

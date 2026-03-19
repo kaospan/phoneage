@@ -88,7 +88,7 @@ export const resolveLevelMapperBaseline = async (
         Number.isFinite(Number(savedState.imageOffsetX)) ? Math.max(0, Number(savedState.imageOffsetX)) : 0,
       imageOffsetY:
         Number.isFinite(Number(savedState.imageOffsetY)) ? Math.max(0, Number(savedState.imageOffsetY)) : 0,
-      lockImageAspect: Boolean(savedState.lockImageAspect ?? true),
+      lockImageAspect: Boolean(savedState.lockImageAspect ?? false),
       zoom: Number.isFinite(Number(savedState.zoom)) ? Math.max(0.2, Math.min(6, Number(savedState.zoom))) : 1,
       gridOffsetX: Number.isFinite(Number(savedState.gridOffsetX)) ? Number(savedState.gridOffsetX) : 0,
       gridOffsetY: Number.isFinite(Number(savedState.gridOffsetY)) ? Number(savedState.gridOffsetY) : 0,

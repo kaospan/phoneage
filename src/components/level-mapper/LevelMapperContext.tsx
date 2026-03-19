@@ -203,7 +203,7 @@ const normalizeHistoryEntry = (value: unknown): LevelMapperHistoryEntry | null =
         imageScaleY: Number.isFinite(imageScaleY) ? imageScaleY : 1,
         imageOffsetX: Number.isFinite(imageOffsetX) ? imageOffsetX : 0,
         imageOffsetY: Number.isFinite(imageOffsetY) ? imageOffsetY : 0,
-        lockImageAspect: Boolean(candidate.lockImageAspect ?? true),
+        lockImageAspect: Boolean(candidate.lockImageAspect ?? false),
         gridOffsetX: Number.isFinite(gridOffsetX) ? gridOffsetX : 0,
         gridOffsetY: Number.isFinite(gridOffsetY) ? gridOffsetY : 0,
         gridFrameWidth,
@@ -309,7 +309,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [imageScaleY, setImageScaleY] = useState(1);
         const [imageOffsetX, setImageOffsetX] = useState(0);
         const [imageOffsetY, setImageOffsetY] = useState(0);
-        const [lockImageAspect, setLockImageAspect] = useState(true);
+        const [lockImageAspect, setLockImageAspect] = useState(false);
         const [lastGridDetection, setLastGridDetection] = useState<ReturnType<typeof detectGridLines> | null>(null);
         const loadedSnapshotRef = useRef<null | {
             levelId?: number | null;
@@ -420,7 +420,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setImageScaleY(nextImageScaleY);
             setImageOffsetX(nextImageOffsetX);
             setImageOffsetY(nextImageOffsetY);
-            setLockImageAspect(Boolean(draft.lockImageAspect ?? true));
+            setLockImageAspect(Boolean(draft.lockImageAspect ?? false));
             setZoom(nextZoom);
             setGridOffsetX(nextGridOffsetX);
             setGridOffsetY(nextGridOffsetY);
@@ -501,7 +501,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 setImageScaleY(1);
                 setImageOffsetX(0);
                 setImageOffsetY(0);
-                setLockImageAspect(true);
+                setLockImageAspect(false);
             }
             // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [importLevelIndex]);
@@ -867,6 +867,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         const detectGrid = async () => {
             try {
+                setLockImageAspect(false);
                 const maxDim = 1100; // speed: run detection on downsampled image, then scale back to source pixels
                 const imageCanvas = document.createElement('canvas');
                 let srcW = 0;
@@ -1016,6 +1017,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         // Advanced tool: keep current rows/cols, only snap frame/offset to the detected grid.
         const snapToLockedCounts = async () => {
             try {
+                setLockImageAspect(false);
                 if (!imageURL) {
                     alert('Please load an image first.');
                     return null;
@@ -1088,6 +1090,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         const detectCells = async () => {
             console.log('🔍 detectCells() called - OPTIMIZED VERSION');
+            setLockImageAspect(false);
             if (!imageURL) {
                 console.error('❌ No image in detectCells');
                 alert('Please load an image first');

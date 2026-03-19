@@ -16,5 +16,5 @@ export const getDefaultOverlayImageScale = (levelId: number) => {
         return { x: 1, y: 1.15, lock: false as const };
     }
 
-    return { x: 1, y: 1, lock: true as const };
+    return { x: 1, y: 1, lock: false as const };
 };
