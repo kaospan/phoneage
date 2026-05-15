@@ -42,6 +42,8 @@ const countCells = (grid: number[][]) => {
   return rows * cols;
 };
 
+const DEFAULT_DETECTION_SIMILARITY = 0.72;
+
 const compareGridMatchRatio = (left: number[][], right: number[][]) => {
   const rows = Math.max(left.length, right.length);
   const cols = Math.max(left[0]?.length ?? 0, right[0]?.length ?? 0);
@@ -73,8 +75,8 @@ const hasReachabilityMarkers = (grid: number[][]) => {
   return caveCount > 0 && traversableCount > 1;
 };
 
-const verifyImageLoads = async (source: string) =>
-  await new Promise<void>((resolve, reject) => {
+const verifyImageLoads = (source: string) =>
+  new Promise<void>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve();
     image.onerror = () => reject(new Error(`Failed to load source image: ${source}`));
@@ -118,7 +120,7 @@ export const runLevelQaReport = async (options: RunLevelQaOptions = {}): Promise
         await verifyImageLoads(source);
         if (options.deepImageMatch) {
           const detected = await buildLevelFromSources([source], {
-            minSimilarity: 0.72,
+            minSimilarity: DEFAULT_DETECTION_SIMILARITY,
             timeoutMs: options.detectTimeoutMs ?? 5000,
           });
           const ratio = compareGridMatchRatio(level.grid, detected.grid);

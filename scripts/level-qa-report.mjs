@@ -59,7 +59,7 @@ try {
     { solveMaxMsPerLevel, solveMaxNodesPerLevel, solveMaxDepth, detectTimeoutMs, matchThreshold, deepImageMatch },
   );
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const timestamp = new Date().toISOString().split('.')[0].replace(/[T:]/g, '-');
   const filename = `level-qa-report-${timestamp}.json`;
   const outputPath = path.join(root, reportDir);
   await mkdir(outputPath, { recursive: true });
