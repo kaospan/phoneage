@@ -17,6 +17,7 @@ const solveMaxNodesPerLevel = Number(argMap.get('--solveMaxNodesPerLevel') ?? 10
 const solveMaxDepth = Number(argMap.get('--solveMaxDepth') ?? 120);
 const detectTimeoutMs = Number(argMap.get('--detectTimeoutMs') ?? 5000);
 const matchThreshold = Number(argMap.get('--matchThreshold') ?? 0.75);
+const deepImageMatch = argMap.get('--deepImageMatch') === '1' || argMap.get('--deepImageMatch') === true;
 
 const root = process.cwd();
 let viteServer = null;
@@ -44,17 +45,18 @@ try {
   await page.waitForFunction(() => typeof window.runLevelQaReport === 'function', null, { timeout: 120000 });
 
   const report = await page.evaluate(
-    async ({ solveMaxMsPerLevel, solveMaxNodesPerLevel, solveMaxDepth, detectTimeoutMs, matchThreshold }) => {
+    async ({ solveMaxMsPerLevel, solveMaxNodesPerLevel, solveMaxDepth, detectTimeoutMs, matchThreshold, deepImageMatch }) => {
       return await window.runLevelQaReport({
         solveMaxMsPerLevel,
         solveMaxNodesPerLevel,
         solveMaxDepth,
         detectTimeoutMs,
         matchThreshold,
+        deepImageMatch,
         onProgress: (status) => console.log(`[qa] ${status}`),
       });
     },
-    { solveMaxMsPerLevel, solveMaxNodesPerLevel, solveMaxDepth, detectTimeoutMs, matchThreshold },
+    { solveMaxMsPerLevel, solveMaxNodesPerLevel, solveMaxDepth, detectTimeoutMs, matchThreshold, deepImageMatch },
   );
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

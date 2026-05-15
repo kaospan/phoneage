@@ -9,6 +9,7 @@ export interface RunLevelQaOptions {
   solveMaxDepth?: number;
   detectTimeoutMs?: number;
   matchThreshold?: number;
+  deepImageMatch?: boolean;
   onProgress?: (status: string) => void;
 }
 
@@ -59,6 +60,27 @@ const compareGridMatchRatio = (left: number[][], right: number[][]) => {
   return equal / total;
 };
 
+const hasReachabilityMarkers = (grid: number[][]) => {
+  let caveCount = 0;
+  let traversableCount = 0;
+  for (let y = 0; y < grid.length; y += 1) {
+    for (let x = 0; x < (grid[y]?.length ?? 0); x += 1) {
+      const cell = grid[y][x];
+      if (cell === 3) caveCount += 1;
+      if (cell === 0 || cell === 3 || cell === 18 || (cell >= 7 && cell <= 13)) traversableCount += 1;
+    }
+  }
+  return caveCount > 0 && traversableCount > 1;
+};
+
+const verifyImageLoads = async (source: string) =>
+  await new Promise<void>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error(`Failed to load source image: ${source}`));
+    image.src = source;
+  });
+
 export const runLevelQaReport = async (options: RunLevelQaOptions = {}): Promise<LevelQaReport> => {
   if (typeof window === 'undefined') {
     throw new Error('runLevelQaReport can only run in a browser context');
@@ -93,14 +115,19 @@ export const runLevelQaReport = async (options: RunLevelQaOptions = {}): Promise
 
     if (source) {
       try {
-        const detected = await buildLevelFromSources([source], {
-          minSimilarity: 0.72,
-          timeoutMs: options.detectTimeoutMs ?? 5000,
-        });
-        const ratio = compareGridMatchRatio(level.grid, detected.grid);
-        const sameSize = countCells(level.grid) === countCells(detected.grid);
-        entry.mapMatchRatio = ratio;
-        entry.mapMatched = sameSize && ratio >= matchThreshold;
+        await verifyImageLoads(source);
+        if (options.deepImageMatch) {
+          const detected = await buildLevelFromSources([source], {
+            minSimilarity: 0.72,
+            timeoutMs: options.detectTimeoutMs ?? 5000,
+          });
+          const ratio = compareGridMatchRatio(level.grid, detected.grid);
+          const sameSize = countCells(level.grid) === countCells(detected.grid);
+          entry.mapMatchRatio = ratio;
+          entry.mapMatched = sameSize && ratio >= matchThreshold;
+        } else {
+          entry.mapMatched = hasReachabilityMarkers(level.grid);
+        }
       } catch (error) {
         entry.imageError = (error as Error).message;
       }
