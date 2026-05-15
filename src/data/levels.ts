@@ -470,7 +470,114 @@ const buildAutoLevels = (): Level[] => {
   });
 };
 
-export const allLevels = buildAutoLevels();
+type VariationMode = 'flip-h' | 'flip-v' | 'flip-hv';
+
+const flipArrowHorizontal = (cell: number): number => {
+  if (cell === 8) return 10;
+  if (cell === 10) return 8;
+  return cell;
+};
+
+const flipArrowVertical = (cell: number): number => {
+  if (cell === 7) return 9;
+  if (cell === 9) return 7;
+  return cell;
+};
+
+const transformCellForMode = (cell: number, mode: VariationMode): number => {
+  if (mode === 'flip-h') return flipArrowHorizontal(cell);
+  if (mode === 'flip-v') return flipArrowVertical(cell);
+  return flipArrowVertical(flipArrowHorizontal(cell));
+};
+
+const transformGridForMode = (grid: number[][], mode: VariationMode): number[][] => {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const out = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 5));
+
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const nextY = mode === 'flip-v' || mode === 'flip-hv' ? rows - 1 - y : y;
+      const nextX = mode === 'flip-h' || mode === 'flip-hv' ? cols - 1 - x : x;
+      out[nextY][nextX] = transformCellForMode(grid[y][x], mode);
+    }
+  }
+
+  return out;
+};
+
+const transformPosForMode = (
+  pos: { x: number; y: number },
+  rows: number,
+  cols: number,
+  mode: VariationMode
+) => ({
+  x: mode === 'flip-h' || mode === 'flip-hv' ? cols - 1 - pos.x : pos.x,
+  y: mode === 'flip-v' || mode === 'flip-hv' ? rows - 1 - pos.y : pos.y,
+});
+
+const transformHourglassBonusForMode = (
+  hourglassBonusByCell: Record<string, number> | undefined,
+  rows: number,
+  cols: number,
+  mode: VariationMode
+) => {
+  if (!hourglassBonusByCell) return undefined;
+  const out: Record<string, number> = {};
+  for (const [key, bonus] of Object.entries(hourglassBonusByCell)) {
+    const [rawX, rawY] = key.split(',');
+    const x = Number(rawX);
+    const y = Number(rawY);
+    if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
+    const next = transformPosForMode({ x, y }, rows, cols, mode);
+    out[`${next.x},${next.y}`] = bonus;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
+const buildVariationLevels = (baseLevels: Level[]): Level[] => {
+  const targetExtraLevels = 100;
+  if (baseLevels.length === 0) return [];
+
+  const sourceLevels = baseLevels
+    .filter((level) => !isPlaceholderGrid(level.grid))
+    .sort((a, b) => a.id - b.id)
+    .slice(0, targetExtraLevels);
+  if (sourceLevels.length === 0) return [];
+
+  const variationModes: VariationMode[] = ['flip-h', 'flip-v', 'flip-hv'];
+  const themeCycle: ColorTheme[] = ['default', 'ocean', 'forest', 'sunset', 'lava', 'crystal', 'neon', 'snow', 'gray', 'slate'];
+  const maxBaseId = Math.max(...baseLevels.map((level) => level.id));
+
+  return Array.from({ length: targetExtraLevels }, (_, index) => {
+    const source = sourceLevels[index % sourceLevels.length];
+    const mode = variationModes[index % variationModes.length];
+    const rows = source.grid.length;
+    const cols = source.grid[0]?.length ?? 0;
+    const grid = transformGridForMode(source.grid, mode);
+    const playerStart = transformPosForMode(source.playerStart, rows, cols, mode);
+    const cavePos = transformPosForMode(source.cavePos, rows, cols, mode);
+    const hourglassBonusByCell = transformHourglassBonusForMode(source.hourglassBonusByCell, rows, cols, mode);
+
+    return {
+      ...source,
+      id: maxBaseId + index + 1,
+      grid,
+      playerStart,
+      cavePos,
+      hourglassBonusByCell,
+      theme: themeCycle[index % themeCycle.length],
+      image: undefined,
+      sources: undefined,
+      autoBuild: false,
+    };
+  });
+};
+
+const autoLevels = buildAutoLevels();
+const variationLevels = buildVariationLevels(autoLevels);
+
+export const allLevels = [...autoLevels, ...variationLevels];
 
 console.log('📦 levels.ts loaded, total levels:', allLevels.length);
 
