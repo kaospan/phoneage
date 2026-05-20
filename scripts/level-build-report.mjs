@@ -12,6 +12,8 @@ argv.forEach((arg) => {
 
 const useUrl = argMap.get('--url');
 const reportDir = argMap.get('--out') ?? 'reports';
+const timeoutMs = Number(argMap.get('--timeoutMs') ?? 8000);
+const force = argMap.get('--force') === '1' || argMap.get('--force') === true;
 
 const root = process.cwd();
 let viteServer = null;
@@ -28,16 +30,22 @@ if (!baseUrl) {
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
+page.on('console', (msg) => {
+  const text = msg.text();
+  if (text.startsWith('[bulkbuild]')) console.log(text);
+});
 
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => typeof window.runBulkBuildReport === 'function');
 
-  const report = await page.evaluate(async () => {
+  const report = await page.evaluate(async ({ timeoutMs, force }) => {
     return await window.runBulkBuildReport({
+      timeoutMs,
+      force,
       onProgress: (status) => console.log(`[bulkbuild] ${status}`)
     });
-  });
+  }, { timeoutMs, force });
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `level-build-report-${timestamp}.json`;
