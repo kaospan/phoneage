@@ -41,6 +41,16 @@ All colors MUST be HSL.
   }
 }
 
+@layer components {
+  @media (orientation: landscape) and (max-height: 500px) {
+    .toast-phone-landscape {
+      width: auto !important;
+      max-width: 85vw;
+      padding: 0.5rem 0.75rem;
+    }
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
