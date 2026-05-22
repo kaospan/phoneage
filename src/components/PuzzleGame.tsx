@@ -224,6 +224,20 @@ interface LevelCompletionSummary {
   totalLevels: number;
 }
 
+interface StoredLevelOverrideShape {
+  grid?: unknown;
+}
+
+type BrowserFullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+  msExitFullscreen?: () => Promise<void> | void;
+};
+
+type BrowserFullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  msRequestFullscreen?: () => Promise<void> | void;
+};
+
 export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
@@ -414,7 +428,10 @@ export const PuzzleGame = () => {
     };
   }, []);
 
-  const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex, overrideRevision]);
+  const allLevels = useMemo(() => {
+    void overrideRevision;
+    return getAllLevels();
+  }, [overrideRevision]);
   const currentLevel = allLevels[Math.min(currentLevelIndex, Math.max(0, allLevels.length - 1))] ?? allLevels[0];
   const orderedLevelIds = useMemo(() => allLevels.map((level) => level.id), [allLevels]);
   const completedLevelCount = useMemo(
@@ -575,7 +592,7 @@ export const PuzzleGame = () => {
 
         // New format: { grid, playerStart, theme, ... }
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          const grid = (parsed as any).grid as unknown;
+          const grid = (parsed as StoredLevelOverrideShape).grid;
           if (Array.isArray(grid) && Array.isArray(grid[0])) return true;
         }
       } catch {
@@ -755,7 +772,7 @@ export const PuzzleGame = () => {
       return () => {
         cancelled = true;
       };
-    }, [currentLevelIndex, overrideRevision, applyLevelState, hasReadableLevelOverride, isPlaceholderGrid]);
+    }, [applyLevelState, currentLevel, hasReadableLevelOverride, isPlaceholderGrid]);
 
     // Countdown timer tick (mapper-configurable per level).
     useEffect(() => {
@@ -1131,7 +1148,7 @@ export const PuzzleGame = () => {
           if (outcome.collectedHourglass && player.isLocal) {
             const at = outcome.collectedHourglass;
             const key = `${at.x},${at.y}`;
-            const raw = (currentLevel as any)?.hourglassBonusByCell?.[key];
+            const raw = currentLevel?.hourglassBonusByCell?.[key];
             const bonus = Math.max(1, Math.min(86400, Math.round(Number(raw ?? DEFAULT_BONUS_TIME_SECONDS))));
             if (timerEnabledRef.current) {
               addLevelTimeSeconds(bonus);
@@ -1195,10 +1212,12 @@ export const PuzzleGame = () => {
       if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
       if (sim.cavePos.x !== renderCavePos.x || sim.cavePos.y !== renderCavePos.y) setRenderCavePos(sim.cavePos);
     }, [
+      addLevelTimeSeconds,
       allLevels,
       commitCampaignProgress,
-      currentLevel?.id,
+      currentLevel,
       currentLevelIndex,
+      isComplete,
       moves,
       orderedLevelIds,
       renderCavePos.x,
@@ -1357,6 +1376,13 @@ export const PuzzleGame = () => {
       }
     }, [isSelectorActive, localPlayerPos.x, localPlayerPos.y, selectedArrow]);
 
+    const resetLevel = useCallback(() => {
+      const levelToReset = activeLevel ?? currentLevel;
+      if (!levelToReset) return;
+      applyLevelState(levelToReset);
+      toast.info("LEVEL RESET");
+    }, [activeLevel, applyLevelState, currentLevel]);
+
     // Keyboard controls (player movement + keyboard arrow selection)
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
@@ -1410,22 +1436,17 @@ export const PuzzleGame = () => {
       window.addEventListener('keydown', handleKeyPress);
       return () => window.removeEventListener('keydown', handleKeyPress);
     }, [
+      allLevels.length,
       currentLevelIndex,
       isBuilding,
       isSelectorActive,
       moveKeyboardSelector,
       goToLevelIndex,
       queueMove,
+      resetLevel,
       selectedArrow,
       toggleKeyboardSelection
     ]);
-
-    const resetLevel = () => {
-      const levelToReset = activeLevel ?? currentLevel;
-      if (!levelToReset) return;
-      applyLevelState(levelToReset);
-      toast.info("LEVEL RESET");
-    };
 
     const nextLevel = () => {
       if (currentLevelIndex < allLevels.length - 1) {
@@ -1578,14 +1599,14 @@ export const PuzzleGame = () => {
       // Try to enter browser fullscreen if supported (best-effort).
       if (typeof document === "undefined") return;
       try {
-        const docAny = document as any;
-        const el: any = document.documentElement;
+        const doc = document as BrowserFullscreenDocument;
+        const el = document.documentElement as BrowserFullscreenElement;
         if (next) {
           const req = el.requestFullscreen ?? el.webkitRequestFullscreen ?? el.msRequestFullscreen;
           if (typeof req === "function") await req.call(el);
         } else {
-          const exit = document.exitFullscreen ?? docAny.webkitExitFullscreen ?? docAny.msExitFullscreen;
-          if (typeof exit === "function") await exit.call(document);
+          const exit = doc.exitFullscreen ?? doc.webkitExitFullscreen ?? doc.msExitFullscreen;
+          if (typeof exit === "function") await exit.call(doc);
         }
       } catch {
         // ignore (e.g. iOS Safari)
