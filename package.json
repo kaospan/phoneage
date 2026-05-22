@@ -21,6 +21,7 @@
         "android:open": "npm --prefix apps/android run cap:open",
         "report:levels": "node scripts/level-build-report.mjs",
         "report:solutions": "node scripts/level-solution-report.mjs",
+        "report:qa": "node scripts/level-qa-report.mjs",
         "seed:hint": "node -e \"console.log('In the app console: const seed = exportLocalStorageSeed(); copy(JSON.stringify(seed,null,2))  -> save as solver-seed.json to make report:solutions match your overrides.')\"",
         "ws:server": "node server/ws-server.mjs",
         "asset-writer": "node server/asset-writer.mjs",

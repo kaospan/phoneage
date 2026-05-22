@@ -5,6 +5,7 @@ import "./index.css";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
 import { runBulkBuildAndDownload, runBulkBuildReport } from "@/lib/levelBulkBuilder";
 import { dumpLevel, runSolveAllLevels, runSolveLevel } from "@/lib/levelSolver";
+import { runLevelQaReport } from "@/lib/levelQa";
 
 console.log('🚀 main.tsx starting...');
 
@@ -111,6 +112,7 @@ try {
     (window as any).runSolveAllLevels = runSolveAllLevels;
     (window as any).runSolveLevel = runSolveLevel;
     (window as any).dumpLevel = dumpLevel;
+    (window as any).runLevelQaReport = runLevelQaReport;
 
     // Used to make Playwright reports match your current mapper edits/overrides.
     // Example:
