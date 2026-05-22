@@ -1,4 +1,3 @@
-/* @refresh reset */
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
