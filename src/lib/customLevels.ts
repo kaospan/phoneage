@@ -8,7 +8,7 @@ import type { ColorTheme, Level } from '@/data/levels';
 
 export type CustomLevelDefinition = Pick<
   Level,
-  'id' | 'grid' | 'playerStart' | 'cavePos' | 'theme' | 'timeLimitSeconds'
+  'id' | 'grid' | 'playerStart' | 'cavePos' | 'theme' | 'timeLimitSeconds' | 'provenance'
 > & {
   createdAt?: number;
   updatedAt?: number;

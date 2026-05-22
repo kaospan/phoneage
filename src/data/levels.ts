@@ -1,6 +1,7 @@
 import { stageImageSets } from '@/data/assetCatalog';
 import { loadCustomLevelDefinition, loadCustomLevelIds } from '@/lib/customLevels';
 import promotedLevelDefaultsRaw from '@/data/promoted-levels.json';
+import { DEFAULT_LEVEL_TIME_LIMITS } from './defaultLevelTimes';
 
 // Stone Age DOS game levels
 // Legend: 
@@ -262,6 +263,14 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
 
 const promotedLevelDefaults = coercePromotedLevelDefaults(promotedLevelDefaultsRaw);
 
+const applyDefaultTimeLimits = (levels: Level[]): Level[] =>
+  levels.map((level) => {
+    const forced = DEFAULT_LEVEL_TIME_LIMITS[level.id];
+    return Number.isInteger(forced)
+      ? { ...level, timeLimitSeconds: forced }
+      : level;
+  });
+
 const applyPromotedLevelDefaults = (levels: Level[]): Level[] => {
   if (promotedLevelDefaults.length === 0) return levels;
 
@@ -426,7 +435,9 @@ const baseManualLevels: Level[] = [
   }
 ];
 
-export const manualLevels: Level[] = applyPromotedLevelDefaults(baseManualLevels);
+export const manualLevels: Level[] = applyDefaultTimeLimits(
+  applyPromotedLevelDefaults(baseManualLevels)
+);
 
 export const manualFallbackById = new Map(manualLevels.map((level) => [level.id, level]));
 const manualById = new Map(manualLevels.map((level) => [level.id, level]));
@@ -446,7 +457,7 @@ const buildAutoLevels = (): Level[] => {
     'neon',
   ];
 
-  return stageImageSets.map((stage) => {
+  const built = stageImageSets.map((stage) => {
     const manual = manualById.get(stage.id);
     if (manual) {
       return {
@@ -468,6 +479,8 @@ const buildAutoLevels = (): Level[] => {
       autoBuild: true,
     };
   });
+
+  return applyDefaultTimeLimits(built);
 };
 
 export const allLevels = buildAutoLevels();
@@ -484,7 +497,7 @@ export const getAllLevels = (): Level[] => {
     
     if (typeof window === 'undefined') {
       console.log('⚠️ SSR mode, returning base levels');
-      return base;
+      return applyDefaultTimeLimits(base);
     }
 
     // Merge in any custom levels created in the mapper (localStorage) without overwriting built-ins.
@@ -496,12 +509,13 @@ export const getAllLevels = (): Level[] => {
         if (existingIds.has(id)) continue;
         const def = loadCustomLevelDefinition(id);
         if (!def) continue;
+        const customProvenance = (def as Partial<Level>).provenance;
         base.push({
           id: def.id,
           grid: def.grid.map((row) => [...row]),
           playerStart: def.playerStart ?? { x: 0, y: 0 },
           cavePos: def.cavePos ?? { x: 0, y: 0 },
-          provenance: def.provenance,
+          ...(customProvenance ? { provenance: customProvenance } : {}),
           theme: def.theme,
           autoBuild: false,
         });
@@ -634,7 +648,7 @@ export const getAllLevels = (): Level[] => {
     });
     
     console.log('✅ getAllLevels() complete, returning', result.length, 'levels');
-    return result;
+    return applyDefaultTimeLimits(result);
   } catch (error) {
     console.error('❌ Error in getAllLevels:', error);
     console.error('Stack trace:', (error as Error).stack);

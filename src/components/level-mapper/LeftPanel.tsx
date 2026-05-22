@@ -26,7 +26,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         detectGrid, snapToLockedCounts, detectCells,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
-        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
+        imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
         hourglassBrushSeconds, setHourglassBrushSeconds, setHourglassBonusByCell,
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved, currentLevelProvenance,
