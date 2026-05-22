@@ -13,7 +13,20 @@ import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
 import { LEVEL_OVERRIDES_UPDATED_EVENT, saveLevelOverride } from "@/lib/levelOverrides";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
+import {
+  formatCampaignClock,
+  getCompletedLevelCount,
+  getHighestUnlockedLevelIndex,
+  getLevelCampaignRecord,
+  loadCampaignProgress,
+  recordLevelCompletion,
+  saveCampaignProgress,
+  setLastPlayedLevel,
+  syncCampaignProgress,
+  type CampaignProgressState,
+} from "@/lib/campaignProgress";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { CampaignDialog } from "./CampaignDialog";
 import { HowToPlayDialog } from "./HowToPlayDialog";
 import { TouchControls } from "./TouchControls";
 
@@ -199,6 +212,19 @@ const deltaFromFacing = (facing: FacingDirection): { dx: number; dy: number } =>
 
 type LevelData = ReturnType<typeof getAllLevels>[number];
 
+interface LevelCompletionSummary {
+  levelId: number;
+  moves: number;
+  timeLeftSeconds: number | null;
+  bestMoves: number | null;
+  bestTimeLeftSeconds: number | null;
+  isFirstClear: boolean;
+  isNewBestMoves: boolean;
+  isNewBestTime: boolean;
+  completedCount: number;
+  totalLevels: number;
+}
+
 export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
@@ -228,14 +254,25 @@ export const PuzzleGame = () => {
   const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
   const [userZoomTouched, setUserZoomTouched] = useState(false);
   const [fitRevision, setFitRevision] = useState(0);
+  const initialCampaignProgressRef = useRef<CampaignProgressState | null>(null);
 
-  const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
+  if (initialCampaignProgressRef.current == null) {
+    initialCampaignProgressRef.current = loadCampaignProgress();
+  }
+
+  const [currentLevelIndex, setCurrentLevelIndex] = useState(() =>
+    Math.max(0, (initialCampaignProgressRef.current?.lastPlayedLevelId ?? 1) - 1)
+  );
+  const [campaignProgress, setCampaignProgress] = useState<CampaignProgressState>(
+    () => initialCampaignProgressRef.current ?? loadCampaignProgress()
+  );
   const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
   const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
   const [renderCavePos, setRenderCavePos] = useState({ x: 0, y: 0 });
   const [activeLevel, setActiveLevel] = useState<LevelData | null>(null);
   const [moves, setMoves] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
+  const [completionSummary, setCompletionSummary] = useState<LevelCompletionSummary | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("3d");
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
@@ -265,6 +302,26 @@ export const PuzzleGame = () => {
   const timerEndAtMsRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
   const timerEnabledRef = useRef(false);
+  const campaignProgressRef = useRef<CampaignProgressState>(
+    initialCampaignProgressRef.current ?? loadCampaignProgress()
+  );
+  const didRestoreCampaignLevelRef = useRef(false);
+
+  useEffect(() => {
+    campaignProgressRef.current = campaignProgress;
+  }, [campaignProgress]);
+
+  const commitCampaignProgress = useCallback((next: CampaignProgressState) => {
+    if (next === campaignProgressRef.current) return;
+    campaignProgressRef.current = next;
+    saveCampaignProgress(next);
+    setCampaignProgress(next);
+  }, []);
+
+  const updateCampaignProgress = useCallback((updater: (prev: CampaignProgressState) => CampaignProgressState) => {
+    const next = updater(campaignProgressRef.current);
+    commitCampaignProgress(next);
+  }, [commitCampaignProgress]);
 
   useEffect(() => {
     timerEnabledRef.current = Boolean(levelTimeLimitSeconds);
@@ -359,7 +416,68 @@ export const PuzzleGame = () => {
   }, []);
 
   const allLevels = useMemo(() => getAllLevels(), [currentLevelIndex, overrideRevision]);
-  const currentLevel = allLevels[currentLevelIndex];
+  const currentLevel = allLevels[Math.min(currentLevelIndex, Math.max(0, allLevels.length - 1))] ?? allLevels[0];
+  const orderedLevelIds = useMemo(() => allLevels.map((level) => level.id), [allLevels]);
+  const completedLevelCount = useMemo(
+    () => getCompletedLevelCount(campaignProgress, orderedLevelIds),
+    [campaignProgress, orderedLevelIds]
+  );
+  const highestUnlockedIndex = useMemo(
+    () => getHighestUnlockedLevelIndex(campaignProgress, orderedLevelIds),
+    [campaignProgress, orderedLevelIds]
+  );
+  const frontierLevelId =
+    highestUnlockedIndex >= 0
+      ? allLevels[Math.min(highestUnlockedIndex, allLevels.length - 1)]?.id ?? null
+      : null;
+  const campaignProgressValue = allLevels.length > 0 ? (completedLevelCount / allLevels.length) * 100 : 0;
+  const currentLevelRecord = currentLevel ? getLevelCampaignRecord(campaignProgress, currentLevel.id) : null;
+  const campaignLevelCards = useMemo(
+    () =>
+      allLevels.map((level, index) => {
+        const record = getLevelCampaignRecord(campaignProgress, level.id);
+        return {
+          id: level.id,
+          theme: level.theme,
+          isCurrent: level.id === currentLevel?.id,
+          isCompleted: Boolean(record?.completed),
+          isUnlocked: index <= highestUnlockedIndex,
+          bestMoves: record?.bestMoves ?? null,
+          bestTimeLeftSeconds: record?.bestTimeLeftSeconds ?? null,
+        };
+      }),
+    [allLevels, campaignProgress, currentLevel?.id, highestUnlockedIndex]
+  );
+
+  useEffect(() => {
+    if (allLevels.length === 0) return;
+    updateCampaignProgress((prev) => syncCampaignProgress(prev, orderedLevelIds));
+  }, [allLevels.length, orderedLevelIds, updateCampaignProgress]);
+
+  useEffect(() => {
+    if (didRestoreCampaignLevelRef.current) return;
+    if (allLevels.length === 0) return;
+    didRestoreCampaignLevelRef.current = true;
+
+    const savedLevelId = campaignProgressRef.current.lastPlayedLevelId;
+    if (savedLevelId == null) {
+      setCurrentLevelIndex((index) => Math.min(index, allLevels.length - 1));
+      return;
+    }
+
+    const exactIndex = allLevels.findIndex((level) => level.id === savedLevelId);
+    if (exactIndex >= 0) {
+      setCurrentLevelIndex(exactIndex);
+      return;
+    }
+
+    setCurrentLevelIndex((index) => Math.min(index, allLevels.length - 1));
+  }, [allLevels]);
+
+  useEffect(() => {
+    if (!currentLevel) return;
+    updateCampaignProgress((prev) => setLastPlayedLevel(prev, currentLevel.id));
+  }, [currentLevel, updateCampaignProgress]);
 
   // Mobile portrait gate: require landscape so the whole board can be visible.
   useEffect(() => {
@@ -535,6 +653,7 @@ export const PuzzleGame = () => {
       setRenderCavePos(cave);
       setMoves(0);
       setIsComplete(false);
+      setCompletionSummary(null);
       setSelectedArrow(null);
       setSelectorPos({ ...level.playerStart });
       setIsSelectorActive(false);
@@ -1035,22 +1154,40 @@ export const PuzzleGame = () => {
       const localPlayer = sim.players.get(localPlayerIdRef.current);
       if (localPlayer && localPlayer.pos.x === sim.cavePos.x && localPlayer.pos.y === sim.cavePos.y && !localComplete) {
         localComplete = true;
-        setIsComplete(true);
-        toast.success(`LEVEL ${currentLevel.id} COMPLETE! MOVES: ${localPlayer.moves}`, {
-          duration: 3000,
+        const clearTimeLeftSeconds = timerEnabledRef.current
+          ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
+          : null;
+        const clearUpdate = recordLevelCompletion({
+          progress: campaignProgressRef.current,
+          levelId: currentLevel.id,
+          moves: localPlayer.moves,
+          timeLeftSeconds: clearTimeLeftSeconds,
+          nextLevelId: allLevels[currentLevelIndex + 1]?.id ?? null,
         });
 
-        const timer = setTimeout(() => {
-          if (currentLevelIndex < allLevels.length - 1) {
-            setCurrentLevelIndex(i => i + 1);
-          } else {
-            toast.success("ALL LEVELS COMPLETE! YOU WIN!", {
-              duration: 5000,
-            });
-          }
-        }, 2000);
+        commitCampaignProgress(clearUpdate.progress);
+        setCompletionSummary({
+          levelId: currentLevel.id,
+          moves: localPlayer.moves,
+          timeLeftSeconds: clearTimeLeftSeconds,
+          bestMoves: clearUpdate.record.bestMoves,
+          bestTimeLeftSeconds: clearUpdate.record.bestTimeLeftSeconds,
+          isFirstClear: clearUpdate.isFirstClear,
+          isNewBestMoves: clearUpdate.isNewBestMoves,
+          isNewBestTime: clearUpdate.isNewBestTime,
+          completedCount: getCompletedLevelCount(clearUpdate.progress, orderedLevelIds),
+          totalLevels: allLevels.length,
+        });
+        setIsComplete(true);
+        const clearHighlights = [];
+        if (clearUpdate.isFirstClear) clearHighlights.push("First clear");
+        if (clearUpdate.isNewBestMoves) clearHighlights.push("Best moves");
+        if (clearUpdate.isNewBestTime) clearHighlights.push("Best clock");
 
-        setTimeout(() => clearTimeout(timer), 2100);
+        toast.success(`LEVEL ${currentLevel.id} COMPLETE!`, {
+          description: clearHighlights.length > 0 ? clearHighlights.join(" • ") : `Moves: ${localPlayer.moves}`,
+          duration: 2800,
+        });
       }
 
       if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
@@ -1058,7 +1195,17 @@ export const PuzzleGame = () => {
       if (localMoves !== moves) setMoves(localMoves);
       if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
       if (sim.cavePos.x !== renderCavePos.x || sim.cavePos.y !== renderCavePos.y) setRenderCavePos(sim.cavePos);
-    }, [allLevels.length, currentLevel?.id, currentLevelIndex, moves, renderCavePos.x, renderCavePos.y, selectedArrow]);
+    }, [
+      allLevels,
+      commitCampaignProgress,
+      currentLevel?.id,
+      currentLevelIndex,
+      moves,
+      orderedLevelIds,
+      renderCavePos.x,
+      renderCavePos.y,
+      selectedArrow,
+    ]);
 
     useEffect(() => {
       let raf = 0;
@@ -1097,6 +1244,37 @@ export const PuzzleGame = () => {
         return `${m}:${String(s).padStart(2, '0')}`;
       })();
     const isTimerUrgent = timeLeftSeconds != null && timeLeftSeconds <= 10;
+    const currentBestMoves = currentLevelRecord?.bestMoves ?? null;
+    const currentBestClockText = formatCampaignClock(currentLevelRecord?.bestTimeLeftSeconds ?? null);
+    const campaignProgressText = `${completedLevelCount}/${allLevels.length}`;
+    const completionClockText = formatCampaignClock(completionSummary?.timeLeftSeconds ?? null);
+    const completionBestClockText = formatCampaignClock(completionSummary?.bestTimeLeftSeconds ?? null);
+
+    const goToLevelIndex = useCallback((nextIndex: number) => {
+      if (nextIndex < 0 || nextIndex >= allLevels.length) return false;
+      if (nextIndex > highestUnlockedIndex) {
+        const currentFrontier = allLevels[Math.min(highestUnlockedIndex, allLevels.length - 1)];
+        const nextLocked = allLevels[nextIndex];
+        if (currentFrontier && nextLocked) {
+          toast.info(`Complete Level ${currentFrontier.id} to unlock Level ${nextLocked.id}.`);
+        } else {
+          toast.info("Complete the current frontier level to unlock more stages.");
+        }
+        return false;
+      }
+
+      setSelectedArrow(null);
+      setCameraOffset({ x: 0, z: 0 });
+      setCompletionSummary(null);
+      setCurrentLevelIndex(nextIndex);
+      return true;
+    }, [allLevels, highestUnlockedIndex]);
+
+    const goToLevelId = useCallback((levelId: number) => {
+      const nextIndex = allLevels.findIndex((level) => level.id === levelId);
+      if (nextIndex < 0) return false;
+      return goToLevelIndex(nextIndex);
+    }, [allLevels, goToLevelIndex]);
 
     const resetSelectorToPlayer = useCallback(() => {
       setIsSelectorActive(false);
@@ -1216,8 +1394,18 @@ export const PuzzleGame = () => {
           case 'ArrowLeft': case 'a': case 'A': e.preventDefault(); queueMove(-1, 0); break;
           case 'ArrowRight': case 'd': case 'D': e.preventDefault(); queueMove(1, 0); break;
           case 'r': case 'R': e.preventDefault(); resetLevel(); break;
-          case 'n': case 'N': e.preventDefault(); if (currentLevelIndex < allLevels.length - 1) { setCurrentLevelIndex(i => i + 1); toast.info("SKIPPED TO NEXT LEVEL"); } break;
-          case 'p': case 'P': e.preventDefault(); if (currentLevelIndex > 0) { setCurrentLevelIndex(i => i - 1); toast.info("PREVIOUS LEVEL"); } break;
+          case 'n': case 'N':
+            e.preventDefault();
+            if (currentLevelIndex < allLevels.length - 1 && goToLevelIndex(currentLevelIndex + 1)) {
+              toast.info("SKIPPED TO NEXT LEVEL");
+            }
+            break;
+          case 'p': case 'P':
+            e.preventDefault();
+            if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) {
+              toast.info("PREVIOUS LEVEL");
+            }
+            break;
         }
       };
       window.addEventListener('keydown', handleKeyPress);
@@ -1227,6 +1415,7 @@ export const PuzzleGame = () => {
       isBuilding,
       isSelectorActive,
       moveKeyboardSelector,
+      goToLevelIndex,
       queueMove,
       selectedArrow,
       toggleKeyboardSelection
@@ -1241,13 +1430,15 @@ export const PuzzleGame = () => {
 
     const nextLevel = () => {
       if (currentLevelIndex < allLevels.length - 1) {
-        setCurrentLevelIndex(i => i + 1);
+        goToLevelIndex(currentLevelIndex + 1);
       } else {
         toast.success("ALL LEVELS COMPLETE!");
       }
     };
 
-    const prevLevel = () => { if (currentLevelIndex > 0) setCurrentLevelIndex(i => i - 1); };
+    const prevLevel = () => {
+      if (currentLevelIndex > 0) goToLevelIndex(currentLevelIndex - 1);
+    };
     const canZoomIn = viewMode !== 'fps' && cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
     const canZoomOut = viewMode !== 'fps' && cameraZoomIndex > 0;
   const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex];
@@ -1403,6 +1594,25 @@ export const PuzzleGame = () => {
     }, [cameraZoomIndex, isFullscreenMode]);
 
     const useSplitHud = isMobileLandscape || isFullscreenMode || viewMode === "sprite";
+    const hasNextLevel = currentLevelIndex < allLevels.length - 1;
+    const nextLevelLocked = hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
+    const nextLevelTitle = !hasNextLevel
+      ? "No more levels"
+      : nextLevelLocked
+        ? `Complete Level ${currentLevel.id} to unlock the next stage`
+        : "Next level (N)";
+    const campaignDialog = (
+      <CampaignDialog
+        compact={useSplitHud}
+        disabled={shouldRotateGate}
+        levels={campaignLevelCards}
+        completedCount={completedLevelCount}
+        frontierLevelId={frontierLevelId}
+        progressValue={campaignProgressValue}
+        totalLevels={allLevels.length}
+        onSelectLevel={goToLevelId}
+      />
+    );
 
     return (
       <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'}`}>
@@ -1459,12 +1669,7 @@ export const PuzzleGame = () => {
             <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
               <Button
                 onClick={() => {
-                  if (currentLevelIndex > 0) {
-                    setSelectedArrow(null);
-                    setCameraOffset({ x: 0, z: 0 });
-                    setCurrentLevelIndex(i => i - 1);
-                    toast.info("Previous Level");
-                  }
+                  if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) toast.info("Previous Level");
                 }}
                 variant="ghost"
                 size="default"
@@ -1481,6 +1686,20 @@ export const PuzzleGame = () => {
                    {`L${currentLevel.id}`}
                  </span>
                  <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
+                 <span
+                   className="inline-flex items-center rounded-md border border-border/60 bg-background/70 px-2 py-1 text-[11px] font-black tracking-wide text-muted-foreground"
+                   title="Campaign clears"
+                 >
+                   {campaignProgressText}
+                 </span>
+                 {currentBestMoves != null && (
+                   <span
+                     className="inline-flex items-center rounded-md border border-amber-300/50 bg-amber-500/10 px-2 py-1 text-[11px] font-black tracking-wide text-amber-100"
+                     title="Personal best moves on this level"
+                   >
+                     PB {currentBestMoves}
+                   </span>
+                 )}
                   {timeLeftText && (
                      <span
                        className={[
@@ -1516,10 +1735,7 @@ export const PuzzleGame = () => {
               <Button
                 onClick={() => {
                   if (currentLevelIndex < allLevels.length - 1) {
-                    setSelectedArrow(null);
-                    setCameraOffset({ x: 0, z: 0 });
-                    setCurrentLevelIndex(i => i + 1);
-                    toast.info("Next Level");
+                    if (goToLevelIndex(currentLevelIndex + 1)) toast.info("Next Level");
                   } else {
                     toast.info("No more levels");
                   }
@@ -1528,7 +1744,7 @@ export const PuzzleGame = () => {
                 size="default"
                 className="h-9 w-9 p-0 text-lg font-bold hover:bg-primary/20"
                 aria-label="Next level"
-                title="Next level (N)"
+                title={nextLevelTitle}
               >
                 →
               </Button>
@@ -1546,6 +1762,8 @@ export const PuzzleGame = () => {
               >
                 {isFullscreenMode ? "↻" : "Restart"}
               </Button>
+
+              {campaignDialog}
 
               {!isFullscreenMode && <HowToPlayDialog disabled={shouldRotateGate} />}
 
@@ -1668,12 +1886,7 @@ export const PuzzleGame = () => {
               {/* Previous Level Button */}
               <Button
                 onClick={() => {
-                  if (currentLevelIndex > 0) {
-                    setSelectedArrow(null);
-                    setCameraOffset({ x: 0, z: 0 });
-                    setCurrentLevelIndex(i => i - 1);
-                    toast.info("Previous Level");
-                  }
+                  if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) toast.info("Previous Level");
                 }}
                 variant="ghost"
                 size="default"
@@ -1711,6 +1924,28 @@ export const PuzzleGame = () => {
                 ) : (
                   <span className="text-muted-foreground text-xl">•</span>
                 )}
+                <span
+                  className="inline-flex items-center rounded-md border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-black tracking-wide text-muted-foreground"
+                  title="Campaign clears"
+                >
+                  {campaignProgressText} cleared
+                </span>
+                {currentBestMoves != null && (
+                  <span
+                    className="inline-flex items-center rounded-md border border-amber-300/50 bg-amber-500/10 px-3 py-1.5 text-xs font-black tracking-wide text-amber-100"
+                    title="Personal best moves on this level"
+                  >
+                    PB {currentBestMoves}
+                  </span>
+                )}
+                {currentBestClockText && (
+                  <span
+                    className="inline-flex items-center rounded-md border border-sky-300/40 bg-sky-500/10 px-3 py-1.5 text-xs font-black tracking-wide text-sky-100"
+                    title="Best remaining time on this level"
+                  >
+                    Clock {currentBestClockText}
+                  </span>
+                )}
                 <div className="flex items-center gap-2">
                   <span
                     className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-xs font-black text-white px-2 py-1"
@@ -1741,16 +1976,15 @@ export const PuzzleGame = () => {
                 Restart
               </Button>
 
+              {campaignDialog}
+
               <HowToPlayDialog disabled={shouldRotateGate} />
 
               {/* Next Level Button */}
               <Button
                 onClick={() => {
                   if (currentLevelIndex < allLevels.length - 1) {
-                    setSelectedArrow(null);
-                    setCameraOffset({ x: 0, z: 0 });
-                    setCurrentLevelIndex(i => i + 1);
-                    toast.info("Next Level");
+                    if (goToLevelIndex(currentLevelIndex + 1)) toast.info("Next Level");
                   } else {
                     toast.info("No more levels");
                   }
@@ -1759,7 +1993,7 @@ export const PuzzleGame = () => {
                 size="default"
                 className="h-10 w-10 p-0 text-xl font-bold hover:bg-primary/20"
                 aria-label="Next level"
-                title="Next level (N)"
+                title={nextLevelTitle}
               >
                 →
               </Button>
@@ -1964,17 +2198,93 @@ export const PuzzleGame = () => {
         {selectedArrow && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
         )}
-        {isComplete && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
-            <div className="rounded-2xl border border-white/20 bg-black/75 px-10 py-6 text-center shadow-2xl backdrop-blur-sm">
-              <div className="text-4xl font-black tracking-[0.18em] text-white sm:text-5xl">LEVEL COMPLETE!</div>
+        {isComplete && completionSummary && (
+          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
+            <div className="pointer-events-auto w-full max-w-xl rounded-[28px] border border-white/15 bg-stone-950/92 p-6 text-stone-50 shadow-2xl">
+              <div className="text-center">
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-amber-300">
+                  Stage Cleared
+                </div>
+                <div className="mt-2 text-3xl font-black uppercase tracking-[0.14em] sm:text-4xl">
+                  Level {completionSummary.levelId} Complete
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  {completionSummary.isFirstClear && (
+                    <span className="rounded-full border border-emerald-300/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100">
+                      First Clear
+                    </span>
+                  )}
+                  {completionSummary.isNewBestMoves && (
+                    <span className="rounded-full border border-amber-300/40 bg-amber-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-amber-100">
+                      Best Moves
+                    </span>
+                  )}
+                  {completionSummary.isNewBestTime && (
+                    <span className="rounded-full border border-sky-300/40 bg-sky-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-sky-100">
+                      Best Clock
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Run Moves</div>
+                  <div className="mt-2 text-3xl font-black">{completionSummary.moves}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Personal Best</div>
+                  <div className="mt-2 text-3xl font-black">{completionSummary.bestMoves ?? "--"}</div>
+                </div>
+                {completionClockText && (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Clock Left</div>
+                    <div className="mt-2 text-3xl font-black">{completionClockText}</div>
+                  </div>
+                )}
+                {completionBestClockText && (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Best Clock</div>
+                    <div className="mt-2 text-3xl font-black">{completionBestClockText}</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Campaign Progress</div>
+                <div className="mt-2 text-lg font-black text-stone-50">
+                  {completionSummary.completedCount}/{completionSummary.totalLevels} stages cleared
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  onClick={resetLevel}
+                  variant="outline"
+                  className="border-white/15 bg-white/5 text-stone-50 hover:bg-white/10"
+                >
+                  Replay
+                </Button>
+                {currentLevelIndex < allLevels.length - 1 ? (
+                  <Button
+                    onClick={nextLevel}
+                    className="bg-amber-300 text-stone-950 hover:bg-amber-200"
+                  >
+                    Next Level
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      goToLevelIndex(0);
+                      toast.success("Campaign restarted");
+                    }}
+                    className="bg-amber-300 text-stone-950 hover:bg-amber-200"
+                  >
+                    Restart Campaign
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-        {isComplete && (
-          <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 z-50 flex gap-1 md:bottom-auto md:right-1 md:left-auto md:top-8">
-            <Button onClick={prevLevel} disabled={currentLevelIndex === 0} className="h-7 px-2 text-xs bg-card/95 backdrop-blur" variant="outline" size="sm">←</Button>
-            <Button onClick={nextLevel} disabled={currentLevelIndex >= allLevels.length - 1} className="h-7 px-2 text-xs bg-card/95 backdrop-blur" variant="outline" size="sm">→</Button>
           </div>
         )}
       </div>
