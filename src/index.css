@@ -44,7 +44,7 @@ All colors MUST be HSL.
 @layer components {
   @media (orientation: landscape) and (max-height: 500px) {
     .toast-phone-landscape {
-      width: auto !important;
+      --width: 85vw;
       max-width: 85vw;
       padding: 0.5rem 0.75rem;
     }
