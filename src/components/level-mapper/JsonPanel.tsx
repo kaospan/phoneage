@@ -20,7 +20,7 @@ const formatGridWithRowNumbers = (grid: number[][]): string => {
     return result;
 };
 
-export const JsonPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
+export const JsonPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; resizable?: boolean; }> = ({ width, onStartResize, min, max, resizable = true }) => {
     const { grid, isSaved, jsonInput, setJsonInput, syncJsonInputToGrid, applyJsonInput } = useLevelMapper();
     const [savedGrid, setSavedGrid] = useState<number[][] | null>(null);
     const currentGridText = useMemo(() => formatGridWithRowNumbers(grid), [grid]);
@@ -157,11 +157,13 @@ export const JsonPanel: React.FC<{ width: number; onStartResize: () => void; min
                 </MapperSection>
             </div>
 
-            <MapperResizeHandle
-                side="left"
-                onMouseDown={onStartResize}
-                title="Resize inspector panel"
-            />
+            {resizable ? (
+                <MapperResizeHandle
+                    side="left"
+                    onMouseDown={onStartResize}
+                    title="Resize inspector panel"
+                />
+            ) : null}
         </MapperPanelFrame>
     );
 };

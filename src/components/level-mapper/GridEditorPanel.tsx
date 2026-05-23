@@ -10,9 +10,25 @@ import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
 const RULER_SIZE_PX = 24;
 const GRID_EDITOR_HEADER_HEIGHT_STORAGE_KEY = 'levelmapper_grid_editor_header_height_v1';
-const DEFAULT_GRID_EDITOR_HEADER_HEIGHT = 168;
-const MIN_GRID_EDITOR_HEADER_HEIGHT = 104;
+const DEFAULT_GRID_EDITOR_HEADER_HEIGHT = 152;
+const DEFAULT_GRID_EDITOR_HEADER_HEIGHT_COMPACT = 128;
+const MIN_GRID_EDITOR_HEADER_HEIGHT = 96;
 const MAX_GRID_EDITOR_HEADER_HEIGHT = 320;
+const MIN_GRID_CELL_SIZE_PX = 12;
+
+const getDefaultHeaderPanelHeight = () => {
+    if (typeof window === 'undefined') return DEFAULT_GRID_EDITOR_HEADER_HEIGHT;
+
+    const raw = window.localStorage.getItem(GRID_EDITOR_HEADER_HEIGHT_STORAGE_KEY);
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+        return Math.max(MIN_GRID_EDITOR_HEADER_HEIGHT, Math.min(MAX_GRID_EDITOR_HEADER_HEIGHT, Math.round(parsed)));
+    }
+
+    return window.innerWidth < 1024
+        ? DEFAULT_GRID_EDITOR_HEADER_HEIGHT_COMPACT
+        : DEFAULT_GRID_EDITOR_HEADER_HEIGHT;
+};
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -61,13 +77,7 @@ export const GridEditorPanel: React.FC = () => {
     const [cellHeight, setCellHeight] = React.useState(32);
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
     const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
-    const [headerPanelHeight, setHeaderPanelHeight] = React.useState(() => {
-        if (typeof window === 'undefined') return DEFAULT_GRID_EDITOR_HEADER_HEIGHT;
-        const raw = window.localStorage.getItem(GRID_EDITOR_HEADER_HEIGHT_STORAGE_KEY);
-        const parsed = Number(raw);
-        if (!Number.isFinite(parsed)) return DEFAULT_GRID_EDITOR_HEADER_HEIGHT;
-        return Math.max(MIN_GRID_EDITOR_HEADER_HEIGHT, Math.min(MAX_GRID_EDITOR_HEADER_HEIGHT, Math.round(parsed)));
-    });
+    const [headerPanelHeight, setHeaderPanelHeight] = React.useState(getDefaultHeaderPanelHeight);
     const headerResizeStartRef = React.useRef<{ y: number; height: number } | null>(null);
     const [isResizingHeaderPanel, setIsResizingHeaderPanel] = React.useState(false);
 
@@ -172,9 +182,9 @@ export const GridEditorPanel: React.FC = () => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
             // Reserve space for the rulers so they sit above/left of the map (never overlay it).
-            const containerWidth = Math.max(320, containerRef.current.clientWidth - 32 - RULER_SIZE_PX);
+            const containerWidth = Math.max(1, containerRef.current.clientWidth - 32 - RULER_SIZE_PX);
             const fallbackHeight = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.65) : 600;
-            const containerHeight = Math.max(240, ((containerRef.current.clientHeight || fallbackHeight) - 32 - RULER_SIZE_PX));
+            const containerHeight = Math.max(1, ((containerRef.current.clientHeight || fallbackHeight) - 32 - RULER_SIZE_PX));
 
             if (imageURL) {
                 if (!imageNaturalSize) return;
@@ -200,7 +210,7 @@ export const GridEditorPanel: React.FC = () => {
             } else {
                 // Without overlay, fit to container size
                 const calculatedCellSize = Math.floor(Math.min(containerWidth / cols, containerHeight / rows));
-                const clamped = Math.max(24, Math.min(calculatedCellSize, 80));
+                const clamped = Math.max(MIN_GRID_CELL_SIZE_PX, Math.min(calculatedCellSize, 80));
                 setCellWidth(clamped);
                 setCellHeight(clamped);
                 setDisplaySize({ width: clamped * cols, height: clamped * rows });
@@ -1163,7 +1173,7 @@ export const GridEditorPanel: React.FC = () => {
             <div className="min-h-0 flex-1">
                 <div
                     ref={containerRef}
-                    className="h-full min-h-[280px] overflow-auto rounded-xl border border-border/60 bg-background/20 p-1 [color-scheme:dark]"
+                    className="h-full min-h-[220px] overflow-auto rounded-xl border border-border/60 bg-background/20 p-1 [color-scheme:dark] sm:min-h-[280px]"
                     onWheel={onWheelZoom}
                 >
                     <div className="flex min-h-full min-w-full items-start justify-center px-0.5 pb-0.5">
