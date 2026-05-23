@@ -84,8 +84,8 @@ export function GameSprite2D({
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
-  const atlasGrid = useMemo(() => grid.map((r) => [...r]), [levelImageUrl]);
-  const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos.x, cavePos.y]);
+  const atlasGrid = useMemo(() => grid.map((r) => [...r]), [grid]);
+  const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
 
   // Mark board edges (modern + readable): a cell is on the edge if it is non-void and
   // at least one 4-neighbor is void or out-of-bounds.
@@ -377,7 +377,7 @@ export function GameSprite2D({
     return () => {
       cancelled = true;
     };
-  }, [levelImageUrl, rows, cols, goalCaveKeys, atlasGrid, playerStart?.x, playerStart?.y]);
+  }, [levelImageUrl, rows, cols, goalCaveKeys, atlasGrid, playerStart, grid]);
 
   const scale = useMemo(() => {
     // Keep semantics aligned with the existing % indicator: higher % = larger board.

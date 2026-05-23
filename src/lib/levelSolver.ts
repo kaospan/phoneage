@@ -376,7 +376,6 @@ async function solveLevel(
 
     // Yield to keep UI responsive if run in-browser.
     if (nodesExpanded % 1500 === 0) {
-      // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 0));
     }
 

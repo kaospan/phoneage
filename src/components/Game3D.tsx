@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { useEffect, useRef, useMemo, useLayoutEffect } from 'react';
@@ -30,6 +30,7 @@ interface Game3DProps {
 }
 
 type PlayerFacing = 'up' | 'right' | 'down' | 'left';
+type MeshPointerEvent = ThreeEvent<PointerEvent>;
 
 const playerRotationByFacing: Record<PlayerFacing, number> = {
   up: Math.PI,
@@ -394,7 +395,7 @@ const ArrowTile = ({
   isSelected?: boolean;
   hasSelection?: boolean;
   color: string;
-  onClick?: (e: any) => void;
+  onClick?: (e: MeshPointerEvent) => void;
   noiseMap?: THREE.Texture | null;
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
@@ -410,7 +411,7 @@ const ArrowTile = ({
     10: Math.PI / 2 // left - points in -X direction
   };
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: MeshPointerEvent) => {
     e.stopPropagation();
     touchStartTimeRef.current = Date.now();
 
@@ -422,7 +423,7 @@ const ArrowTile = ({
     }
   };
 
-  const handlePointerUp = (e: any) => {
+  const handlePointerUp = (e: MeshPointerEvent) => {
     e.stopPropagation();
 
     // Clear the timer
@@ -460,7 +461,7 @@ const ArrowTile = ({
     touchStartTimeRef.current = null;
   };
 
-  const handleDoubleClick = (e: any) => {
+  const handleDoubleClick = (e: MeshPointerEvent) => {
     e.stopPropagation();
     onClick?.(e);
   };
@@ -555,7 +556,7 @@ const BidirectionalArrowTile = ({
   isSelected?: boolean;
   hasSelection?: boolean;
   color: string;
-  onClick?: (e: any) => void;
+  onClick?: (e: MeshPointerEvent) => void;
   noiseMap?: THREE.Texture | null;
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
@@ -565,7 +566,7 @@ const BidirectionalArrowTile = ({
   const lastTapTimeRef = useRef<number>(0);
   const isVertical = direction === 11;
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: MeshPointerEvent) => {
     e.stopPropagation();
     touchStartTimeRef.current = Date.now();
 
@@ -577,7 +578,7 @@ const BidirectionalArrowTile = ({
     }
   };
 
-  const handlePointerUp = (e: any) => {
+  const handlePointerUp = (e: MeshPointerEvent) => {
     e.stopPropagation();
 
     // Clear the timer
@@ -615,7 +616,7 @@ const BidirectionalArrowTile = ({
     touchStartTimeRef.current = null;
   };
 
-  const handleDoubleClick = (e: any) => {
+  const handleDoubleClick = (e: MeshPointerEvent) => {
     e.stopPropagation();
     onClick?.(e);
   };
@@ -727,7 +728,7 @@ const OmnidirectionalArrowTile = ({
   isSelected?: boolean;
   hasSelection?: boolean;
   color: string;
-  onClick?: (e: any) => void;
+  onClick?: (e: MeshPointerEvent) => void;
   noiseMap?: THREE.Texture | null;
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
@@ -736,7 +737,7 @@ const OmnidirectionalArrowTile = ({
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: MeshPointerEvent) => {
     e.stopPropagation();
     touchStartTimeRef.current = Date.now();
 
@@ -748,7 +749,7 @@ const OmnidirectionalArrowTile = ({
     }
   };
 
-  const handlePointerUp = (e: any) => {
+  const handlePointerUp = (e: MeshPointerEvent) => {
     e.stopPropagation();
 
     // Clear the timer
@@ -786,7 +787,7 @@ const OmnidirectionalArrowTile = ({
     touchStartTimeRef.current = null;
   };
 
-  const handleDoubleClick = (e: any) => {
+  const handleDoubleClick = (e: MeshPointerEvent) => {
     e.stopPropagation();
     onClick?.(e);
   };
@@ -1210,7 +1211,7 @@ const Player = ({
     if (rightEyeRef.current) rightEyeRef.current.scale.y = blink;
   });
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: MeshPointerEvent) => {
     e.stopPropagation();
     const now = Date.now();
     const timeSinceLastTap = now - lastTapTimeRef.current;
@@ -1779,7 +1780,7 @@ export const Game3D = ({
   const focusPlayer = players.find((p) => p.id === localPlayerId) ?? players[0];
   const focusPlayerPos = focusPlayer?.pos ?? { x: 0, y: 0 };
   const focusPlayerFacing = focusPlayer?.facing ?? 'down';
-  const goalCaves = useMemo(() => findGoalCaves(grid, cavePos), [grid, cavePos.x, cavePos.y]);
+  const goalCaves = useMemo(() => findGoalCaves(grid, cavePos), [grid, cavePos]);
 
   // Camera settings based on view mode
   const is2D = viewMode === '2d';
@@ -1884,10 +1885,10 @@ export const Game3D = ({
     const crackRim = highlight.clone().lerp(floor, 0.45);
 
     const drawBresenham = (x0: number, y0: number, x1: number, y1: number, plot: (x: number, y: number) => void) => {
-      let dx = Math.abs(x1 - x0);
-      let sx = x0 < x1 ? 1 : -1;
-      let dy = -Math.abs(y1 - y0);
-      let sy = y0 < y1 ? 1 : -1;
+      const dx = Math.abs(x1 - x0);
+      const sx = x0 < x1 ? 1 : -1;
+      const dy = -Math.abs(y1 - y0);
+      const sy = y0 < y1 ? 1 : -1;
       let err = dx + dy;
       let x = x0;
       let y = y0;
