@@ -17,7 +17,7 @@ import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT }
 import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperMetricPill, MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
-export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
+export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; resizable?: boolean; }> = ({ width, onStartResize, min, max, resizable = true }) => {
     type IdleWindow = Window & typeof globalThis & {
         requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
         cancelIdleCallback?: (id: number) => void;
@@ -902,11 +902,13 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 </TabsContent>
             </Tabs>
 
-            <MapperResizeHandle
-                side="right"
-                onMouseDown={onStartResize}
-                title="Resize control deck"
-            />
+            {resizable ? (
+                <MapperResizeHandle
+                    side="right"
+                    onMouseDown={onStartResize}
+                    title="Resize control deck"
+                />
+            ) : null}
         </MapperPanelFrame>
     );
 };
