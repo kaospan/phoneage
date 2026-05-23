@@ -1,5 +1,6 @@
 import { getAllLevels, isPlaceholderGrid } from "@/data/levels";
 import { getArrowDirections, isArrowCell } from "@/game/arrows";
+import { findGoalCaves } from "@/game/caves";
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from "@/game/glide";
 import { getPairedTeleport, TELEPORT_CELL } from "@/game/teleport";
 import type { CellType, KeyInventory, Position } from "@/game/types";
@@ -311,11 +312,12 @@ function fmtAction(a: Action): string {
 async function solveLevel(
   levelId: number,
   start: SolveState,
-  cavePos: Position,
+  goalCaves: Position[],
   opts: Required<Pick<SolveOptions, "maxMsPerLevel" | "maxNodesPerLevel" | "maxDepth">> & Pick<SolveOptions, "onProgress">
 ): Promise<LevelSolution> {
   const t0 = performance.now();
   const startKey = stateKey(start);
+  const goalKeys = new Set(goalCaves.map((goal) => `${goal.x},${goal.y}`));
 
   const prev = new Map<string, { p: string; a: Action }>();
   const depth = new Map<string, number>();
@@ -325,7 +327,7 @@ async function solveLevel(
   let nodesExpanded = 0;
   let idx = 0;
 
-  const isGoal = (s: SolveState) => s.playerPos.x === cavePos.x && s.playerPos.y === cavePos.y;
+  const isGoal = (s: SolveState) => goalKeys.has(`${s.playerPos.x},${s.playerPos.y}`);
 
   if (isGoal(start)) {
     return {
@@ -499,14 +501,14 @@ export async function runSolveAllLevels(options: SolveOptions = {}): Promise<{
       continue;
     }
 
-    const cave = lvl.cavePos ?? { x: 0, y: 0 };
-    if (!Number.isFinite(cave.x) || !Number.isFinite(cave.y)) {
+    const goalCaves = findGoalCaves(grid, lvl.cavePos);
+    if (goalCaves.length === 0) {
       results.push({
         levelId: lvl.id,
         solved: false,
         moves: null,
         actions: [],
-        reason: "Missing cave position",
+        reason: "Missing goal cave tile",
         nodesExpanded: 0,
         ms: 0,
       });
@@ -523,7 +525,7 @@ export async function runSolveAllLevels(options: SolveOptions = {}): Promise<{
       breakableRockStates: new Map(),
     };
 
-    const solved = await solveLevel(lvl.id, start, cave, { ...opts, onProgress });
+    const solved = await solveLevel(lvl.id, start, goalCaves, { ...opts, onProgress });
     results.push(solved);
 
     if (solved.solved) {
@@ -601,7 +603,7 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
     inventory: { red: false, green: false },
     breakableRockStates: new Map(),
   };
-  return await solveLevel(levelId, start, { ...lvl.cavePos }, {
+  return await solveLevel(levelId, start, findGoalCaves(grid, lvl.cavePos), {
     maxMsPerLevel: options.maxMsPerLevel ?? 15000,
     maxNodesPerLevel: options.maxNodesPerLevel ?? 200_000,
     maxDepth: options.maxDepth ?? 300,
