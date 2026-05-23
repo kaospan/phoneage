@@ -8,6 +8,7 @@ import { UI_SETTINGS_UPDATED_EVENT, getShowCoordsOverlay, setShowCoordsOverlay }
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
+import { buildGoalCaveKeySet, findGoalCaves } from "@/game/caves";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
 import { LEVEL_OVERRIDES_UPDATED_EVENT, saveLevelOverride } from "@/lib/levelOverrides";
@@ -68,6 +69,7 @@ interface SimulationState {
   breakableRockStates: Map<string, boolean>;
   players: Map<PlayerId, SimPlayer>;
   arrowGlides: ArrowGlide[];
+  goalCaveKeys: Set<string>;
   cavePos: Position;
   tick: number;
 }
@@ -634,7 +636,8 @@ export const PuzzleGame = () => {
     const applyLevelState = useCallback((level: LevelData) => {
       const gridCopy = level.grid.map(row => [...row]) as CellType[][];
       const baseGridCopy = buildBaseGrid(gridCopy);
-      const cave = { ...level.cavePos };
+      const goalCaves = findGoalCaves(gridCopy, level.cavePos);
+      const cave = goalCaves[0] ?? { ...level.cavePos };
       const localId = localPlayerIdRef.current;
       const localPlayer: SimPlayer = {
         id: localId,
@@ -660,6 +663,7 @@ export const PuzzleGame = () => {
         breakableRockStates: new Map(),
         players,
         arrowGlides: [],
+        goalCaveKeys: buildGoalCaveKeySet(gridCopy, cave),
         cavePos: cave,
         tick: 0
       };
@@ -1168,7 +1172,7 @@ export const PuzzleGame = () => {
       });
 
       const localPlayer = sim.players.get(localPlayerIdRef.current);
-      if (localPlayer && localPlayer.pos.x === sim.cavePos.x && localPlayer.pos.y === sim.cavePos.y && !localComplete) {
+      if (localPlayer && sim.goalCaveKeys.has(`${localPlayer.pos.x},${localPlayer.pos.y}`) && !localComplete) {
         localComplete = true;
         const clearTimeLeftSeconds = timerEnabledRef.current
           ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))

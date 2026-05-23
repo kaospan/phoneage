@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { themes, type ColorTheme } from '@/data/levels';
 import { isArrowCell } from '@/game/arrows';
+import { findGoalCaves } from '@/game/caves';
 import { createClockIconCanvas, createKeyIconCanvas, createVortexIconCanvas } from '@/lib/canvasIcons';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
@@ -1778,6 +1779,7 @@ export const Game3D = ({
   const focusPlayer = players.find((p) => p.id === localPlayerId) ?? players[0];
   const focusPlayerPos = focusPlayer?.pos ?? { x: 0, y: 0 };
   const focusPlayerFacing = focusPlayer?.facing ?? 'down';
+  const goalCaves = useMemo(() => findGoalCaves(grid, cavePos), [grid, cavePos.x, cavePos.y]);
 
   // Camera settings based on view mode
   const is2D = viewMode === '2d';
@@ -2524,8 +2526,14 @@ export const Game3D = ({
           return null;
         })}
 
-        {/* Cave */}
-        <Cave position={[cavePos.x + offsetX, 0.05, cavePos.y + offsetZ]} noiseMap={noiseTexture} />
+        {/* Goal caves */}
+        {goalCaves.map((goalCave) => (
+          <Cave
+            key={`goal-cave-${goalCave.x}-${goalCave.y}`}
+            position={[goalCave.x + offsetX, 0.05, goalCave.y + offsetZ]}
+            noiseMap={noiseTexture}
+          />
+        ))}
 
         {/* Players */}
         {players.map((player) => {
