@@ -595,6 +595,18 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
       ms: 0,
     };
   }
+  const goalCaves = findGoalCaves(grid, lvl.cavePos);
+  if (goalCaves.length === 0) {
+    return {
+      levelId,
+      solved: false,
+      moves: null,
+      actions: [],
+      reason: "Missing goal cave tile",
+      nodesExpanded: 0,
+      ms: 0,
+    };
+  }
 
   const start: SolveState = {
     grid: grid.map((r) => r.slice()) as CellType[][],
@@ -603,7 +615,7 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
     inventory: { red: false, green: false },
     breakableRockStates: new Map(),
   };
-  return await solveLevel(levelId, start, findGoalCaves(grid, lvl.cavePos), {
+  return await solveLevel(levelId, start, goalCaves, {
     maxMsPerLevel: options.maxMsPerLevel ?? 15000,
     maxNodesPerLevel: options.maxNodesPerLevel ?? 200_000,
     maxDepth: options.maxDepth ?? 300,
