@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getAllLevels, type ColorTheme, type LevelProvenance } from '@/data/levels';
+import { getAllLevels, isPlaceholderGrid, type ColorTheme, type LevelProvenance } from '@/data/levels';
 import { emptyGrid, formatGridRowsOneLine, voidGrid } from '@/lib/levelgrid';
 import { detectGridLines } from './gridDetection';
 import { LevelMapperContext, type BulkContextType, type LevelMapperContextValue } from './LevelMapperStore';
+import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS } from './mapperDefaults';
 import {
     addColumnLeft as addColLeft,
     addColumnRight as addColRight,
@@ -57,12 +58,6 @@ const MAX_AUTO_DETECT_CELLS = 320;
 
 // Types
 // LevelMapperContextValue lives in LevelMapperStore.ts (to keep Fast Refresh stable)
-
-const isPlaceholderGrid = (levelGrid?: number[][]) => {
-    if (!levelGrid || levelGrid.length === 0) return true;
-    if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
-    return levelGrid.every((row) => row.every((cell) => cell === 5));
-};
 
 const reshapeGridPreservingOverlap = (prev: number[][], nextRows: number, nextCols: number, fill = 5) => {
     const next = Array.from({ length: nextRows }, () => Array(nextCols).fill(fill));
@@ -232,10 +227,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         const canvasRef = useRef<HTMLCanvasElement | null>(null);
         // Default mapper layout is 12x20 unless a level has a saved manual layout override.
-        const [rows, setRows] = useState(12);
-        const [cols, setCols] = useState(20);
+        const [rows, setRows] = useState(DEFAULT_MAPPER_ROWS);
+        const [cols, setCols] = useState(DEFAULT_MAPPER_COLS);
         const [activeTile, setActiveTile] = useState(0);
-        const [grid, setGrid] = useState<number[][]>(() => emptyGrid(12, 20));
+        const [grid, setGrid] = useState<number[][]>(() => emptyGrid(DEFAULT_MAPPER_ROWS, DEFAULT_MAPPER_COLS));
         const [hourglassBonusByCell, setHourglassBonusByCell] = useState<Record<string, number>>(() => {
             if (typeof window === 'undefined') return {};
             try {
@@ -243,7 +238,11 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 if (!raw) return {};
                 const parsed = JSON.parse(raw) as unknown;
                 if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-                return clampHourglassBonusByCell(parsed as Record<string, number>, 12, 20);
+                return clampHourglassBonusByCell(
+                    parsed as Record<string, number>,
+                    DEFAULT_MAPPER_ROWS,
+                    DEFAULT_MAPPER_COLS
+                );
             } catch {
                 return {};
             }
@@ -909,14 +908,15 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
                 const detectionHints = await loadDetectionHints();
                 // Primary path: deterministic lattice fit learned from corrected levels 1–35.
+                const preservePlaceholderCounts = isPlaceholderGrid(grid);
                 const detected =
                     (await detectDeterministicGridWithTraining(imageCanvas, {
-                        useCurrentCounts: false,
+                        useCurrentCounts: preservePlaceholderCounts,
                         currentRows: rows,
                         currentCols: cols,
                         hints: detectionHints,
                     })) ??
-                    detectGridLines(imageCanvas, false, rows, cols, detectionHints);
+                    detectGridLines(imageCanvas, preservePlaceholderCounts, rows, cols, detectionHints);
                 if (!detected) {
                     setLastGridDetection(null);
                     console.error('❌ Grid detection failed');

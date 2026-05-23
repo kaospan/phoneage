@@ -1,6 +1,7 @@
-import { getAllLevels, type ColorTheme, type LevelProvenance } from '@/data/levels';
+import { getAllLevels, isPlaceholderGrid, type ColorTheme, type LevelProvenance } from '@/data/levels';
 import { voidGrid } from '@/lib/levelgrid';
 import { normalizeMapperImage } from './imageNormalization';
+import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { getLevelImageUrl } from './levelImageStore';
 import { getDefaultOverlayImageScale } from './overlayDefaults';
 import {
@@ -36,12 +37,6 @@ export interface ResolvedLevelMapperBaseline {
   gridFrameWidth: number | null;
   gridFrameHeight: number | null;
 }
-
-const isPlaceholderGrid = (levelGrid?: number[][]) => {
-  if (!levelGrid || levelGrid.length === 0) return true;
-  if (levelGrid.length === 1 && levelGrid[0]?.length === 1 && levelGrid[0][0] === 5) return true;
-  return levelGrid.every((row) => row.every((cell) => cell === 5));
-};
 
 const cloneGrid = (grid: number[][]) => grid.map((row) => [...row]);
 
@@ -104,11 +99,13 @@ export const resolveLevelMapperBaseline = async (
   }
 
   const layout = level.autoBuild && isPlaceholderGrid(level.grid)
-    ? loadLevelLayoutOverride(level.id) ?? { rows: 12, cols: 20 }
+    ? loadLevelLayoutOverride(level.id) ?? { rows: DEFAULT_MAPPER_ROWS, cols: DEFAULT_MAPPER_COLS }
     : null;
   const editableGrid =
     level.autoBuild && isPlaceholderGrid(level.grid)
-      ? voidGrid(layout?.rows ?? 12, layout?.cols ?? 20)
+      ? layout
+        ? voidGrid(layout.rows, layout.cols)
+        : createDefaultMapperVoidGrid()
       : cloneGrid(level.grid);
   const savedScale = loadLevelImageScale(level.id);
   const defaultScale = getDefaultOverlayImageScale(level.id);

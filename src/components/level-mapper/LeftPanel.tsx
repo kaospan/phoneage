@@ -15,6 +15,7 @@ import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLev
 import { putLevelImage } from './levelImageStore';
 import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT } from '@/lib/uiSettings';
 import { resolveLevelMapperBaseline } from './levelBaseline';
+import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperMetricPill, MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
     type IdleWindow = Window & typeof globalThis & {
@@ -38,7 +39,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved, currentLevelProvenance,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
-        setLoadedSnapshot, resetToLoadedSnapshot
+        setLoadedSnapshot, resetToLoadedSnapshot, replaceGridShape
     } = useLevelMapper();
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -336,7 +337,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         variant="outline"
                         className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
                         onClick={() => {
-                            setGrid(voidGrid(rows, cols));
+                            replaceGridShape(createDefaultMapperVoidGrid());
                             setImageURL(null);
                             setHourglassBonusByCell({});
                             setPlayerStart(null);
@@ -589,7 +590,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                     if (idx === -1) {
                                         const newLevel: Level = {
                                             id: levelId,
-                                            grid: voidGrid(12, 20),
+                                            grid: voidGrid(DEFAULT_MAPPER_ROWS, DEFAULT_MAPPER_COLS),
                                             playerStart: { x: 0, y: 0 },
                                             cavePos: { x: 0, y: 0 },
                                             theme: guessThemeForLevelId(levelId),
@@ -659,7 +660,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 min={1}
                                 value={rows}
                                 onChange={(e) => {
-                                    const next = Math.max(1, parseInt(e.target.value || '1', 10));
+                                    const next = Math.max(1, parseInt(e.target.value || String(DEFAULT_MAPPER_ROWS), 10));
                                     if (Number.isFinite(next) && next !== rows) setIsSaved(false);
                                     setRows(next);
                                 }}
@@ -671,7 +672,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 min={1}
                                 value={cols}
                                 onChange={(e) => {
-                                    const next = Math.max(1, parseInt(e.target.value || '1', 10));
+                                    const next = Math.max(1, parseInt(e.target.value || String(DEFAULT_MAPPER_COLS), 10));
                                     if (Number.isFinite(next) && next !== cols) setIsSaved(false);
                                     setCols(next);
                                 }}
