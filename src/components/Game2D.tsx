@@ -1,3 +1,5 @@
+import { buildGoalCaveKeySet } from "@/game/caves";
+
 interface Game2DProps {
     grid: number[][];
     playerPos: { x: number; y: number };
@@ -8,6 +10,8 @@ interface Game2DProps {
   }
   
   export const Game2D = ({ grid, playerPos, cavePos, selectedArrow, onArrowClick, onCancelSelection }: Game2DProps) => {
+    const goalCaveKeys = buildGoalCaveKeySet(grid, cavePos);
+
     const getCellDisplay = (cell: number, isPlayer: boolean, isCave: boolean) => {
       if (isPlayer) return "🦖";
       if (isCave) return "🕳️";
@@ -73,7 +77,7 @@ interface Game2DProps {
             <div key={y} className="flex gap-1">
               {row.map((cell, x) => {
                 const isPlayer = playerPos.x === x && playerPos.y === y;
-                const isCave = cavePos.x === x && cavePos.y === y;
+                const isCave = goalCaveKeys.has(`${x},${y}`);
                 const isArrow = (cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13;
                 const isSelectedArrow = selectedArrow?.x === x && selectedArrow?.y === y;
                 const cellColor = isCave ? "bg-emerald-700" : getCellColor(cell);

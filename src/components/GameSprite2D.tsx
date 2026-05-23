@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
 import { createClockIconDataUrl, createKeyIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
+import { buildGoalCaveKeySet } from "@/game/caves";
 import { referenceSpriteUrls } from "@/data/assetCatalog";
 import { detectGridLines } from "@/components/level-mapper/gridDetection";
 import { getAlignmentHints } from "@/components/level-mapper/alignmentProfile";
@@ -84,6 +85,7 @@ export function GameSprite2D({
   const cols = grid[0]?.length ?? 0;
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
   const atlasGrid = useMemo(() => grid.map((r) => [...r]), [levelImageUrl]);
+  const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos.x, cavePos.y]);
 
   // Mark board edges (modern + readable): a cell is on the edge if it is non-void and
   // at least one 4-neighbor is void or out-of-bounds.
@@ -94,13 +96,13 @@ export function GameSprite2D({
       if (y < 0 || y >= rows) return true;
       if (x < 0 || x >= cols) return true;
       // Cave is always treated as non-void for edge purposes.
-      if (cavePos.x === x && cavePos.y === y) return false;
+      if (goalCaveKeys.has(`${x},${y}`)) return false;
       return grid[y]?.[x] === 5;
     };
 
     return grid.map((row, y) =>
       row.map((cell, x) => {
-        const tileType = cavePos.x === x && cavePos.y === y ? 3 : cell;
+        const tileType = goalCaveKeys.has(`${x},${y}`) ? 3 : cell;
         if (tileType === 5) return null;
         const top = isVoidAt(x, y - 1);
         const right = isVoidAt(x + 1, y);
@@ -110,7 +112,7 @@ export function GameSprite2D({
         return { top, right, bottom, left, any };
       })
     );
-  }, [grid, rows, cols, cavePos.x, cavePos.y]);
+  }, [goalCaveKeys, grid, rows, cols]);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,7 +198,7 @@ export function GameSprite2D({
             for (let c = 0; c < cols; c += 1) {
               const raw = atlasGrid[r]?.[c];
               if (raw === undefined) continue;
-              const tileType = cavePos.x === c && cavePos.y === r ? 3 : raw;
+              const tileType = goalCaveKeys.has(`${c},${r}`) ? 3 : raw;
               // Void is handled separately in sprite mode (transparent).
               if (tileType === 5) continue;
               // Start cave (18) is synthetic; never sample it from the screenshot or we'll capture the hero.
@@ -268,7 +270,7 @@ export function GameSprite2D({
           const isFloorAt = (x: number, y: number) => {
             const v = grid[y]?.[x];
             if (v == null) return false;
-            if (x === cavePos.x && y === cavePos.y) return false;
+            if (goalCaveKeys.has(`${x},${y}`)) return false;
             // Start cave (18) is synthetic; do not treat it as a clean floor sample.
             if (v === 18) return false;
             return v === 0;
@@ -375,7 +377,7 @@ export function GameSprite2D({
     return () => {
       cancelled = true;
     };
-  }, [levelImageUrl, rows, cols, cavePos.x, cavePos.y, atlasGrid, playerStart?.x, playerStart?.y]);
+  }, [levelImageUrl, rows, cols, goalCaveKeys, atlasGrid, playerStart?.x, playerStart?.y]);
 
   const scale = useMemo(() => {
     // Keep semantics aligned with the existing % indicator: higher % = larger board.
@@ -453,7 +455,7 @@ export function GameSprite2D({
         >
           {grid.map((row, y) =>
             row.map((cell, x) => {
-              const isCave = cavePos.x === x && cavePos.y === y;
+              const isCave = goalCaveKeys.has(`${x},${y}`);
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
               const tileType = isCave ? 3 : cell;
               // If the player is standing on the start-marker cave (18), render the base tile as floor
