@@ -154,9 +154,9 @@ const LayoutInner: React.FC = () => {
     }, [isSaved, saveFromUnsavedToast, showUnsavedBanner]);
 
     return (
-        <div className="relative min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
+        <div className="relative h-full min-h-0 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
             <div className="pointer-events-none absolute inset-0 opacity-60" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '26px 26px' }} />
-            <div className="relative mx-auto flex min-h-dvh w-full max-w-[1880px] flex-col gap-2 p-2 sm:gap-3 sm:p-3">
+            <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1880px] flex-col gap-2 p-2 sm:gap-3 sm:p-3">
                 <div className="rounded-[28px] border border-white/10 bg-stone-950/88 px-4 py-3 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-5 sm:py-4">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                         <div className="min-w-0">
@@ -221,9 +221,9 @@ const LayoutInner: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="relative flex min-h-0 flex-1 gap-3">
+                <div className="relative flex h-full min-h-0 flex-1 gap-3 overflow-hidden">
                     {!isCompactViewport && !leftCollapsed ? (
-                        <div className="relative min-h-0 shrink-0 transition-all duration-300">
+                        <div className="relative flex h-full min-h-0 shrink-0 transition-all duration-300">
                             <LeftPanel width={leftPanelWidth} onStartResize={() => { isResizingLeftRef.current = true; }} min={leftPanelMin} max={leftPanelMax} />
                             <button
                                 onClick={() => setLeftCollapsed(true)}
@@ -260,7 +260,7 @@ const LayoutInner: React.FC = () => {
                     <GridEditorPanel />
 
                     {!isCompactViewport && !rightCollapsed ? (
-                        <div className="relative min-h-0 shrink-0 transition-all duration-300">
+                        <div className="relative flex h-full min-h-0 shrink-0 transition-all duration-300">
                             <JsonPanel width={rightPanelWidth} onStartResize={() => { isResizingRightRef.current = true; }} min={rightPanelMin} max={rightPanelMax} />
                             <button
                                 onClick={() => setRightCollapsed(true)}
@@ -303,7 +303,7 @@ const LayoutInner: React.FC = () => {
                                 aria-label="Close control deck"
                             />
                             <div className="absolute inset-y-0 left-0 z-40 w-full max-w-[min(92vw,420px)] pr-2 sm:pr-3">
-                                <div className="relative h-full">
+                                <div className="relative h-full min-h-0">
                                     <LeftPanel
                                         width={compactPanelWidth}
                                         onStartResize={() => { /* compact overlay is fixed width */ }}
@@ -332,7 +332,7 @@ const LayoutInner: React.FC = () => {
                                 aria-label="Close inspector"
                             />
                             <div className="absolute inset-y-0 right-0 z-40 w-full max-w-[min(92vw,420px)] pl-2 sm:pl-3">
-                                <div className="relative h-full">
+                                <div className="relative h-full min-h-0">
                                     <JsonPanel
                                         width={compactPanelWidth}
                                         onStartResize={() => { /* compact overlay is fixed width */ }}
