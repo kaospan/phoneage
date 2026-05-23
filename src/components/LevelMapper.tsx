@@ -10,6 +10,8 @@ import { TILE_TYPES } from '@/lib/levelgrid';
 import { ChevronLeft, ChevronRight, Image as ImageIcon, Layers3, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 
+const MAPPER_COMPACT_VIEWPORT_BREAKPOINT = 1280;
+
 const THEME_LABELS: Record<string, string> = {
     default: 'Default (Brown)',
     ocean: 'Ocean (Blue)',
@@ -66,6 +68,14 @@ const LayoutInner: React.FC = () => {
         })();
     }, [saveChanges]);
 
+    const defaultCompactViewport =
+        typeof window !== 'undefined' ? window.innerWidth < MAPPER_COMPACT_VIEWPORT_BREAKPOINT : false;
+    const [viewportWidth, setViewportWidth] = useState(() =>
+        typeof window !== 'undefined' ? window.innerWidth : 1440
+    );
+    const isCompactViewport = viewportWidth < MAPPER_COMPACT_VIEWPORT_BREAKPOINT;
+    const compactPanelWidth = Math.min(420, Math.max(280, viewportWidth - 28));
+
     // Local panel widths (UI only)
     const [leftPanelWidth, setLeftPanelWidth] = useState(292);
     const leftPanelMin = 252; const leftPanelMax = 640;
@@ -75,18 +85,33 @@ const LayoutInner: React.FC = () => {
     const isResizingRightRef = useRef(false);
 
     // Collapse/expand state
-    const [leftCollapsed, setLeftCollapsed] = useState(false);
+    const [leftCollapsed, setLeftCollapsed] = useState(defaultCompactViewport);
     const [rightCollapsed, setRightCollapsed] = useState(true);
+    const compactViewportRef = useRef(defaultCompactViewport);
     const currentLevel = importLevelIndex !== null ? allLevels[importLevelIndex] ?? null : null;
     const selectedTile = TILE_TYPES.find((tile) => tile.id === activeTile) ?? TILE_TYPES[0];
     const themeLabel = THEME_LABELS[theme || 'default'] ?? 'Default (Brown)';
-    const currentLevelLabel = currentLevel ? `Level ${currentLevel.id}` : 'New Draft';
+    const currentLevelLabel = currentLevel ? `Level ${currentLevel.id}` : 'Mapper';
     const provenanceLabel =
         currentLevelProvenance === 'user-edited'
             ? 'User'
             : currentLevelProvenance === 'ai-detected'
                 ? 'AI'
                 : 'Default';
+
+    useEffect(() => {
+        const onResize = () => setViewportWidth(window.innerWidth);
+        window.addEventListener('resize', onResize, { passive: true });
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    useEffect(() => {
+        if (!compactViewportRef.current && isCompactViewport) {
+            setLeftCollapsed(true);
+            setRightCollapsed(true);
+        }
+        compactViewportRef.current = isCompactViewport;
+    }, [isCompactViewport]);
 
     useEffect(() => {
         const onMove = (e: MouseEvent) => {
@@ -129,10 +154,10 @@ const LayoutInner: React.FC = () => {
     }, [isSaved, saveFromUnsavedToast, showUnsavedBanner]);
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
+        <div className="relative min-h-dvh overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
             <div className="pointer-events-none absolute inset-0 opacity-60" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '26px 26px' }} />
-            <div className="relative mx-auto flex min-h-screen w-full max-w-[1880px] flex-col gap-3 p-3">
-                <div className="rounded-[28px] border border-white/10 bg-stone-950/88 px-5 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+            <div className="relative mx-auto flex min-h-dvh w-full max-w-[1880px] flex-col gap-2 p-2 sm:gap-3 sm:p-3">
+                <div className="rounded-[28px] border border-white/10 bg-stone-950/88 px-4 py-3 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-5 sm:py-4">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                         <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.24em] text-stone-400">
@@ -157,10 +182,6 @@ const LayoutInner: React.FC = () => {
                                     {isSaved ? 'Saved' : 'Unsaved'}
                                 </div>
                             </div>
-                            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-stone-400">
-                                Screenshot ingestion, grid alignment, sprite capture, and JSON inspection now sit in one cleaner workspace.
-                                The editing engine stays intact; the shell is simplified around it.
-                            </p>
                         </div>
 
                         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
@@ -188,7 +209,7 @@ const LayoutInner: React.FC = () => {
                             />
                         </div>
                     </div>
-                    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
                         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                             <Layers3 className="h-3.5 w-3.5 text-sky-300" />
                             Compare target: {compareLevel ? `Level ${compareLevel.id}` : 'None'}
@@ -201,7 +222,7 @@ const LayoutInner: React.FC = () => {
                 </div>
 
                 <div className="relative flex min-h-0 flex-1 gap-3">
-                    {!leftCollapsed ? (
+                    {!isCompactViewport && !leftCollapsed ? (
                         <div className="relative min-h-0 shrink-0 transition-all duration-300">
                             <LeftPanel width={leftPanelWidth} onStartResize={() => { isResizingLeftRef.current = true; }} min={leftPanelMin} max={leftPanelMax} />
                             <button
@@ -212,7 +233,7 @@ const LayoutInner: React.FC = () => {
                                 <ChevronLeft className="h-4 w-4" />
                             </button>
                         </div>
-                    ) : (
+                    ) : !isCompactViewport ? (
                         <MapperDockButton
                             title="Controls"
                             description="Re-open the level, screenshot, and tile workflow deck."
@@ -220,11 +241,25 @@ const LayoutInner: React.FC = () => {
                             icon={<ChevronRight className="h-4 w-4" />}
                             align="left"
                         />
+                    ) : null}
+
+                    {isCompactViewport && leftCollapsed && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setRightCollapsed(true);
+                                setLeftCollapsed(false);
+                            }}
+                            className="absolute left-2 top-2 z-30 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-stone-950/92 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-stone-100 shadow-lg backdrop-blur-xl transition-colors hover:border-amber-200/30"
+                        >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                            Controls
+                        </button>
                     )}
 
                     <GridEditorPanel />
 
-                    {!rightCollapsed ? (
+                    {!isCompactViewport && !rightCollapsed ? (
                         <div className="relative min-h-0 shrink-0 transition-all duration-300">
                             <JsonPanel width={rightPanelWidth} onStartResize={() => { isResizingRightRef.current = true; }} min={rightPanelMin} max={rightPanelMax} />
                             <button
@@ -235,7 +270,7 @@ const LayoutInner: React.FC = () => {
                                 <ChevronRight className="h-4 w-4" />
                             </button>
                         </div>
-                    ) : (
+                    ) : !isCompactViewport ? (
                         <MapperDockButton
                             title="Inspector"
                             description="Bring back the JSON, current grid, and saved snapshot view."
@@ -243,6 +278,78 @@ const LayoutInner: React.FC = () => {
                             icon={<ChevronLeft className="h-4 w-4" />}
                             align="right"
                         />
+                    ) : null}
+
+                    {isCompactViewport && rightCollapsed && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setLeftCollapsed(true);
+                                setRightCollapsed(false);
+                            }}
+                            className="absolute right-2 top-2 z-30 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-stone-950/92 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-stone-100 shadow-lg backdrop-blur-xl transition-colors hover:border-sky-200/30"
+                        >
+                            Inspector
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                        </button>
+                    )}
+
+                    {isCompactViewport && !leftCollapsed && (
+                        <>
+                            <button
+                                type="button"
+                                className="absolute inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
+                                onClick={() => setLeftCollapsed(true)}
+                                aria-label="Close control deck"
+                            />
+                            <div className="absolute inset-y-0 left-0 z-40 w-full max-w-[min(92vw,420px)] pr-2 sm:pr-3">
+                                <div className="relative h-full">
+                                    <LeftPanel
+                                        width={compactPanelWidth}
+                                        onStartResize={() => { /* compact overlay is fixed width */ }}
+                                        min={compactPanelWidth}
+                                        max={compactPanelWidth}
+                                        resizable={false}
+                                    />
+                                    <button
+                                        onClick={() => setLeftCollapsed(true)}
+                                        className="absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-amber-200/30 hover:text-stone-50"
+                                        title="Close control deck"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {isCompactViewport && !rightCollapsed && (
+                        <>
+                            <button
+                                type="button"
+                                className="absolute inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
+                                onClick={() => setRightCollapsed(true)}
+                                aria-label="Close inspector"
+                            />
+                            <div className="absolute inset-y-0 right-0 z-40 w-full max-w-[min(92vw,420px)] pl-2 sm:pl-3">
+                                <div className="relative h-full">
+                                    <JsonPanel
+                                        width={compactPanelWidth}
+                                        onStartResize={() => { /* compact overlay is fixed width */ }}
+                                        min={compactPanelWidth}
+                                        max={compactPanelWidth}
+                                        resizable={false}
+                                    />
+                                    <button
+                                        onClick={() => setRightCollapsed(true)}
+                                        className="absolute left-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-sky-200/30 hover:text-stone-50"
+                                        title="Close inspector"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </>
                     )}
                 </div>
             </div>
