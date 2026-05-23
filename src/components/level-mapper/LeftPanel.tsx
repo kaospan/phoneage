@@ -6,7 +6,7 @@ import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SpriteCapture } from './SpriteCapture';
 import { CellReferenceManager } from './CellReferenceManager';
-import { themes, type ColorTheme } from '@/data/levels';
+import { themes, type ColorTheme, type Level } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
 import { detectGridLines } from './gridDetection';
 import { getAlignmentHints } from './alignmentProfile';
@@ -15,7 +15,13 @@ import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLev
 import { putLevelImage } from './levelImageStore';
 import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT } from '@/lib/uiSettings';
 import { resolveLevelMapperBaseline } from './levelBaseline';
+import { MapperMetricPill, MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; }> = ({ width, onStartResize, min, max }) => {
+    type IdleWindow = Window & typeof globalThis & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+        cancelIdleCallback?: (id: number) => void;
+    };
+
     const {
         rows, cols, setRows, setCols,
         importLevelIndex, setImportLevelIndex,
@@ -69,6 +75,21 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             : currentLevelProvenance === 'ai-detected'
                 ? 'AI'
                 : 'Default';
+    const selectedTile = TILE_TYPES.find((tile) => tile.id === activeTile) ?? TILE_TYPES[0];
+    const currentThemeKey = theme || 'default';
+    const themePreview = themes[currentThemeKey]?.floor ?? themes.default.floor;
+    const canGoPrev = importLevelIndex !== null && importLevelIndex > 0;
+    const canGoNext = importLevelIndex !== null && importLevelIndex < allLevels.length - 1;
+    const boardShapeLabel = `${rows} × ${cols}`;
+    const imageStatusLabel = imageURL ? (overlayEnabled ? 'Overlay Active' : 'Image Loaded') : 'No Image';
+    const tileFitSummary = imageURL
+        ? tileFitStatus === 'detecting'
+            ? 'Measuring screenshot tile size...'
+            : tileFit
+                ? `Detected floor tile ~${Math.round(tileFit.cellWidth)}×${Math.round(tileFit.cellHeight)}px across ${tileFit.cols}×${tileFit.rows}`
+                : 'No reliable floor-tile measurement yet.'
+        : 'Upload a screenshot to enable alignment and scan tools.';
+    const triggerFileUpload = () => fileInputRef.current?.click();
 
     useEffect(() => {
         const refresh = () => setShowCoordsOverlayState(getShowCoordsOverlay());
@@ -146,8 +167,9 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             }
         };
 
-        const idle = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: { timeout?: number }) => number);
-        const cancelIdle = (window as any).cancelIdleCallback as undefined | ((id: number) => void);
+        const idleWindow = window as IdleWindow;
+        const idle = idleWindow.requestIdleCallback;
+        const cancelIdle = idleWindow.cancelIdleCallback;
         let handle: number | null = null;
         if (idle) {
             handle = idle(() => { void run(); }, { timeout: 450 });
@@ -239,60 +261,80 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     };
 
     return (
-        <div
-            className="relative flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm lg:w-auto"
+        <MapperPanelFrame
+            className="shrink-0 lg:w-auto"
             style={{ width, minWidth: min, maxWidth: max, maxHeight: '100%' }}
         >
-            {/* File Upload - Always visible across all tabs */}
-            <div className="mb-2 shrink-0 border-b border-border/60 pb-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="text-sm"
-                        onChange={async (e) => {
-                            try {
-                                console.log('📁 File input onChange triggered');
-                                const f = e.target.files?.[0];
-                                if (!f) {
-                                    console.log('❌ No file selected');
-                                    return;
-                                }
-
-                                console.log('📷 File selected:', f.name, f.type, f.size, 'bytes');
-
-                                // Suggest a target level:
-                                // 1) from filename (e.g. "07.png", "lvl01.png", "level-9.png")
-                                // 2) current imported level id
-                                // 3) next id after max
-                                const levelMatch = f.name.match(/^(\\d{1,3})\\D|(?:lvl|level)[\\s_-]*(\\d{1,3})/i);
-                                const raw = levelMatch?.[1] ?? levelMatch?.[2];
-                                const fromName = raw ? parseInt(raw, 10) : null;
-                                const currentId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
-                                const maxId = allLevels.reduce((m, l) => Math.max(m, l.id), 0);
-                                const suggested = fromName ?? currentId ?? (maxId + 1);
-
-                                setPendingUploadFile(f);
-                                setPendingUploadLevelId(String(suggested));
-                                setPendingUploadAllowOverwrite(false);
-                                setPendingUploadError('');
-                                setApplyDialogOpen(true);
-
-                                // Allow selecting the same file again.
-                                try { e.currentTarget.value = ''; } catch { /* ignore */ }
-                            } catch (error) {
-                                console.error('❌ Error in file onChange handler:', error);
-                                console.error('Stack trace:', (error as Error).stack);
-                                setIsDetecting(false);
-                                setDetectionProgress('');
-                                alert(`Failed to load image: ${(error as Error).message}`);
+            <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] px-5 py-4">
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                        try {
+                            console.log('📁 File input onChange triggered');
+                            const f = e.target.files?.[0];
+                            if (!f) {
+                                console.log('❌ No file selected');
+                                return;
                             }
-                        }}
-                    />
+
+                            console.log('📷 File selected:', f.name, f.type, f.size, 'bytes');
+
+                            const levelMatch = f.name.match(/^(\\d{1,3})\\D|(?:lvl|level)[\\s_-]*(\\d{1,3})/i);
+                            const raw = levelMatch?.[1] ?? levelMatch?.[2];
+                            const fromName = raw ? parseInt(raw, 10) : null;
+                            const currentId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
+                            const maxId = allLevels.reduce((m, l) => Math.max(m, l.id), 0);
+                            const suggested = fromName ?? currentId ?? (maxId + 1);
+
+                            setPendingUploadFile(f);
+                            setPendingUploadLevelId(String(suggested));
+                            setPendingUploadAllowOverwrite(false);
+                            setPendingUploadError('');
+                            setApplyDialogOpen(true);
+
+                            try { e.currentTarget.value = ''; } catch { /* ignore */ }
+                        } catch (error) {
+                            console.error('❌ Error in file onChange handler:', error);
+                            console.error('Stack trace:', (error as Error).stack);
+                            setIsDetecting(false);
+                            setDetectionProgress('');
+                            alert(`Failed to load image: ${(error as Error).message}`);
+                        }
+                    }}
+                />
+
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="text-[10px] font-black uppercase tracking-[0.22em] text-stone-400">
+                            Control Deck
+                        </div>
+                        <div className="mt-1 text-xl font-black tracking-[0.08em] text-stone-50">
+                            {currentLevelTitle}
+                        </div>
+                        <div className="mt-1 text-xs leading-relaxed text-stone-400">
+                            Load screenshots, steer level metadata, and prep the board before you move into alignment or paint work.
+                        </div>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-stone-200">
+                        {currentLevelStatusLabel}
+                    </div>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <MapperMetricPill label="Board" value={boardShapeLabel} />
+                    <MapperMetricPill label="Theme" value={currentThemeKey === 'default' ? 'Default' : currentThemeKey} tone="warning" />
+                    <MapperMetricPill label="Selected Tile" value={selectedTile.name} tone="info" />
+                    <MapperMetricPill label="Screenshot" value={imageStatusLabel} tone={imageURL ? 'success' : 'default'} />
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
                     <Button
                         size="sm"
                         variant="outline"
+                        className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
                         onClick={() => {
                             setGrid(voidGrid(rows, cols));
                             setImageURL(null);
@@ -311,10 +353,34 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     >
                         New Level
                     </Button>
+                    <select
+                        className="h-9 min-w-[148px] rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-xs text-stone-100 [color-scheme:dark]"
+                        value={importLevelIndex ?? ''}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') return;
+                            const idx = parseInt(val, 10);
+                            setImportLevelIndex(idx);
+                            setCompareLevelIndex(idx);
+                            void loadLevelByIndex(idx);
+                        }}
+                        title="Load an existing level into the mapper"
+                    >
+                        <option value="">Load level...</option>
+                        {allLevels.map((lvl, idx) => (<option key={lvl.id} value={idx}>Level {lvl.id}</option>))}
+                    </select>
+                    <Button
+                        size="sm"
+                        className="bg-amber-300 text-stone-950 hover:bg-amber-200"
+                        onClick={triggerFileUpload}
+                    >
+                        Upload Screenshot
+                    </Button>
                     <Button
                         size="sm"
                         variant="outline"
-                        disabled={importLevelIndex === null || importLevelIndex <= 0}
+                        className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
+                        disabled={!canGoPrev}
                         title={importLevelIndex === null ? 'Load a level first' : 'Load previous level'}
                         onClick={() => {
                             if (importLevelIndex === null) return;
@@ -324,12 +390,13 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             void loadLevelByIndex(nextIdx);
                         }}
                     >
-                        Prev Level
+                        Prev
                     </Button>
                     <Button
                         size="sm"
                         variant="outline"
-                        disabled={importLevelIndex === null || importLevelIndex >= allLevels.length - 1}
+                        className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
+                        disabled={!canGoNext}
                         title={importLevelIndex === null ? 'Load a level first' : 'Load next level'}
                         onClick={() => {
                             if (importLevelIndex === null) return;
@@ -339,36 +406,44 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             void loadLevelByIndex(nextIdx);
                         }}
                     >
-                        Next Level
+                        Next
                     </Button>
                 </div>
 
-                <div className="mt-2 rounded-xl border border-border/60 bg-background/60 p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0">
-                            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                                Current Level
-                            </div>
-                            <div className="mt-1 text-2xl font-bold leading-none text-foreground">
-                                {currentLevelTitle}
-                            </div>
-                        </div>
-                        <div
-                            className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
-                            title="Latest mapper provenance for this level"
-                        >
-                            {currentLevelStatusLabel}
-                        </div>
-                    </div>
-
-                    <div className="mt-3 grid gap-2">
-                        <div className="rounded-lg border border-border/60 bg-card/80 p-2">
-                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                Timer
+                <div className="mt-4 grid gap-3 xl:grid-cols-[1.1fr,0.9fr]">
+                    <div className="rounded-[20px] border border-white/10 bg-white/[0.045] px-4 py-3">
+                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Theme + Timer</div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr,auto]">
+                            <div className="flex items-center gap-2">
+                                <select
+                                    className="h-10 min-w-[120px] flex-1 rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-sm text-stone-100 [color-scheme:dark]"
+                                    value={currentThemeKey}
+                                    onChange={(e) => {
+                                        const newTheme = e.target.value === 'default' ? undefined : e.target.value as ColorTheme;
+                                        setTheme(newTheme);
+                                        setIsSaved(false);
+                                    }}
+                                >
+                                    <option value="default">Default (Brown)</option>
+                                    <option value="ocean">Ocean (Blue)</option>
+                                    <option value="forest">Forest (Green)</option>
+                                    <option value="sunset">Sunset (Orange/Pink)</option>
+                                    <option value="lava">Lava (Red)</option>
+                                    <option value="crystal">Crystal (Purple)</option>
+                                    <option value="neon">Neon (Cyberpunk)</option>
+                                    <option value="snow">Snow (White)</option>
+                                    <option value="gray">Gray (Neutral)</option>
+                                    <option value="slate">Slate (Cool Gray)</option>
+                                </select>
+                                <div
+                                    className="h-10 w-10 shrink-0 rounded-2xl border border-white/10 shadow-sm"
+                                    style={{ backgroundColor: themePreview }}
+                                    title={`${currentThemeKey} theme preview`}
+                                />
                             </div>
                             <div className="flex items-center gap-2">
                                 <input
-                                    className="h-9 w-24 rounded border bg-background px-3 text-sm text-foreground [color-scheme:dark]"
+                                    className="h-10 w-24 rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-sm text-stone-100 [color-scheme:dark]"
                                     type="number"
                                     inputMode="numeric"
                                     min={0}
@@ -388,43 +463,15 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                     }}
                                     title="Seconds countdown per level (0 disables)"
                                 />
-                                <div className="text-[11px] text-muted-foreground">sec (0 = off)</div>
+                                <div className="text-[11px] text-stone-400">sec</div>
                             </div>
                         </div>
+                    </div>
 
-                        <div className="rounded-lg border border-border/60 bg-card/80 p-2">
-                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                Color Theme
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <select
-                                    className="h-9 min-w-[120px] flex-1 rounded border bg-background px-3 text-sm text-foreground [color-scheme:dark]"
-                                    value={theme || 'default'}
-                                    onChange={(e) => {
-                                        const newTheme = e.target.value === 'default' ? undefined : e.target.value as ColorTheme;
-                                        setTheme(newTheme);
-                                        setIsSaved(false);
-                                    }}
-                                >
-                                    <option value="default">Default (Brown)</option>
-                                    <option value="ocean">Ocean (Blue)</option>
-                                    <option value="forest">Forest (Green)</option>
-                                    <option value="sunset">Sunset (Orange/Pink)</option>
-                                    <option value="lava">Lava (Red)</option>
-                                    <option value="crystal">Crystal (Purple)</option>
-                                    <option value="neon">Neon (Cyberpunk)</option>
-                                    <option value="snow">Snow (White)</option>
-                                    <option value="gray">Gray (Neutral)</option>
-                                    <option value="slate">Slate (Cool Gray)</option>
-                                </select>
-                                {theme && theme !== 'default' && (
-                                    <div
-                                        className="h-7 w-7 rounded border-2 border-border shadow-sm"
-                                        style={{ backgroundColor: themes[theme].floor }}
-                                        title={`${theme} theme preview`}
-                                    />
-                                )}
-                            </div>
+                    <div className="rounded-[20px] border border-white/10 bg-white/[0.045] px-4 py-3">
+                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Alignment Readiness</div>
+                        <div className="mt-3 text-xs leading-relaxed text-stone-300">
+                            {tileFitSummary}
                         </div>
                     </div>
                 </div>
@@ -437,29 +484,29 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     if (!open) setPendingUploadError('');
                 }}
             >
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-md border-white/10 bg-stone-950/95 text-stone-100">
                     <DialogHeader>
-                        <DialogTitle>Apply Screenshot To Level</DialogTitle>
-                        <DialogDescription>
+                        <DialogTitle className="text-stone-50">Apply Screenshot To Level</DialogTitle>
+                        <DialogDescription className="text-stone-400">
                             Choose which level number this image belongs to. By default this will not overwrite an existing saved screenshot.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3">
-                        <div className="text-xs text-muted-foreground">
-                            File: <span className="font-medium text-foreground">{pendingUploadFile?.name ?? 'None'}</span>
+                        <div className="text-xs text-stone-400">
+                            File: <span className="font-medium text-stone-100">{pendingUploadFile?.name ?? 'None'}</span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <label className="text-sm text-muted-foreground whitespace-nowrap">Level #</label>
+                            <label className="text-sm whitespace-nowrap text-stone-300">Level #</label>
                             <input
-                                className="w-28 px-2 py-1 rounded border bg-background text-foreground [color-scheme:dark]"
+                                className="w-28 rounded-2xl border border-white/10 bg-stone-900/85 px-3 py-2 text-stone-100 [color-scheme:dark]"
                                 inputMode="numeric"
                                 pattern="\\d*"
                                 value={pendingUploadLevelId}
                                 onChange={(e) => setPendingUploadLevelId(e.target.value)}
                             />
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-stone-400">
                                 {(() => {
                                     const id = parseInt(pendingUploadLevelId, 10);
                                     if (!Number.isFinite(id)) return null;
@@ -469,7 +516,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             </div>
                         </div>
 
-                        <label className="flex items-center gap-2 text-sm">
+                        <label className="flex items-center gap-2 text-sm text-stone-300">
                             <input
                                 type="checkbox"
                                 checked={pendingUploadAllowOverwrite}
@@ -488,6 +535,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     <DialogFooter>
                         <Button
                             variant="outline"
+                            className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
                             onClick={() => {
                                 setApplyDialogOpen(false);
                                 setPendingUploadFile(null);
@@ -496,7 +544,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             Cancel
                         </Button>
                         <Button
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                            className="bg-emerald-600 text-white hover:bg-emerald-500"
                             onClick={async () => {
                                 const file = pendingUploadFile;
                                 const levelId = parseInt(pendingUploadLevelId, 10);
@@ -539,14 +587,14 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                     let nextLevels = allLevels;
                                     let idx = nextLevels.findIndex((l) => l.id === levelId);
                                     if (idx === -1) {
-                                        const newLevel = {
+                                        const newLevel: Level = {
                                             id: levelId,
                                             grid: voidGrid(12, 20),
                                             playerStart: { x: 0, y: 0 },
                                             cavePos: { x: 0, y: 0 },
                                             theme: guessThemeForLevelId(levelId),
                                             autoBuild: false,
-                                        } as any;
+                                        };
                                         saveCustomLevelDefinition(newLevel);
                                         nextLevels = [...nextLevels, newLevel].sort((a, b) => a.id - b.id);
                                         setAllLevels(nextLevels);
@@ -578,18 +626,17 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 </DialogContent>
             </Dialog>
 
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col">
-                <TabsList className="mb-2 grid h-10 w-full shrink-0 grid-cols-3">
-                    <TabsTrigger value="editor">Editor</TabsTrigger>
-                    <TabsTrigger value="sprites">Capture</TabsTrigger>
-                    <TabsTrigger value="references">References</TabsTrigger>
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col px-4 py-4">
+                <TabsList className="mb-3 grid h-11 w-full shrink-0 grid-cols-3 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                    <TabsTrigger value="editor" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">Editor</TabsTrigger>
+                    <TabsTrigger value="sprites" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">Capture</TabsTrigger>
+                    <TabsTrigger value="references" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">References</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="editor" className="relative mt-0 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                    {/* Loading Overlay */}
+                <TabsContent value="editor" className="relative mt-0 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                     {isDetecting && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center rounded bg-slate-950/70 backdrop-blur-sm">
-                            <div className="rounded-lg border border-sky-500/30 bg-slate-900/90 p-6 text-sky-50 shadow-lg">
+                        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-[24px] bg-stone-950/75 backdrop-blur-sm">
+                            <div className="rounded-[22px] border border-sky-300/20 bg-stone-900/95 p-6 text-sky-50 shadow-lg">
                                 <div className="flex flex-col items-center gap-3">
                                     <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-300"></div>
                                     <div className="text-sm font-medium text-sky-50">{detectionProgress}</div>
@@ -598,140 +645,122 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         </div>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        <label className="text-xs text-muted-foreground">Rows</label>
-                        <input
-                            className="h-9 w-14 rounded border bg-background px-2 text-foreground [color-scheme:dark]"
-                            type="number"
-                            min={1}
-                            value={rows}
-                            onChange={(e) => {
-                                const next = Math.max(1, parseInt(e.target.value || '1', 10));
-                                if (Number.isFinite(next) && next !== rows) setIsSaved(false);
-                                setRows(next);
-                            }}
-                        />
-                        <label className="text-xs text-muted-foreground">Cols</label>
-                        <input
-                            className="h-9 w-14 rounded border bg-background px-2 text-foreground [color-scheme:dark]"
-                            type="number"
-                            min={1}
-                            value={cols}
-                            onChange={(e) => {
-                                const next = Math.max(1, parseInt(e.target.value || '1', 10));
-                                if (Number.isFinite(next) && next !== cols) setIsSaved(false);
-                                setCols(next);
-                            }}
-                        />
-                        <div className="flex flex-wrap items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
-                            <span className="text-xs text-muted-foreground">Rows</span>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowTop} title="Add a void row at the top">+Top</Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addRowBottom} title="Add a void row at the bottom">+Bot</Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeRowTop} title="Remove the top row">-Top</Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeRowBottom} title="Remove the bottom row">-Bot</Button>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1 rounded border border-border/60 bg-background px-2 py-1">
-                            <span className="text-xs text-muted-foreground">Cols</span>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addColumnLeft} title="Add a void column on the left">+L</Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={addColumnRight} title="Add a void column on the right">+R</Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeColumnLeft} title="Remove the left column">-L</Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2" onClick={removeColumnRight} title="Remove the right column">-R</Button>
-                        </div>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={resetToLoadedSnapshot}
-                            disabled={importLevelIndex === null}
-                            title="Snap back to the layout as it was loaded"
-                        >
-                            Reset Layout
-                        </Button>
-                        <select
-                            className="h-9 rounded border bg-background px-2 text-xs text-foreground [color-scheme:dark]"
-                            value={importLevelIndex ?? ''}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === '') return;
-                                const idx = parseInt(val, 10);
-                                setImportLevelIndex(idx);
-                                setCompareLevelIndex(idx);
-                                void loadLevelByIndex(idx);
-                            }}
-                        >
-                            <option value="">Load level...</option>
-                            {allLevels.map((lvl, idx) => (<option key={lvl.id} value={idx}>Level {lvl.id}</option>))}
-                        </select>
-                        <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={runCellDetection}
-                            disabled={!imageURL || isDetecting}
-                            title="Auto-detect the grid (rows/cols + snap frame/offset). Does not analyze cell types."
-                        >
-                            Auto-detect Grid
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                                setIsDetecting(true);
-                                setDetectionProgress('Snapping grid to the screenshot before scanning...');
-                                try {
-                                    await new Promise((resolve) => setTimeout(resolve, 50));
-                                    const snapResult = await snapToLockedCounts();
-                                    if (!snapResult) return;
-                                    setAutoDetectStatus(
-                                        `Snapped (kept ${rows}×${cols}) | Tile: ${Math.round(snapResult.cellWidth)}×${Math.round(snapResult.cellHeight)}px | Confidence: ${snapResult.confidence.toFixed(2)}`
-                                    );
-                                    setDetectionProgress('Scanning cell types into the aligned grid...');
-                                    await detectCells();
-                                } finally {
-                                    setIsDetecting(false);
-                                    setDetectionProgress('');
-                                }
-                            }}
-                            disabled={!imageURL || isDetecting}
-                            title="Snap the overlay/grid to the screenshot first, then scan saved reference sprites. Fills only void (unknown) cells so manual fixes are preserved."
-                        >
-                            Align + Scan Cells
-                        </Button>
-                    </div>
-                    {autoDetectStatus && (
-                        <div className="mt-1 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
-                            {autoDetectStatus}
-                        </div>
-                    )}
-                    <details className="mt-1.5 rounded border border-border/50 bg-background/30 p-2">
-                        <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">
-                            Advanced
-                        </summary>
-                        <div className="mt-2 text-xs text-muted-foreground">
-                            Auto-detect ignores locks and will update rows/cols. Use this tool to snap the frame/offset while keeping your current rows/cols.
-                        </div>
-                        <div className="mt-3 flex items-center justify-between gap-2 rounded border border-border/50 bg-background/40 px-2 py-2">
-                            <div className="min-w-0">
-                                <div className="text-xs font-semibold text-foreground">In-game coordinates</div>
-                                <div className="text-[11px] leading-snug text-muted-foreground">
-                                    Show X labels (0..cols-1) across the top row and Y labels (0..rows-1) down the left column in <strong>SPR</strong> view.
-                                </div>
-                            </div>
-                            <label className="flex items-center gap-2 shrink-0 select-none">
-                                <input
-                                    type="checkbox"
-                                    checked={showCoordsOverlay}
-                                    onChange={(e) => {
-                                        const next = e.target.checked;
-                                        setShowCoordsOverlay(next);
-                                        setShowCoordsOverlayState(next);
-                                    }}
-                                />
-                                <span className="text-xs text-foreground">Show</span>
-                            </label>
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
+                    <MapperSection
+                        title="Board Shape"
+                        eyebrow="Layout Control"
+                        description="Adjust rows, columns, and edge padding for the board currently loaded in the mapper."
+                        contentClassName="space-y-3 pt-3"
+                    >
+                        <div className="flex flex-wrap items-center gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wide text-stone-400">Rows</label>
+                            <input
+                                className="h-10 w-16 rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-sm text-stone-100 [color-scheme:dark]"
+                                type="number"
+                                min={1}
+                                value={rows}
+                                onChange={(e) => {
+                                    const next = Math.max(1, parseInt(e.target.value || '1', 10));
+                                    if (Number.isFinite(next) && next !== rows) setIsSaved(false);
+                                    setRows(next);
+                                }}
+                            />
+                            <label className="text-xs font-semibold uppercase tracking-wide text-stone-400">Cols</label>
+                            <input
+                                className="h-10 w-16 rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-sm text-stone-100 [color-scheme:dark]"
+                                type="number"
+                                min={1}
+                                value={cols}
+                                onChange={(e) => {
+                                    const next = Math.max(1, parseInt(e.target.value || '1', 10));
+                                    if (Number.isFinite(next) && next !== cols) setIsSaved(false);
+                                    setCols(next);
+                                }}
+                            />
                             <Button
                                 size="sm"
                                 variant="outline"
+                                className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
+                                onClick={resetToLoadedSnapshot}
+                                disabled={importLevelIndex === null}
+                                title="Snap back to the layout as it was loaded"
+                            >
+                                Reset Layout
+                            </Button>
+                        </div>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="rounded-2xl border border-white/10 bg-stone-900/55 p-3">
+                                <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Rows</div>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addRowTop} title="Add a void row at the top">+ Top</Button>
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addRowBottom} title="Add a void row at the bottom">+ Bottom</Button>
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeRowTop} title="Remove the top row">- Top</Button>
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeRowBottom} title="Remove the bottom row">- Bottom</Button>
+                                </div>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-stone-900/55 p-3">
+                                <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Columns</div>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addColumnLeft} title="Add a void column on the left">+ Left</Button>
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addColumnRight} title="Add a void column on the right">+ Right</Button>
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeColumnLeft} title="Remove the left column">- Left</Button>
+                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeColumnRight} title="Remove the right column">- Right</Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-100">
+                            Resizing rows or columns changes the level layout. Use <strong>Reset Layout</strong> if you want to return to the currently loaded baseline before saving.
+                        </div>
+                    </MapperSection>
+
+                    <MapperSection
+                        title="Detection Workflow"
+                        eyebrow="Alignment"
+                        description="Snap the board to a screenshot first, then optionally scan tiles into the aligned grid."
+                        contentClassName="space-y-3 pt-3"
+                    >
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                size="sm"
+                                variant="secondary"
+                                className="bg-sky-600 text-white hover:bg-sky-500"
+                                onClick={runCellDetection}
+                                disabled={!imageURL || isDetecting}
+                                title="Auto-detect the grid (rows/cols + snap frame/offset). Does not analyze cell types."
+                            >
+                                Auto-detect Grid
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
+                                onClick={async () => {
+                                    setIsDetecting(true);
+                                    setDetectionProgress('Snapping grid to the screenshot before scanning...');
+                                    try {
+                                        await new Promise((resolve) => setTimeout(resolve, 50));
+                                        const snapResult = await snapToLockedCounts();
+                                        if (!snapResult) return;
+                                        setAutoDetectStatus(
+                                            `Snapped (kept ${rows}×${cols}) | Tile: ${Math.round(snapResult.cellWidth)}×${Math.round(snapResult.cellHeight)}px | Confidence: ${snapResult.confidence.toFixed(2)}`
+                                        );
+                                        setDetectionProgress('Scanning cell types into the aligned grid...');
+                                        await detectCells();
+                                    } finally {
+                                        setIsDetecting(false);
+                                        setDetectionProgress('');
+                                    }
+                                }}
+                                disabled={!imageURL || isDetecting}
+                                title="Snap the overlay/grid to the screenshot first, then scan saved reference sprites. Fills only void (unknown) cells so manual fixes are preserved."
+                            >
+                                Align + Scan Cells
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
                                 onClick={async () => {
                                     setIsDetecting(true);
                                     setDetectionProgress('Snapping frame (keeping rows/cols)...');
@@ -754,95 +783,130 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 Snap (Keep Rows/Cols)
                             </Button>
                         </div>
-                    </details>
-                    {imageURL && (
-                        <div className="mt-1 text-[11px] leading-tight text-muted-foreground">
-                            {tileFitStatus === 'detecting' && <span>Measuring floor tile size and board tile counts...</span>}
-                            {tileFitStatus !== 'detecting' && tileFit && (
-                                <span>
-                                    Floor tile: ~{Math.round(tileFit.cellWidth)}×{Math.round(tileFit.cellHeight)}px. Across: {tileFit.cols}. Down: {tileFit.rows}.
-                                    {((tileFit.rows !== rows) || (tileFit.cols !== cols)) && (
-                                        <span className="ml-2 text-amber-200">
-                                            (Current grid: {rows}×{cols})
-                                        </span>
-                                    )}
+
+                        {autoDetectStatus && (
+                            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
+                                {autoDetectStatus}
+                            </div>
+                        )}
+
+                        <div className="rounded-2xl border border-white/10 bg-stone-900/55 px-3 py-3 text-[11px] leading-relaxed text-stone-300">
+                            {tileFitSummary}
+                            {imageURL && tileFit && ((tileFit.rows !== rows) || (tileFit.cols !== cols)) && (
+                                <span className="ml-2 text-amber-100">
+                                    Current grid is {rows}×{cols}.
                                 </span>
                             )}
-                            {tileFitStatus === 'failed' && <span>Could not estimate tile size from this image. Try a cleaner crop or hit Auto-detect.</span>}
                         </div>
-                    )}
-                    <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                        Auto-detect finds the screenshot's tile grid and snaps rows/cols + frame. If it misses, adjust crop and re-run.
-                    </div>
-                    <div className="mt-1 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-100">
-                        Resizing rows/cols or adding/removing edges changes the level layout. Use `Reset Layout` to snap back before saving if you resized by accident.
-                    </div>
 
-                    {/* Bonus Time (+time) brush */}
-                    {activeTile === 20 && (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded border bg-muted/30 p-2">
-                            <label className="text-xs font-semibold text-foreground whitespace-nowrap">Bonus Time:</label>
-                            <input
-                                className="h-9 w-24 rounded border bg-background px-3 text-sm text-foreground [color-scheme:dark]"
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                step={1}
-                                value={hourglassBrushSeconds}
-                                onChange={(e) => {
-                                    const raw = e.target.value;
-                                    const n = Math.max(1, Math.min(86400, Math.round(Number(raw)) || 0));
-                                    setHourglassBrushSeconds(n);
-                                }}
-                                title="Seconds added when Bonus Time is collected"
-                            />
-                            <div className="text-[11px] text-muted-foreground">sec bonus (needs timer on)</div>
-                        </div>
-                    )}
-                    <div className="mt-1.5 relative">
-                        {imageURL ? (
-                            <div className="text-sm p-4 border rounded border-emerald-500/25 bg-emerald-500/10 text-emerald-100">
-                                ✅ Image loaded! Switch to <strong>Grid Editor</strong> tab to see the overlay.
+                        <details className="rounded-2xl border border-white/10 bg-stone-900/40 p-3">
+                            <summary className="cursor-pointer select-none text-xs font-semibold text-stone-300">
+                                Advanced
+                            </summary>
+                            <div className="mt-2 text-xs leading-relaxed text-stone-400">
+                                Auto-detect may change rows and columns. Use the snap-only path when you want to keep your existing board shape and only realign the frame.
                             </div>
-                        ) : (
-                            <div className="text-sm text-muted-foreground p-6 border rounded">Upload a screenshot above to get started</div>
-                        )}
-                    </div>
-                    <Palette activeTile={activeTile} setActiveTile={setActiveTile} />
+                            <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                                <div className="min-w-0">
+                                    <div className="text-xs font-semibold text-stone-100">In-game coordinates</div>
+                                    <div className="text-[11px] leading-snug text-stone-400">
+                                        Show X labels across the top row and Y labels down the left column in <strong>SPR</strong> view.
+                                    </div>
+                                </div>
+                                <label className="flex shrink-0 items-center gap-2 select-none text-xs text-stone-100">
+                                    <input
+                                        type="checkbox"
+                                        checked={showCoordsOverlay}
+                                        onChange={(e) => {
+                                            const next = e.target.checked;
+                                            setShowCoordsOverlay(next);
+                                            setShowCoordsOverlayState(next);
+                                        }}
+                                    />
+                                    Show
+                                </label>
+                            </div>
+                        </details>
+                    </MapperSection>
+
+                    {activeTile === 20 && (
+                        <MapperSection
+                            title="Bonus Time Brush"
+                            eyebrow="Tile Metadata"
+                            description="Tile 20 stores its own per-cell time bonus. Set the amount that gets applied while painting."
+                            contentClassName="pt-3"
+                        >
+                            <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                    className="h-10 w-24 rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-sm text-stone-100 [color-scheme:dark]"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={1}
+                                    step={1}
+                                    value={hourglassBrushSeconds}
+                                    onChange={(e) => {
+                                        const raw = e.target.value;
+                                        const n = Math.max(1, Math.min(86400, Math.round(Number(raw)) || 0));
+                                        setHourglassBrushSeconds(n);
+                                    }}
+                                    title="Seconds added when Bonus Time is collected"
+                                />
+                                <div className="text-[11px] text-stone-400">seconds added when the hourglass is collected</div>
+                            </div>
+                        </MapperSection>
+                    )}
+
+                    <MapperSection
+                        title="Tile Palette"
+                        eyebrow="Paint Tools"
+                        description="Choose the active tile and then paint directly in the center editor."
+                        contentClassName="space-y-3 pt-3"
+                    >
+                        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-stone-900/55 px-3 py-3">
+                            <span className="inline-block h-8 w-8 rounded-2xl border border-white/10 shadow-sm" style={{ backgroundColor: selectedTile.color }} />
+                            <div className="min-w-0">
+                                <div className="text-xs font-semibold text-stone-100">{selectedTile.name}</div>
+                                <div className="text-[11px] text-stone-400">Tile ID {selectedTile.id}</div>
+                            </div>
+                        </div>
+                        <Palette activeTile={activeTile} setActiveTile={setActiveTile} />
+                    </MapperSection>
                 </TabsContent>
 
                 <TabsContent value="sprites" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
-                    <SpriteCapture
-                        imageURL={imageURL}
-                        rows={rows}
-                        cols={cols}
-                        gridOffsetX={gridOffsetX}
-                        gridOffsetY={gridOffsetY}
-                        gridFrameWidth={gridFrameWidth}
-                        gridFrameHeight={gridFrameHeight}
-                        imageScaleX={imageScaleX}
-                        imageScaleY={imageScaleY}
-                        imageOffsetX={imageOffsetX}
-                        imageOffsetY={imageOffsetY}
-                        grid={grid}
-                        setGrid={setGrid}
-                        onCapture={handleSpriteCapture}
-                    />
+                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2">
+                        <SpriteCapture
+                            imageURL={imageURL}
+                            rows={rows}
+                            cols={cols}
+                            gridOffsetX={gridOffsetX}
+                            gridOffsetY={gridOffsetY}
+                            gridFrameWidth={gridFrameWidth}
+                            gridFrameHeight={gridFrameHeight}
+                            imageScaleX={imageScaleX}
+                            imageScaleY={imageScaleY}
+                            imageOffsetX={imageOffsetX}
+                            imageOffsetY={imageOffsetY}
+                            grid={grid}
+                            setGrid={setGrid}
+                            onCapture={handleSpriteCapture}
+                        />
+                    </div>
                 </TabsContent>
 
                 <TabsContent value="references" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
-                    <CellReferenceManager />
+                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2">
+                        <CellReferenceManager />
+                    </div>
                 </TabsContent>
             </Tabs>
 
-            <div
-                style={{ position: 'absolute', top: 0, right: -8, width: 16, height: '100%', cursor: 'ew-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            <MapperResizeHandle
+                side="right"
                 onMouseDown={onStartResize}
-                title="Resize horizontally"
-            >
-                <span style={{ fontSize: 18, color: '#aaa', userSelect: 'none' }}>&#8596;</span>
-            </div>
-        </div>
+                title="Resize control deck"
+            />
+        </MapperPanelFrame>
     );
 };
 
