@@ -9,26 +9,7 @@ import { updateAlignmentProfile } from './alignmentProfile';
 import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
 const RULER_SIZE_PX = 24;
-const GRID_EDITOR_HEADER_HEIGHT_STORAGE_KEY = 'levelmapper_grid_editor_header_height_v1';
-const DEFAULT_GRID_EDITOR_HEADER_HEIGHT = 152;
-const DEFAULT_GRID_EDITOR_HEADER_HEIGHT_COMPACT = 128;
-const MIN_GRID_EDITOR_HEADER_HEIGHT = 96;
-const MAX_GRID_EDITOR_HEADER_HEIGHT = 320;
 const MIN_GRID_CELL_SIZE_PX = 12;
-
-const getDefaultHeaderPanelHeight = () => {
-    if (typeof window === 'undefined') return DEFAULT_GRID_EDITOR_HEADER_HEIGHT;
-
-    const raw = window.localStorage.getItem(GRID_EDITOR_HEADER_HEIGHT_STORAGE_KEY);
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-        return Math.max(MIN_GRID_EDITOR_HEADER_HEIGHT, Math.min(MAX_GRID_EDITOR_HEADER_HEIGHT, Math.round(parsed)));
-    }
-
-    return window.innerWidth < 1024
-        ? DEFAULT_GRID_EDITOR_HEADER_HEIGHT_COMPACT
-        : DEFAULT_GRID_EDITOR_HEADER_HEIGHT;
-};
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -77,38 +58,8 @@ export const GridEditorPanel: React.FC = () => {
     const [cellHeight, setCellHeight] = React.useState(32);
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
     const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
-    const [headerPanelHeight, setHeaderPanelHeight] = React.useState(getDefaultHeaderPanelHeight);
-    const headerResizeStartRef = React.useRef<{ y: number; height: number } | null>(null);
-    const [isResizingHeaderPanel, setIsResizingHeaderPanel] = React.useState(false);
 
     const markUnsaved = React.useCallback(() => setIsSaved(false), [setIsSaved]);
-
-    React.useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(GRID_EDITOR_HEADER_HEIGHT_STORAGE_KEY, String(headerPanelHeight));
-    }, [headerPanelHeight]);
-
-    React.useEffect(() => {
-        if (!isResizingHeaderPanel) return;
-        const onMove = (event: PointerEvent) => {
-            const start = headerResizeStartRef.current;
-            if (!start) return;
-            const nextHeight = start.height + (event.clientY - start.y);
-            setHeaderPanelHeight(Math.max(MIN_GRID_EDITOR_HEADER_HEIGHT, Math.min(MAX_GRID_EDITOR_HEADER_HEIGHT, Math.round(nextHeight))));
-        };
-        const onEnd = () => {
-            headerResizeStartRef.current = null;
-            setIsResizingHeaderPanel(false);
-        };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-        return () => {
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-    }, [isResizingHeaderPanel]);
 
     const updateHourglassMetaAt = React.useCallback(
         (row: number, col: number, tileId: number) => {
@@ -711,16 +662,11 @@ export const GridEditorPanel: React.FC = () => {
     const compactIconButtonClass = "h-7 w-7";
     const compactButtonClass = "h-8 px-2.5";
     const toolRowClass = "flex flex-wrap items-center gap-1 rounded-xl border border-border/60 bg-background/20 p-1";
-    const beginHeaderResize = (clientY: number) => {
-        headerResizeStartRef.current = { y: clientY, height: headerPanelHeight };
-        setIsResizingHeaderPanel(true);
-    };
 
     return (
-        <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm">
+        <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm">
             <div
-                className="shrink-0 overflow-auto rounded-lg border border-border/50 bg-background/10 p-1.5"
-                style={{ height: headerPanelHeight }}
+                className="shrink-0 max-h-[42vh] overflow-auto rounded-lg border border-border/50 bg-background/10 p-1.5"
             >
                 <div className="flex flex-wrap items-start justify-between gap-1 border-b border-border/60 pb-1">
                     <div className="min-w-0 space-y-1">
@@ -1149,27 +1095,8 @@ export const GridEditorPanel: React.FC = () => {
                         Drag anywhere on the grid to fine-tune alignment. Mouse wheel zooms the view; hold Alt to scale only the overlay image. Turn drag mode off to paint or click cells.
                     </div>
                 )}
-                </div>
             </div>
-            <div
-                className={[
-                    "my-1 flex h-6 shrink-0 items-center justify-center rounded-md border border-dashed text-muted-foreground transition-colors",
-                    isResizingHeaderPanel
-                        ? "border-primary/70 bg-primary/10 text-primary"
-                        : "border-border/50 bg-background/15 hover:border-border hover:bg-background/25",
-                ].join(' ')}
-                title="Drag to stretch or compress the grid editor header"
-                style={{ cursor: 'ns-resize', touchAction: 'none' }}
-                onPointerDown={(event) => {
-                    event.preventDefault();
-                    beginHeaderResize(event.clientY);
-                }}
-            >
-                <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em]">
-                    <ArrowDownUp className="h-3.5 w-3.5" />
-                    <span>Header Size</span>
-                </div>
-            </div>
+        </div>
             <div className="min-h-0 flex-1">
                 <div
                     ref={containerRef}

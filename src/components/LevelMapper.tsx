@@ -7,7 +7,7 @@ import GridEditorPanel from '@/components/level-mapper/GridEditorPanel';
 import JsonPanel from '@/components/level-mapper/JsonPanel';
 import { MapperDockButton, MapperMetricPill } from '@/components/level-mapper/MapperChrome';
 import { TILE_TYPES } from '@/lib/levelgrid';
-import { ChevronLeft, ChevronRight, Image as ImageIcon, Layers3, LayoutDashboard } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 
 const MAPPER_COMPACT_VIEWPORT_BREAKPOINT = 1280;
@@ -40,7 +40,6 @@ const LayoutInner: React.FC = () => {
         addMultipleRows,
         importLevelIndex,
         allLevels,
-        compareLevel,
         activeTile,
         imageURL,
         theme,
@@ -157,23 +156,23 @@ const LayoutInner: React.FC = () => {
         <div className="relative h-full min-h-0 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
             <div className="pointer-events-none absolute inset-0 opacity-60" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '26px 26px' }} />
             <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1880px] flex-col gap-2 p-2 sm:gap-3 sm:p-3">
-                <div className="rounded-[28px] border border-white/10 bg-stone-950/88 px-4 py-3 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-5 sm:py-4">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div className="rounded-[24px] border border-white/10 bg-stone-950/88 px-4 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-4 sm:py-3">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                         <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.24em] text-stone-400">
-                                <LayoutDashboard className="h-4 w-4 text-amber-300" />
-                                Mapper Workspace
+                            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-stone-400">
+                                <LayoutDashboard className="h-3.5 w-3.5 text-amber-300" />
+                                Mapper
                             </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-3">
-                                <h1 className="text-2xl font-black tracking-[0.08em] text-stone-50 sm:text-3xl">
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                <h1 className="text-xl font-black tracking-[0.06em] text-stone-50 sm:text-2xl">
                                     {currentLevelLabel}
                                 </h1>
-                                <div className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-stone-300">
+                                <div className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-stone-300">
                                     {provenanceLabel}
                                 </div>
                                 <div
                                     className={[
-                                        'rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em]',
+                                        'rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em]',
                                         isSaved
                                             ? 'border-emerald-300/25 bg-emerald-500/12 text-emerald-100'
                                             : 'border-amber-300/25 bg-amber-500/12 text-amber-100',
@@ -184,9 +183,10 @@ const LayoutInner: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                            <MapperMetricPill label="Grid" value={`${rows} × ${cols}`} />
+                        <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-5">
+                            <MapperMetricPill className="rounded-xl px-2.5 py-1.5" label="Grid" value={`${rows} × ${cols}`} />
                             <MapperMetricPill
+                                className="rounded-xl px-2.5 py-1.5"
                                 label="Selected Tile"
                                 value={
                                     <span className="inline-flex items-center gap-2">
@@ -196,27 +196,19 @@ const LayoutInner: React.FC = () => {
                                 }
                                 tone="warning"
                             />
-                            <MapperMetricPill label="Theme" value={themeLabel} />
+                            <MapperMetricPill className="rounded-xl px-2.5 py-1.5" label="Theme" value={themeLabel} />
                             <MapperMetricPill
+                                className="rounded-xl px-2.5 py-1.5"
                                 label="Overlay"
                                 value={overlayEnabled && imageURL ? 'Aligned' : imageURL ? 'Image Ready' : 'No Image'}
                                 tone={overlayEnabled && imageURL ? 'success' : imageURL ? 'info' : 'default'}
                             />
                             <MapperMetricPill
+                                className="rounded-xl px-2.5 py-1.5"
                                 label="Timer"
                                 value={timeLimitSeconds && timeLimitSeconds > 0 ? `${timeLimitSeconds}s` : 'Off'}
                                 tone={timeLimitSeconds && timeLimitSeconds > 0 ? 'info' : 'default'}
                             />
-                        </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
-                            <Layers3 className="h-3.5 w-3.5 text-sky-300" />
-                            Compare target: {compareLevel ? `Level ${compareLevel.id}` : 'None'}
-                        </div>
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
-                            <ImageIcon className="h-3.5 w-3.5 text-emerald-300" />
-                            {imageURL ? 'Screenshot loaded and ready for snapping' : 'Load a screenshot to enable alignment workflows'}
                         </div>
                     </div>
                 </div>

@@ -266,6 +266,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             className="shrink-0 lg:w-auto"
             style={{ width, minWidth: min, maxWidth: max, maxHeight: '100%' }}
         >
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] px-5 py-4">
                 <input
                     ref={fileInputRef}
@@ -627,14 +628,14 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 </DialogContent>
             </Dialog>
 
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex min-h-0 flex-1 flex-col px-4 py-4">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col px-4 py-4">
                 <TabsList className="mb-3 grid h-11 w-full shrink-0 grid-cols-3 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
                     <TabsTrigger value="editor" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">Editor</TabsTrigger>
                     <TabsTrigger value="sprites" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">Capture</TabsTrigger>
                     <TabsTrigger value="references" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">References</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="editor" className="relative mt-0 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                <TabsContent value="editor" className="relative mt-0 space-y-3 pr-1">
                     {isDetecting && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center rounded-[24px] bg-stone-950/75 backdrop-blur-sm">
                             <div className="rounded-[22px] border border-sky-300/20 bg-stone-900/95 p-6 text-sky-50 shadow-lg">
@@ -874,7 +875,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     </MapperSection>
                 </TabsContent>
 
-                <TabsContent value="sprites" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
+                <TabsContent value="sprites" className="mt-0 pr-1">
                     <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2">
                         <SpriteCapture
                             imageURL={imageURL}
@@ -895,12 +896,13 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     </div>
                 </TabsContent>
 
-                <TabsContent value="references" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
+                <TabsContent value="references" className="mt-0 pr-1">
                     <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2">
                         <CellReferenceManager />
                     </div>
                 </TabsContent>
             </Tabs>
+            </div>
 
             {resizable ? (
                 <MapperResizeHandle
