@@ -1686,11 +1686,11 @@ export const PuzzleGame = () => {
 
         {useSplitHud ? (
           <div
-            className="relative z-50 flex w-full items-start justify-between px-2"
-            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)' }}
+            className="relative z-40 flex w-full items-start justify-between px-2"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.15rem)' }}
           >
             {/* Left HUD cluster */}
-            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
+            <div className="bg-card/88 backdrop-blur-sm rounded-md shadow-md border border-border/40 flex items-center gap-1 px-1.5 py-1 max-w-[calc(50vw-12px)] overflow-x-auto [&_button]:min-h-10 [&_button]:min-w-10">
               <Button
                 onClick={() => {
                   if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) toast.info("Previous Level");
@@ -1775,7 +1775,7 @@ export const PuzzleGame = () => {
             </div>
 
             {/* Right HUD cluster */}
-            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-2 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
+            <div className="bg-card/88 backdrop-blur-sm rounded-md shadow-md border border-border/40 flex items-center gap-1.5 px-1.5 py-1 max-w-[calc(50vw-12px)] overflow-x-auto [&_button]:min-h-10 [&_button]:min-w-10">
               <Button
                 onClick={resetLevel}
                 variant="outline"
@@ -1897,13 +1897,13 @@ export const PuzzleGame = () => {
         ) : (
           <div
             className="absolute left-0 right-0 z-50 flex justify-center"
-            style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+            style={{ top: 'calc(env(safe-area-inset-top) + 0.35rem)' }}
           >
             <div
               className={[
-                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50",
+                "bg-card/88 backdrop-blur-sm rounded-md shadow-md border border-border/40",
                 "flex items-center justify-center max-w-[calc(100vw-16px)]",
-                "px-6 py-3 gap-4 flex-wrap",
+                "px-4 py-2 gap-3 flex-wrap",
                 isFullscreenMode ? "bg-card/80" : "",
               ].join(" ")}
             >
