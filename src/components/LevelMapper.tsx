@@ -152,6 +152,8 @@ const LayoutInner: React.FC = () => {
         }
     }, [isSaved, saveFromUnsavedToast, showUnsavedBanner]);
 
+    const showCompactDockBar = isCompactViewport && leftCollapsed && rightCollapsed;
+
     return (
         <div className="relative h-full min-h-0 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
             <div className="pointer-events-none absolute inset-0 opacity-60" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '26px 26px' }} />
@@ -213,136 +215,137 @@ const LayoutInner: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="relative flex h-full min-h-0 flex-1 gap-3 overflow-hidden">
-                    {!isCompactViewport && !leftCollapsed ? (
-                        <div className="relative flex h-full min-h-0 shrink-0 transition-all duration-300">
-                            <LeftPanel width={leftPanelWidth} onStartResize={() => { isResizingLeftRef.current = true; }} min={leftPanelMin} max={leftPanelMax} />
-                            <button
-                                onClick={() => setLeftCollapsed(true)}
-                                className="absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-amber-200/30 hover:text-stone-50"
-                                title="Collapse control deck"
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </button>
-                        </div>
-                    ) : !isCompactViewport ? (
-                        <MapperDockButton
-                            title="Controls"
-                            description="Re-open the level, screenshot, and tile workflow deck."
-                            onClick={() => setLeftCollapsed(false)}
-                            icon={<ChevronRight className="h-4 w-4" />}
-                            align="left"
-                        />
-                    ) : null}
-
-                    {isCompactViewport && leftCollapsed && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setRightCollapsed(true);
-                                setLeftCollapsed(false);
-                            }}
-                            className="absolute left-2 top-2 z-30 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-stone-950/92 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-stone-100 shadow-lg backdrop-blur-xl transition-colors hover:border-amber-200/30"
-                        >
-                            <ChevronRight className="h-3.5 w-3.5" />
-                            Controls
-                        </button>
-                    )}
-
-                    <GridEditorPanel />
-
-                    {!isCompactViewport && !rightCollapsed ? (
-                        <div className="relative flex h-full min-h-0 shrink-0 transition-all duration-300">
-                            <JsonPanel width={rightPanelWidth} onStartResize={() => { isResizingRightRef.current = true; }} min={rightPanelMin} max={rightPanelMax} />
-                            <button
-                                onClick={() => setRightCollapsed(true)}
-                                className="absolute left-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-sky-200/30 hover:text-stone-50"
-                                title="Collapse inspector"
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </button>
-                        </div>
-                    ) : !isCompactViewport ? (
-                        <MapperDockButton
-                            title="Inspector"
-                            description="Bring back the JSON, current grid, and saved snapshot view."
-                            onClick={() => setRightCollapsed(false)}
-                            icon={<ChevronLeft className="h-4 w-4" />}
-                            align="right"
-                        />
-                    ) : null}
-
-                    {isCompactViewport && rightCollapsed && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setLeftCollapsed(true);
-                                setRightCollapsed(false);
-                            }}
-                            className="absolute right-2 top-2 z-30 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-stone-950/92 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-stone-100 shadow-lg backdrop-blur-xl transition-colors hover:border-sky-200/30"
-                        >
-                            Inspector
-                            <ChevronLeft className="h-3.5 w-3.5" />
-                        </button>
-                    )}
-
-                    {isCompactViewport && !leftCollapsed && (
-                        <>
+                <div className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+                    {showCompactDockBar && (
+                        <div className="flex shrink-0 items-center gap-2 px-1">
                             <button
                                 type="button"
-                                className="absolute inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
-                                onClick={() => setLeftCollapsed(true)}
-                                aria-label="Close control deck"
-                            />
-                            <div className="absolute inset-y-0 left-0 z-40 w-full max-w-[min(92vw,420px)] pr-2 sm:pr-3">
-                                <div className="relative h-full min-h-0">
-                                    <LeftPanel
-                                        width={compactPanelWidth}
-                                        onStartResize={() => { /* compact overlay is fixed width */ }}
-                                        min={compactPanelWidth}
-                                        max={compactPanelWidth}
-                                        resizable={false}
-                                    />
-                                    <button
-                                        onClick={() => setLeftCollapsed(true)}
-                                        className="absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-amber-200/30 hover:text-stone-50"
-                                        title="Close control deck"
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {isCompactViewport && !rightCollapsed && (
-                        <>
+                                onClick={() => {
+                                    setRightCollapsed(true);
+                                    setLeftCollapsed(false);
+                                }}
+                                className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-stone-950/92 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-stone-100 shadow-lg backdrop-blur-xl transition-colors hover:border-amber-200/30"
+                            >
+                                <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                                Controls
+                            </button>
                             <button
                                 type="button"
-                                className="absolute inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
-                                onClick={() => setRightCollapsed(true)}
-                                aria-label="Close inspector"
-                            />
-                            <div className="absolute inset-y-0 right-0 z-40 w-full max-w-[min(92vw,420px)] pl-2 sm:pl-3">
-                                <div className="relative h-full min-h-0">
-                                    <JsonPanel
-                                        width={compactPanelWidth}
-                                        onStartResize={() => { /* compact overlay is fixed width */ }}
-                                        min={compactPanelWidth}
-                                        max={compactPanelWidth}
-                                        resizable={false}
-                                    />
-                                    <button
-                                        onClick={() => setRightCollapsed(true)}
-                                        className="absolute left-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-sky-200/30 hover:text-stone-50"
-                                        title="Close inspector"
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </>
+                                onClick={() => {
+                                    setLeftCollapsed(true);
+                                    setRightCollapsed(false);
+                                }}
+                                className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-stone-950/92 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-stone-100 shadow-lg backdrop-blur-xl transition-colors hover:border-sky-200/30"
+                            >
+                                Inspector
+                                <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
+                            </button>
+                        </div>
                     )}
+
+                    <div className="relative flex min-h-0 flex-1 gap-3 overflow-hidden">
+                        {!isCompactViewport && !leftCollapsed ? (
+                            <div className="relative flex h-full min-h-0 shrink-0 transition-all duration-300">
+                                <LeftPanel width={leftPanelWidth} onStartResize={() => { isResizingLeftRef.current = true; }} min={leftPanelMin} max={leftPanelMax} />
+                                <button
+                                    onClick={() => setLeftCollapsed(true)}
+                                    className="absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-amber-200/30 hover:text-stone-50"
+                                    title="Collapse control deck"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ) : !isCompactViewport ? (
+                            <MapperDockButton
+                                title="Controls"
+                                description="Re-open the level, screenshot, and tile workflow deck."
+                                onClick={() => setLeftCollapsed(false)}
+                                icon={<ChevronRight className="h-4 w-4" />}
+                                align="left"
+                            />
+                        ) : null}
+
+                        <GridEditorPanel />
+
+                        {!isCompactViewport && !rightCollapsed ? (
+                            <div className="relative flex h-full min-h-0 shrink-0 transition-all duration-300">
+                                <JsonPanel width={rightPanelWidth} onStartResize={() => { isResizingRightRef.current = true; }} min={rightPanelMin} max={rightPanelMax} />
+                                <button
+                                    onClick={() => setRightCollapsed(true)}
+                                    className="absolute left-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-sky-200/30 hover:text-stone-50"
+                                    title="Collapse inspector"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ) : !isCompactViewport ? (
+                            <MapperDockButton
+                                title="Inspector"
+                                description="Bring back the JSON, current grid, and saved snapshot view."
+                                onClick={() => setRightCollapsed(false)}
+                                icon={<ChevronLeft className="h-4 w-4" />}
+                                align="right"
+                            />
+                        ) : null}
+
+                        {isCompactViewport && !leftCollapsed && (
+                            <>
+                                <button
+                                    type="button"
+                                    className="absolute inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
+                                    onClick={() => setLeftCollapsed(true)}
+                                    aria-label="Close control deck"
+                                />
+                                <div className="absolute inset-y-0 left-0 z-40 w-full max-w-[min(92vw,420px)] pr-2 sm:pr-3">
+                                    <div className="relative h-full min-h-0">
+                                        <LeftPanel
+                                            width={compactPanelWidth}
+                                            onStartResize={() => { /* compact overlay is fixed width */ }}
+                                            min={compactPanelWidth}
+                                            max={compactPanelWidth}
+                                            resizable={false}
+                                        />
+                                        <button
+                                            onClick={() => setLeftCollapsed(true)}
+                                            className="absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-amber-200/30 hover:text-stone-50"
+                                            title="Close control deck"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {isCompactViewport && !rightCollapsed && (
+                            <>
+                                <button
+                                    type="button"
+                                    className="absolute inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
+                                    onClick={() => setRightCollapsed(true)}
+                                    aria-label="Close inspector"
+                                />
+                                <div className="absolute inset-y-0 right-0 z-40 w-full max-w-[min(92vw,420px)] pl-2 sm:pl-3">
+                                    <div className="relative h-full min-h-0">
+                                        <JsonPanel
+                                            width={compactPanelWidth}
+                                            onStartResize={() => { /* compact overlay is fixed width */ }}
+                                            min={compactPanelWidth}
+                                            max={compactPanelWidth}
+                                            resizable={false}
+                                        />
+                                        <button
+                                            onClick={() => setRightCollapsed(true)}
+                                            className="absolute left-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-stone-950/85 text-stone-300 shadow-lg transition-colors hover:border-sky-200/30 hover:text-stone-50"
+                                            title="Close inspector"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
             <BulkAddContextMenu
