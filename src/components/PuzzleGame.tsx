@@ -1,6 +1,20 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import {
+  BookOpen,
+  Compass,
+  Expand,
+  LayoutDashboard,
+  Map as MapIcon,
+  Play,
+  RotateCcw,
+  Sparkles,
+  Star,
+  TimerReset,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
@@ -29,6 +43,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { CampaignDialog } from "./CampaignDialog";
 import { HowToPlayDialog } from "./HowToPlayDialog";
 import { TouchControls } from "./TouchControls";
+import menuArt from "@/assets/menu.png";
 
 console.log('📦 PuzzleGame.tsx loading...');
 
@@ -308,6 +323,8 @@ export const PuzzleGame = () => {
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildStatus, setBuildStatus] = useState<string>('');
   const [networkStatus, setNetworkStatus] = useState<'offline' | 'connecting' | 'online'>('offline');
+  const [hudMessage, setHudMessage] = useState<string | null>(null);
+  const hudMessageTimeoutRef = useRef<number | null>(null);
 
   // Per-level countdown timer (configured in the mapper).
   const [levelTimeLimitSeconds, setLevelTimeLimitSeconds] = useState<number | null>(null);
@@ -347,6 +364,29 @@ export const PuzzleGame = () => {
       window.clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+  }, []);
+
+  const pushHudMessage = useCallback((message: string | null, duration = 1800) => {
+    if (hudMessageTimeoutRef.current != null) {
+      window.clearTimeout(hudMessageTimeoutRef.current);
+      hudMessageTimeoutRef.current = null;
+    }
+
+    setHudMessage(message);
+
+    if (!message) return;
+    hudMessageTimeoutRef.current = window.setTimeout(() => {
+      setHudMessage((current) => (current === message ? null : current));
+      hudMessageTimeoutRef.current = null;
+    }, duration);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hudMessageTimeoutRef.current != null) {
+        window.clearTimeout(hudMessageTimeoutRef.current);
+      }
+    };
   }, []);
 
   const resetLevelTimer = useCallback((limitSeconds: number | undefined) => {
@@ -843,11 +883,11 @@ export const PuzzleGame = () => {
       const hasSeenHint = sessionStorage.getItem('dragHintSeen');
       if (!hasSeenHint) {
         setTimeout(() => {
-          toast.info("💡 Tip: Drag the game view to pan the camera!", { duration: 4000 });
+          pushHudMessage("Tip: drag the board to pan the camera.", 4000);
           sessionStorage.setItem('dragHintSeen', 'true');
         }, 1500);
       }
-    }, []);
+    }, [pushHudMessage]);
 
     // Helper function to flash player highlight twice
     const flashPlayerHighlight = useCallback(() => {
@@ -1144,10 +1184,10 @@ export const PuzzleGame = () => {
             playersDirty = true;
           }
           if (outcome.collectedKey && player.isLocal) {
-            toast.success(`${outcome.collectedKey.toUpperCase()} KEY COLLECTED`);
+            pushHudMessage(`${outcome.collectedKey.toUpperCase()} key collected`);
           }
           if (outcome.unlockedLock && player.isLocal) {
-            toast.success(`${outcome.unlockedLock.toUpperCase()} LOCK OPENED`);
+            pushHudMessage(`${outcome.unlockedLock.toUpperCase()} lock opened`);
           }
           if (outcome.collectedHourglass && player.isLocal) {
             const at = outcome.collectedHourglass;
@@ -1156,13 +1196,13 @@ export const PuzzleGame = () => {
             const bonus = Math.max(1, Math.min(86400, Math.round(Number(raw ?? DEFAULT_BONUS_TIME_SECONDS))));
             if (timerEnabledRef.current) {
               addLevelTimeSeconds(bonus);
-              toast.success(`+${bonus}s`, { duration: 1400 });
+              pushHudMessage(`+${bonus}s bonus time`, 1400);
             } else {
-              toast.info("BONUS TIME COLLECTED", { duration: 1400 });
+              pushHudMessage("Bonus time collected", 1400);
             }
           }
           if (outcome.brokeRock && player.isLocal) {
-            toast.info("ROCK CRUMBLED!");
+            pushHudMessage("Rock crumbled");
           }
           if (outcome.consumedMove) {
             player.moves += 1;
@@ -1204,10 +1244,12 @@ export const PuzzleGame = () => {
         if (clearUpdate.isNewBestMoves) clearHighlights.push("Best moves");
         if (clearUpdate.isNewBestTime) clearHighlights.push("Best clock");
 
-        toast.success(`LEVEL ${currentLevel.id} COMPLETE!`, {
-          description: clearHighlights.length > 0 ? clearHighlights.join(" • ") : `Moves: ${localPlayer.moves}`,
-          duration: 2800,
-        });
+        pushHudMessage(
+          clearHighlights.length > 0
+            ? `Level ${currentLevel.id} complete • ${clearHighlights.join(" • ")}`
+            : `Level ${currentLevel.id} complete • Moves ${localPlayer.moves}`,
+          2600,
+        );
       }
 
       if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
@@ -1224,6 +1266,7 @@ export const PuzzleGame = () => {
       isComplete,
       moves,
       orderedLevelIds,
+      pushHudMessage,
       renderCavePos.x,
       renderCavePos.y,
       selectedArrow,
@@ -1278,9 +1321,9 @@ export const PuzzleGame = () => {
         const currentFrontier = allLevels[Math.min(highestUnlockedIndex, allLevels.length - 1)];
         const nextLocked = allLevels[nextIndex];
         if (currentFrontier && nextLocked) {
-          toast.info(`Complete Level ${currentFrontier.id} to unlock Level ${nextLocked.id}.`);
+          pushHudMessage(`Complete Level ${currentFrontier.id} to unlock Level ${nextLocked.id}.`, 2200);
         } else {
-          toast.info("Complete the current frontier level to unlock more stages.");
+          pushHudMessage("Complete the frontier level to unlock more stages.", 2200);
         }
         return false;
       }
@@ -1290,7 +1333,7 @@ export const PuzzleGame = () => {
       setCompletionSummary(null);
       setCurrentLevelIndex(nextIndex);
       return true;
-    }, [allLevels, highestUnlockedIndex]);
+    }, [allLevels, highestUnlockedIndex, pushHudMessage]);
 
     const goToLevelId = useCallback((levelId: number) => {
       const nextIndex = allLevels.findIndex((level) => level.id === levelId);
@@ -1322,7 +1365,7 @@ export const PuzzleGame = () => {
         enqueueInput({ type: "deselect" });
         resetSelectorToPlayer();
         flashPlayerHighlight();
-        toast.info("Arrow deselected - control returned to player");
+        pushHudMessage("Arrow deselected");
         return;
       }
 
@@ -1341,7 +1384,7 @@ export const PuzzleGame = () => {
         enqueueInput({ type: "select", x: currentSelector.x, y: currentSelector.y });
         setIsSelectorActive(false);
         setSelectorPos({ x: currentSelector.x, y: currentSelector.y });
-        toast.info("Arrow selected! Use arrow keys to move it.");
+        pushHudMessage("Arrow selected — use the movement controls to slide it.", 2200);
         return;
       }
 
@@ -1362,6 +1405,7 @@ export const PuzzleGame = () => {
       localPlayer?.isGliding,
       localPlayerPos.x,
       localPlayerPos.y,
+      pushHudMessage,
       renderGrid,
       resetSelectorToPlayer,
       selectedArrow,
@@ -1384,8 +1428,8 @@ export const PuzzleGame = () => {
       const levelToReset = activeLevel ?? currentLevel;
       if (!levelToReset) return;
       applyLevelState(levelToReset);
-      toast.info("LEVEL RESET");
-    }, [activeLevel, applyLevelState, currentLevel]);
+      pushHudMessage("Level reset");
+    }, [activeLevel, applyLevelState, currentLevel, pushHudMessage]);
 
     // Keyboard controls (player movement + keyboard arrow selection)
     useEffect(() => {
@@ -1426,13 +1470,13 @@ export const PuzzleGame = () => {
           case 'n': case 'N':
             e.preventDefault();
             if (currentLevelIndex < allLevels.length - 1 && goToLevelIndex(currentLevelIndex + 1)) {
-              toast.info("SKIPPED TO NEXT LEVEL");
+              pushHudMessage("Skipped to next level");
             }
             break;
           case 'p': case 'P':
             e.preventDefault();
             if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) {
-              toast.info("PREVIOUS LEVEL");
+              pushHudMessage("Previous level");
             }
             break;
         }
@@ -1449,6 +1493,7 @@ export const PuzzleGame = () => {
       queueMove,
       resetLevel,
       selectedArrow,
+      pushHudMessage,
       toggleKeyboardSelection
     ]);
 
@@ -1456,7 +1501,7 @@ export const PuzzleGame = () => {
       if (currentLevelIndex < allLevels.length - 1) {
         goToLevelIndex(currentLevelIndex + 1);
       } else {
-        toast.success("ALL LEVELS COMPLETE!");
+        pushHudMessage("All levels complete!", 2600);
       }
     };
 
@@ -1536,7 +1581,7 @@ export const PuzzleGame = () => {
     const handleDoubleClick = () => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       setCameraOffset({ x: 0, z: 0 });
-      toast.info("View reset");
+      pushHudMessage("View reset");
     };
 
     useEffect(() => {
@@ -1546,6 +1591,63 @@ export const PuzzleGame = () => {
     }, [viewMode]);
 
   const levelBackground = currentLevel?.image;
+  const activeThemeKey = currentLevel?.theme ?? "default";
+  const activeTheme = themes[activeThemeKey];
+  const networkBadgeText =
+    networkStatus === "online" ? "Connected" : networkStatus === "connecting" ? "Connecting" : "Solo";
+  const chapterCards = useMemo(() => {
+    const chapterBlueprints = [
+      {
+        title: "Forest Caves",
+        subtitle: "Soft moss, hidden roots, and cozy starts.",
+        accent: "from-emerald-400/35 via-lime-300/10 to-transparent",
+      },
+      {
+        title: "Crystal Depths",
+        subtitle: "Glowing caverns with trickier lines.",
+        accent: "from-fuchsia-400/35 via-violet-300/10 to-transparent",
+      },
+      {
+        title: "Volcano Core",
+        subtitle: "Hot routes, sharp turns, no pressure. Okay, some pressure.",
+        accent: "from-orange-400/40 via-red-300/10 to-transparent",
+      },
+      {
+        title: "Frozen Hollow",
+        subtitle: "Calm blue light and slippery brainteasers.",
+        accent: "from-sky-400/35 via-cyan-300/10 to-transparent",
+      },
+    ] as const;
+
+    const levelsPerChapter = Math.max(1, Math.ceil(allLevels.length / chapterBlueprints.length));
+
+    return chapterBlueprints.map((chapter, index) => {
+      const sliceStart = index * levelsPerChapter;
+      const sliceEnd = Math.min(allLevels.length, sliceStart + levelsPerChapter);
+      const segment = allLevels.slice(sliceStart, sliceEnd);
+      const completed = segment.reduce((count, level) => {
+        const record = getLevelCampaignRecord(campaignProgress, level.id);
+        return count + (record?.completed ? 1 : 0);
+      }, 0);
+      const preview = segment.find((level) => level.image)?.image ?? levelBackground ?? null;
+      const containsCurrent = Boolean(currentLevel && segment.some((level) => level.id === currentLevel.id));
+
+      return {
+        ...chapter,
+        completed,
+        total: segment.length,
+        preview,
+        containsCurrent,
+      };
+    });
+  }, [allLevels, campaignProgress, currentLevel, levelBackground]);
+
+  const goToMapper = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const baseUrl = import.meta.env.BASE_URL || "/";
+    const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+    window.location.assign(`${window.location.origin}${normalizedBase}mapper`);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1618,6 +1720,7 @@ export const PuzzleGame = () => {
     }, [cameraZoomIndex, isFullscreenMode]);
 
     const useSplitHud = isMobileLandscape || isFullscreenMode || viewMode === "sprite";
+    const desktopShellActive = !useSplitHud && !shouldRotateGate;
     const hasNextLevel = currentLevelIndex < allLevels.length - 1;
     const nextLevelLocked = hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
     const nextLevelTitle = !hasNextLevel
@@ -1639,14 +1742,16 @@ export const PuzzleGame = () => {
     );
 
     return (
-      <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'}`}>
+      <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-[#081214]`}>
+        <div className={`absolute inset-0 bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'} opacity-20`} />
         {levelBackground && (
           <div
-            className="absolute inset-0 opacity-30 bg-cover bg-center blur-[2px]"
+            className="absolute inset-0 opacity-35 bg-cover bg-center blur-[2px] scale-105"
             style={{ backgroundImage: `url(${levelBackground})` }}
           />
         )}
-        <div className="absolute inset-0 bg-black/30" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,205,138,0.20),transparent_24%),radial-gradient(circle_at_top_right,rgba(98,220,255,0.16),transparent_22%),linear-gradient(180deg,rgba(5,12,14,0.18)_0%,rgba(5,12,14,0.68)_58%,rgba(3,8,9,0.88)_100%)]" />
+        <div className="absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
         {shouldRotateGate && (
           <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm">
             <div className="mx-6 max-w-sm rounded-2xl border border-white/15 bg-black/55 px-6 py-6 text-center shadow-2xl">
@@ -1684,6 +1789,223 @@ export const PuzzleGame = () => {
           <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate} />
         )}
 
+        {desktopShellActive && (
+          <>
+            <aside className="pointer-events-none absolute inset-y-4 left-4 z-40 hidden w-80 xl:flex xl:flex-col xl:gap-4">
+              <div className="pointer-events-auto overflow-hidden rounded-[32px] border border-[#8d6e4f]/55 bg-[#120d09]/78 shadow-[0_24px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                <div className="relative h-44 overflow-hidden border-b border-white/10">
+                  <img src={menuArt} alt="Stone Age art" className="h-full w-full object-cover opacity-80" />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(14,10,8,0.08)_0%,rgba(14,10,8,0.18)_40%,rgba(14,10,8,0.82)_100%)]" />
+                  <div className="absolute inset-x-5 bottom-5">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-amber-100">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Story Mode
+                    </div>
+                    <div className="mt-3 text-4xl font-black uppercase tracking-[0.08em] text-stone-50">
+                      Stone Age
+                    </div>
+                    <div className="mt-2 max-w-[17rem] text-sm leading-relaxed text-stone-300">
+                      A warmer, more cinematic puzzle shell inspired by your reference boards and menus.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 p-4">
+                  <button
+                    type="button"
+                    onClick={() => pushHudMessage("Adventure already in progress ✨")}
+                    className="flex w-full items-center justify-between rounded-2xl border border-emerald-300/25 bg-emerald-500/14 px-4 py-3 text-left text-stone-50 transition-colors hover:bg-emerald-500/18"
+                  >
+                    <span>
+                      <span className="block text-xs font-black uppercase tracking-[0.18em] text-emerald-200/80">Continue</span>
+                      <span className="mt-1 block text-sm text-stone-200">Jump right back into Level {currentLevel.id}</span>
+                    </span>
+                    <Play className="h-5 w-5 text-emerald-200" />
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={goToMapper}
+                      className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-stone-100 transition-colors hover:border-amber-200/30 hover:bg-white/10"
+                    >
+                      <LayoutDashboard className="h-5 w-5 text-amber-200" />
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Create</div>
+                        <div className="mt-1 text-sm font-semibold">Level Editor</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={resetLevel}
+                      className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-stone-100 transition-colors hover:border-amber-200/30 hover:bg-white/10"
+                    >
+                      <RotateCcw className="h-5 w-5 text-stone-200" />
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Replay</div>
+                        <div className="mt-1 text-sm font-semibold">Restart Stage</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Campaign</div>
+                      <div className="mt-2 text-2xl font-black text-stone-50">{campaignProgressText}</div>
+                      <div className="mt-1 text-xs text-stone-300">Stages cleared so far</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Network</div>
+                      <div className="mt-2 text-2xl font-black text-stone-50">{networkBadgeText}</div>
+                      <div className="mt-1 text-xs text-stone-300">{networkStatus === 'online' ? 'Live ghost inputs active' : 'Single-player mode'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pointer-events-auto rounded-[28px] border border-[#8d6e4f]/45 bg-[#120d09]/72 p-4 shadow-[0_18px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">World Map</div>
+                    <div className="mt-1 text-lg font-black text-stone-50">Adventure Regions</div>
+                  </div>
+                  {campaignDialog}
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {chapterCards.map((chapter) => (
+                    <div
+                      key={chapter.title}
+                      className={[
+                        "overflow-hidden rounded-2xl border p-3",
+                        chapter.containsCurrent
+                          ? "border-amber-300/35 bg-white/10"
+                          : "border-white/10 bg-white/[0.045]",
+                      ].join(" ")}
+                    >
+                      <div className="relative overflow-hidden rounded-xl border border-white/10">
+                        {chapter.preview ? (
+                          <img src={chapter.preview} alt={chapter.title} className="h-24 w-full object-cover opacity-80" />
+                        ) : (
+                          <div className={`h-24 w-full bg-gradient-to-br ${chapter.accent}`} />
+                        )}
+                        <div className={`absolute inset-0 bg-gradient-to-br ${chapter.accent}`} />
+                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,12,13,0.05)_0%,rgba(8,12,13,0.72)_100%)]" />
+                        <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-black uppercase tracking-[0.1em] text-stone-50">{chapter.title}</div>
+                            <div className="mt-1 text-[11px] text-stone-200/80">{chapter.subtitle}</div>
+                          </div>
+                          <div className="rounded-full border border-white/15 bg-black/30 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-stone-100">
+                            {chapter.completed}/{chapter.total}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            <aside className="pointer-events-none absolute inset-y-4 right-4 z-40 hidden w-80 xl:flex xl:flex-col xl:gap-4">
+              <div className="pointer-events-auto rounded-[32px] border border-[#5a7f88]/40 bg-[#09161a]/76 p-4 shadow-[0_24px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                <div className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.02)_100%)] p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.22em] text-sky-100/70">Explorer Profile</div>
+                      <div className="mt-2 text-3xl font-black uppercase tracking-[0.08em] text-stone-50">Rex</div>
+                      <div className="mt-1 text-sm text-stone-300">The little cave runner, now with a much fancier UI trailer.</div>
+                    </div>
+                    <div
+                      className="flex h-20 w-20 items-center justify-center rounded-[24px] border border-white/15 text-3xl font-black text-stone-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"
+                      style={{ background: `linear-gradient(135deg, ${activeTheme.player}, ${activeTheme.arrow})` }}
+                    >
+                      R
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Current Stage</div>
+                      <div className="mt-2 text-2xl font-black text-stone-50">{currentLevel.id}</div>
+                      <div className="mt-1 text-xs text-stone-300">{activeThemeKey} theme</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Best Moves</div>
+                      <div className="mt-2 text-2xl font-black text-stone-50">{currentBestMoves ?? '--'}</div>
+                      <div className="mt-1 text-xs text-stone-300">Personal record</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-[28px] border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Companions</div>
+                      <div className="mt-1 text-lg font-black text-stone-50">Palette Picks</div>
+                    </div>
+                    <Star className="h-4 w-4 text-amber-200" />
+                  </div>
+                  <div className="mt-4 grid grid-cols-4 gap-2">
+                    {[
+                      { name: 'Moss', color: '#79d28a' },
+                      { name: 'Tide', color: '#5daeff' },
+                      { name: 'Amber', color: '#f7c35f' },
+                      { name: 'Ember', color: '#ff8f6a' },
+                    ].map((variant, index) => (
+                      <button
+                        key={variant.name}
+                        type="button"
+                        onClick={() => pushHudMessage(`${variant.name} skin preview coming soon`)}
+                        className={[
+                          'group rounded-2xl border px-2 py-3 text-center transition-colors',
+                          index === 0 ? 'border-emerald-300/35 bg-emerald-500/12' : 'border-white/10 bg-white/5 hover:bg-white/10',
+                        ].join(' ')}
+                      >
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/15 text-sm font-black text-stone-950" style={{ backgroundColor: variant.color }}>
+                          {variant.name.charAt(0)}
+                        </div>
+                        <div className="mt-2 text-[10px] font-black uppercase tracking-[0.14em] text-stone-200">{variant.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pointer-events-auto rounded-[28px] border border-[#5a7f88]/35 bg-[#09161a]/72 p-4 shadow-[0_18px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Session Snapshot</div>
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-stone-100">
+                      <Compass className="h-4 w-4 text-sky-200" />
+                      Objective
+                    </div>
+                    <div className="mt-2 text-sm leading-relaxed text-stone-300">
+                      Reach the cave, keep an eye on the clock, and use remote arrows to bridge awkward gaps.
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-stone-100">
+                      <TimerReset className="h-4 w-4 text-amber-200" />
+                      Clock
+                    </div>
+                    <div className="mt-2 text-2xl font-black text-stone-50">{timeLeftText ?? '∞'}</div>
+                    <div className="mt-1 text-xs text-stone-300">{currentBestClockText ? `Best clock: ${currentBestClockText}` : 'No clock record yet'}</div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.05] p-3">
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Controls</div>
+                      <div className="mt-1 text-sm text-stone-100">Keyboard, touch, and immersive board zoom.</div>
+                    </div>
+                    <HowToPlayDialog disabled={shouldRotateGate} />
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </>
+        )}
+
         {useSplitHud ? (
           <div
             className="relative z-50 flex w-full items-start justify-between px-2"
@@ -1693,7 +2015,7 @@ export const PuzzleGame = () => {
             <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
               <Button
                 onClick={() => {
-                  if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) toast.info("Previous Level");
+                  if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) pushHudMessage("Previous level");
                 }}
                 variant="ghost"
                 size="default"
@@ -1759,9 +2081,9 @@ export const PuzzleGame = () => {
               <Button
                 onClick={() => {
                   if (currentLevelIndex < allLevels.length - 1) {
-                    if (goToLevelIndex(currentLevelIndex + 1)) toast.info("Next Level");
+                    if (goToLevelIndex(currentLevelIndex + 1)) pushHudMessage("Next level");
                   } else {
-                    toast.info("No more levels");
+                    pushHudMessage("No more levels");
                   }
                 }}
                 variant="ghost"
@@ -1882,7 +2204,7 @@ export const PuzzleGame = () => {
                 <Button
                   onClick={() => {
                     setCameraOffset({ x: 0, z: 0 });
-                    toast.info("View reset");
+                    pushHudMessage("View reset");
                   }}
                   variant="ghost"
                   size="sm"
@@ -1896,204 +2218,163 @@ export const PuzzleGame = () => {
           </div>
         ) : (
           <div
-            className="absolute left-0 right-0 z-50 flex justify-center"
-            style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+            className="absolute left-4 right-4 z-50 xl:left-[22rem] xl:right-[22rem]"
+            style={{ top: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
           >
-            <div
-              className={[
-                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50",
-                "flex items-center justify-center max-w-[calc(100vw-16px)]",
-                "px-6 py-3 gap-4 flex-wrap",
-                isFullscreenMode ? "bg-card/80" : "",
-              ].join(" ")}
-            >
-              {/* Previous Level Button */}
-              <Button
-                onClick={() => {
-                  if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) toast.info("Previous Level");
-                }}
-                variant="ghost"
-                size="default"
-                className="h-10 w-10 p-0 text-xl font-bold hover:bg-primary/20"
-                disabled={currentLevelIndex === 0}
-                aria-label="Previous level"
-                title="Previous level (P)"
-              >
-                ←
-              </Button>
-
-              {/* Level Info */}
-              <div className="flex items-center gap-3 px-4">
-                <span className="text-primary font-bold text-2xl">
-                  {`Level ${currentLevel.id}`}
-                </span>
-                <span className="text-muted-foreground text-xl">•</span>
-                <span className="text-foreground font-medium text-lg">{`Moves: ${moves}`}</span>
-                  {timeLeftText ? (
-                    <>
-                      <span className="text-muted-foreground text-xl">•</span>
-                      <span
-                        className={[
-                          "inline-flex items-center gap-2 rounded-md border px-3.5 py-2 text-base font-black tabular-nums shadow-md",
-                          isTimerUrgent
-                            ? "border-red-200/80 bg-red-700 text-white shadow-lg ring-2 ring-red-200/40"
-                            : "border-border/60 bg-background/70 text-foreground ring-1 ring-black/10",
-                        ].join(" ")}
-                        title="Time left"
-                      >
-                       <span aria-hidden>⏱</span>
-                       <span>{timeLeftText}</span>
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground text-xl">•</span>
-                )}
-                <span
-                  className="inline-flex items-center rounded-md border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-black tracking-wide text-muted-foreground"
-                  title="Campaign clears"
-                >
-                  {campaignProgressText} cleared
-                </span>
-                {currentBestMoves != null && (
-                  <span
-                    className="inline-flex items-center rounded-md border border-amber-300/50 bg-amber-500/10 px-3 py-1.5 text-xs font-black tracking-wide text-amber-100"
-                    title="Personal best moves on this level"
+            <div className="rounded-[28px] border border-[#7b6043]/60 bg-[#1c140e]/78 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    onClick={() => {
+                      if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) pushHudMessage("Previous level");
+                    }}
+                    variant="ghost"
+                    size="default"
+                    className="h-11 w-11 rounded-2xl border border-white/10 bg-white/5 p-0 text-xl font-bold text-stone-50 hover:bg-white/10"
+                    disabled={currentLevelIndex === 0}
+                    aria-label="Previous level"
+                    title="Previous level (P)"
                   >
-                    PB {currentBestMoves}
-                  </span>
-                )}
-                {currentBestClockText && (
-                  <span
-                    className="inline-flex items-center rounded-md border border-sky-300/40 bg-sky-500/10 px-3 py-1.5 text-xs font-black tracking-wide text-sky-100"
-                    title="Best remaining time on this level"
+                    ←
+                  </Button>
+
+                  <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-white/10 bg-black/20 px-3 py-2">
+                    <div className="rounded-2xl border border-amber-300/25 bg-amber-500/10 px-3 py-2">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Stage</div>
+                      <div className="mt-1 text-lg font-black text-amber-100">L{currentLevel.id}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Moves</div>
+                      <div className="mt-1 text-lg font-black text-stone-50">{moves}</div>
+                    </div>
+                    <div className={[
+                      'rounded-2xl border px-3 py-2',
+                      isTimerUrgent ? 'border-red-300/40 bg-red-500/14' : 'border-white/10 bg-white/5',
+                    ].join(' ')}>
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Clock</div>
+                      <div className="mt-1 text-lg font-black text-stone-50">{timeLeftText ?? '∞'}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Campaign</div>
+                      <div className="mt-1 text-lg font-black text-stone-50">{campaignProgressText}</div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-stone-200">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-red-300/60 bg-red-600/85 px-2 py-1 text-xs font-black text-white">
+                        <span aria-hidden>🗝</span>
+                        <span>{redKeyCount}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-green-300/60 bg-green-600/85 px-2 py-1 text-xs font-black text-white">
+                        <span aria-hidden>🔑</span>
+                        <span>{greenKeyCount}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => {
+                      if (currentLevelIndex < allLevels.length - 1) {
+                        if (goToLevelIndex(currentLevelIndex + 1)) pushHudMessage("Next level");
+                      } else {
+                        pushHudMessage("No more levels");
+                      }
+                    }}
+                    variant="ghost"
+                    size="default"
+                    className="h-11 w-11 rounded-2xl border border-white/10 bg-white/5 p-0 text-xl font-bold text-stone-50 hover:bg-white/10"
+                    aria-label="Next level"
+                    title={nextLevelTitle}
                   >
-                    Clock {currentBestClockText}
-                  </span>
-                )}
-                <div className="flex items-center gap-2">
-                  <span
-                    className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-xs font-black text-white px-2 py-1"
-                    title="Red keys collected"
-                  >
-                    <span aria-hidden>🗝</span>
-                    <span>{redKeyCount}</span>
-                  </span>
-                  <span
-                    className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-xs font-black text-white px-2 py-1"
-                    title="Green keys collected"
-                  >
-                    <span aria-hidden>🔑</span>
-                    <span>{greenKeyCount}</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Restart Button */}
-              <Button
-                onClick={resetLevel}
-                variant="outline"
-                size="default"
-                disabled={isComplete || localPlayer?.isGliding}
-                className="h-11 px-5 text-base font-semibold hover:bg-primary/20"
-                title="Restart level (R)"
-              >
-                Restart
-              </Button>
-
-              {campaignDialog}
-
-              <HowToPlayDialog disabled={shouldRotateGate} />
-
-              {/* Next Level Button */}
-              <Button
-                onClick={() => {
-                  if (currentLevelIndex < allLevels.length - 1) {
-                    if (goToLevelIndex(currentLevelIndex + 1)) toast.info("Next Level");
-                  } else {
-                    toast.info("No more levels");
-                  }
-                }}
-                variant="ghost"
-                size="default"
-                className="h-10 w-10 p-0 text-xl font-bold hover:bg-primary/20"
-                aria-label="Next level"
-                title={nextLevelTitle}
-              >
-                →
-              </Button>
-
-              <div className="ml-2 pl-2 border-l border-border/50 flex items-center gap-2">
-                <Button
-                  onClick={() => {
-                    const next = !showCoordsOverlay;
-                    setShowCoordsOverlay(next);
-                    setShowCoordsOverlayState(next);
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 px-2 text-xs font-black tracking-wide hover:bg-primary/20"
-                  title="Toggle coordinate labels (shown in SPR view)"
-                  aria-pressed={showCoordsOverlay}
-                >
-                  XY
-                </Button>
-
-                <Button
-                  onClick={() => {
-                    setUserZoomTouched(true);
-                    setCameraZoomIndex((i) => Math.max(0, i - 1));
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
-                  title="Zoom out"
-                  disabled={!canZoomOut}
-                >
-                  -
-                </Button>
-
-                <div className="min-w-12 text-center font-semibold text-muted-foreground text-sm">
-                  {Math.round((1 / cameraZoomFactor) * 100)}%
+                    →
+                  </Button>
                 </div>
 
-                <Button
-                  onClick={() => {
-                    setUserZoomTouched(true);
-                    setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 w-10 p-0 text-lg hover:bg-primary/20"
-                  title="Zoom in"
-                  disabled={!canZoomIn}
-                >
-                  +
-                </Button>
+                <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-white/10 bg-black/20 px-3 py-2">
+                  <Button
+                    onClick={resetLevel}
+                    variant="ghost"
+                    size="sm"
+                    disabled={isComplete || localPlayer?.isGliding}
+                    className="h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-stone-50 hover:bg-white/10"
+                    title="Restart level (R)"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Replay
+                  </Button>
 
-                <Button
-                  onClick={() => {
-                    setViewMode(nextViewMode);
-                    setUserZoomTouched(false);
-                    setCameraOffset({ x: 0, z: 0 });
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 px-3 text-sm font-bold tracking-wide hover:bg-primary/20"
-                  title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
-                >
-                  {VIEW_MODE_LABELS[viewMode]}
-                </Button>
+                  <HowToPlayDialog disabled={shouldRotateGate} />
 
-                <Button
-                  onClick={() => void toggleFullscreenMode()}
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 px-2 text-lg font-bold hover:bg-primary/20"
-                  title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
-                  aria-pressed={isFullscreenMode}
-                >
-                  ⛶
-                </Button>
+                  <Button
+                    onClick={() => {
+                      const next = !showCoordsOverlay;
+                      setShowCoordsOverlay(next);
+                      setShowCoordsOverlayState(next);
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-xs font-black tracking-[0.16em] text-stone-50 hover:bg-white/10"
+                    title="Toggle coordinate labels (shown in SPR view)"
+                    aria-pressed={showCoordsOverlay}
+                  >
+                    XY
+                  </Button>
+
+                  <Button
+                    onClick={() => {
+                      setUserZoomTouched(true);
+                      setCameraZoomIndex((i) => Math.max(0, i - 1));
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
+                    title="Zoom out"
+                    disabled={!canZoomOut}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+
+                  <div className="min-w-14 text-center text-sm font-black text-stone-300">
+                    {Math.round((1 / cameraZoomFactor) * 100)}%
+                  </div>
+
+                  <Button
+                    onClick={() => {
+                      setUserZoomTouched(true);
+                      setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
+                    title="Zoom in"
+                    disabled={!canZoomIn}
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    onClick={() => {
+                      setViewMode(nextViewMode);
+                      setUserZoomTouched(false);
+                      setCameraOffset({ x: 0, z: 0 });
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-sm font-black tracking-[0.14em] text-stone-50 hover:bg-white/10"
+                    title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
+                  >
+                    {VIEW_MODE_LABELS[viewMode]}
+                  </Button>
+
+                  <Button
+                    onClick={() => void toggleFullscreenMode()}
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
+                    title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
+                    aria-pressed={isFullscreenMode}
+                  >
+                    <Expand className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -2101,7 +2382,10 @@ export const PuzzleGame = () => {
         <div
           ref={gestureSurfaceRef}
           data-touch-controls-target
-          className="relative z-20 w-full min-h-0 flex-1"
+          className={[
+            "relative z-20 w-full min-h-0 flex-1",
+            desktopShellActive ? "px-3 pb-5 pt-24 xl:px-[22rem] xl:pb-8" : "",
+          ].join(" ")}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -2116,93 +2400,116 @@ export const PuzzleGame = () => {
             touchAction: shouldRotateGate ? 'auto' : 'none',
           }}
         >
-          {viewMode === "sprite" ? (
-            <GameSprite2D
-              grid={renderGrid}
-              cavePos={renderCavePos}
-              levelImageUrl={currentLevel?.image ?? null}
-              playerStart={currentLevel?.playerStart ?? null}
-              selectedArrow={selectedArrow}
-              selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
-              players={renderPlayers}
-              zoomFactor={cameraZoomFactor}
-              showCoords={showCoordsOverlay}
-              fullBleed={isFullscreenMode}
-              onArrowClick={(x, y) => {
-                if (localPlayer?.isGliding) return;
-                const cell = renderGrid[y]?.[x];
-                if (cell !== undefined && isArrowCell(cell)) {
-                  if (localPlayerPos.x === x && localPlayerPos.y === y) {
-                    toast.error("Cannot select arrow while standing on it!");
-                    return;
+          <div className={[
+            "relative h-full w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
+            desktopShellActive ? "ring-1 ring-amber-300/10" : "",
+          ].join(' ')}>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,215,160,0.15),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_18%,rgba(0,0,0,0.18)_100%)]" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_100%)]" />
+
+            {desktopShellActive && (
+              <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 hidden xl:flex items-end justify-between gap-4">
+                <div className="max-w-md rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md">
+                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Adventure Notes</div>
+                  <div className="mt-1 text-sm leading-relaxed text-stone-200">
+                    Reach the cave, route arrows across the void, and keep the clock from eating your lunch.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md text-sm text-stone-200">
+                  <BookOpen className="h-4 w-4 text-amber-200" />
+                  <span>View {VIEW_MODE_LABELS[viewMode]} • Theme {activeThemeKey}</span>
+                </div>
+              </div>
+            )}
+
+            {viewMode === "sprite" ? (
+              <GameSprite2D
+                grid={renderGrid}
+                cavePos={renderCavePos}
+                levelImageUrl={currentLevel?.image ?? null}
+                playerStart={currentLevel?.playerStart ?? null}
+                selectedArrow={selectedArrow}
+                selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+                players={renderPlayers}
+                zoomFactor={cameraZoomFactor}
+                showCoords={showCoordsOverlay}
+                fullBleed={isFullscreenMode}
+                onArrowClick={(x, y) => {
+                  if (localPlayer?.isGliding) return;
+                  const cell = renderGrid[y]?.[x];
+                  if (cell !== undefined && isArrowCell(cell)) {
+                    if (localPlayerPos.x === x && localPlayerPos.y === y) {
+                      pushHudMessage("Step off the arrow before selecting it.", 2200);
+                      return;
+                    }
+                    const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                    if (isSameArrow) {
+                      enqueueInput({ type: "deselect" });
+                      resetSelectorToPlayer();
+                      flashPlayerHighlight();
+                      pushHudMessage("Arrow deselected");
+                    } else {
+                      enqueueInput({ type: "select", x, y });
+                      setIsSelectorActive(false);
+                      setSelectorPos({ x, y });
+                      pushHudMessage("Arrow selected — use the controls to move it.", 2200);
+                    }
                   }
-                  const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
-                  if (isSameArrow) {
+                }}
+                onCancelSelection={() => {
+                  if (selectedArrow) {
                     enqueueInput({ type: "deselect" });
                     resetSelectorToPlayer();
-                    flashPlayerHighlight();
-                    toast.info("Arrow deselected - control returned to player");
-                  } else {
-                    enqueueInput({ type: "select", x, y });
-                    setIsSelectorActive(false);
-                    setSelectorPos({ x, y });
-                    toast.info("Arrow selected! Use controls to move it remotely.");
+                    pushHudMessage("Arrow deselected");
                   }
-                }
-              }}
-              onCancelSelection={() => {
-                if (selectedArrow) {
-                  enqueueInput({ type: "deselect" });
-                  resetSelectorToPlayer();
-                  toast.info("Arrow deselected");
-                }
-              }}
-            />
-          ) : (
-            <Game3D
-              grid={renderGrid}
-              cavePos={renderCavePos}
-              selectedArrow={selectedArrow}
-              selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
-              cameraOffset={cameraOffset}
-              zoomFactor={cameraZoomFactor}
-              viewMode={viewMode}
-              theme={currentLevel.theme}
-              players={renderPlayers}
-              localPlayerId={localPlayer?.id}
-              onPlayerClick={flashPlayerHighlight}
-              playerFlashCount={playerFlashCount}
-              onArrowClick={(x, y) => {
-                if (localPlayer?.isGliding) return;
-                const cell = renderGrid[y]?.[x];
-                if (cell !== undefined && isArrowCell(cell)) {
-                  if (localPlayerPos.x === x && localPlayerPos.y === y) {
-                    toast.error("Cannot select arrow while standing on it!");
-                    return;
+                }}
+              />
+            ) : (
+              <Game3D
+                grid={renderGrid}
+                cavePos={renderCavePos}
+                selectedArrow={selectedArrow}
+                selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+                cameraOffset={cameraOffset}
+                zoomFactor={cameraZoomFactor}
+                viewMode={viewMode}
+                theme={currentLevel.theme}
+                players={renderPlayers}
+                localPlayerId={localPlayer?.id}
+                onPlayerClick={flashPlayerHighlight}
+                playerFlashCount={playerFlashCount}
+                onArrowClick={(x, y) => {
+                  if (localPlayer?.isGliding) return;
+                  const cell = renderGrid[y]?.[x];
+                  if (cell !== undefined && isArrowCell(cell)) {
+                    if (localPlayerPos.x === x && localPlayerPos.y === y) {
+                      pushHudMessage("Step off the arrow before selecting it.", 2200);
+                      return;
+                    }
+                    const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                    if (isSameArrow) {
+                      enqueueInput({ type: "deselect" });
+                      resetSelectorToPlayer();
+                      flashPlayerHighlight();
+                      pushHudMessage("Arrow deselected");
+                    } else {
+                      enqueueInput({ type: "select", x, y });
+                      setIsSelectorActive(false);
+                      setSelectorPos({ x, y });
+                      pushHudMessage("Arrow selected — use the controls to move it.", 2200);
+                    }
                   }
-                  const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
-                  if (isSameArrow) {
+                }}
+                onCancelSelection={() => {
+                  if (selectedArrow) {
                     enqueueInput({ type: "deselect" });
                     resetSelectorToPlayer();
-                    flashPlayerHighlight();
-                    toast.info("Arrow deselected - control returned to player");
-                  } else {
-                    enqueueInput({ type: "select", x, y });
-                    setIsSelectorActive(false);
-                    setSelectorPos({ x, y });
-                    toast.info("Arrow selected! Use controls to move it remotely.");
+                    pushHudMessage("Arrow deselected");
                   }
-                }
-              }}
-              onCancelSelection={() => {
-                if (selectedArrow) {
-                  enqueueInput({ type: "deselect" });
-                  resetSelectorToPlayer();
-                  toast.info("Arrow deselected");
-                }
-              }}
-            />
-          )}
+                }}
+              />
+            )}
+          </div>
         </div>
         {isMobile && !shouldRotateGate && showDpad && (
           <div
@@ -2221,6 +2528,13 @@ export const PuzzleGame = () => {
         )}
         {selectedArrow && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
+        )}
+        {hudMessage && !isComplete && (
+          <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 -translate-x-1/2 px-4">
+            <div className="rounded-full border border-white/10 bg-black/55 px-4 py-2 text-sm font-medium text-stone-100 shadow-xl backdrop-blur-md">
+              {hudMessage}
+            </div>
+          </div>
         )}
         {isComplete && completionSummary && (
           <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
@@ -2300,7 +2614,7 @@ export const PuzzleGame = () => {
                   <Button
                     onClick={() => {
                       goToLevelIndex(0);
-                      toast.success("Campaign restarted");
+                      pushHudMessage("Campaign restarted", 2200);
                     }}
                     className="bg-amber-300 text-stone-950 hover:bg-amber-200"
                   >
