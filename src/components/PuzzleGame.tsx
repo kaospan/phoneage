@@ -2483,6 +2483,7 @@ export const PuzzleGame = () => {
             {viewMode === "sprite" ? (
               <GameSprite2D
                 grid={renderGrid}
+                atlasSourceGrid={activeLevel?.grid ?? currentLevel?.grid ?? renderGrid}
                 cavePos={renderCavePos}
                 levelImageUrl={currentLevel?.image ?? null}
                 playerStart={currentLevel?.playerStart ?? null}

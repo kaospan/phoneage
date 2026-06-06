@@ -12,6 +12,7 @@ type PlayerFacing = "up" | "right" | "down" | "left";
 
 interface GameSprite2DProps {
   grid: number[][];
+  atlasSourceGrid?: number[][];
   cavePos: { x: number; y: number };
   levelImageUrl?: string | null;
   playerStart?: { x: number; y: number } | null;
@@ -55,6 +56,7 @@ const getStartCaveSpriteFallback = () => {
 
 export function GameSprite2D({
   grid,
+  atlasSourceGrid,
   cavePos,
   levelImageUrl,
   playerStart,
@@ -83,8 +85,9 @@ export function GameSprite2D({
 
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
+  const sourceGrid = atlasSourceGrid ?? grid;
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
-  const atlasGrid = useMemo(() => grid.map((r) => [...r]), [grid]);
+  const atlasGrid = useMemo(() => sourceGrid.map((r) => [...r]), [sourceGrid]);
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
 
   // Mark board edges (modern + readable): a cell is on the edge if it is non-void and
@@ -268,7 +271,7 @@ export function GameSprite2D({
 
         const findCleanFloorCell = () => {
           const isFloorAt = (x: number, y: number) => {
-            const v = grid[y]?.[x];
+            const v = sourceGrid[y]?.[x];
             if (v == null) return false;
             if (goalCaveKeys.has(`${x},${y}`)) return false;
             // Start cave (18) is synthetic; do not treat it as a clean floor sample.
@@ -377,7 +380,7 @@ export function GameSprite2D({
     return () => {
       cancelled = true;
     };
-  }, [levelImageUrl, rows, cols, goalCaveKeys, atlasGrid, playerStart, grid]);
+  }, [levelImageUrl, rows, cols, goalCaveKeys, atlasGrid, playerStart, sourceGrid]);
 
   const scale = useMemo(() => {
     // Keep semantics aligned with the existing % indicator: higher % = larger board.
@@ -465,6 +468,15 @@ export function GameSprite2D({
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
               const edge = edgeMasks?.[y]?.[x] ?? null;
+              const arrowGlyph =
+                displayTileType === 7 ? "↑" :
+                displayTileType === 8 ? "→" :
+                displayTileType === 9 ? "↓" :
+                displayTileType === 10 ? "←" :
+                displayTileType === 11 ? "↕" :
+                displayTileType === 12 ? "↔" :
+                displayTileType === 13 ? "✥" :
+                null;
 
               const atlasSprite = levelAtlas?.tileSprites?.[displayTileType];
               const refSprite = latestByType.get(displayTileType)?.imageData;
@@ -574,6 +586,21 @@ export function GameSprite2D({
                         />
                       </div>
                     )
+                  )}
+                  {arrowGlyph && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <span
+                        className="text-[22px] font-black leading-none text-white"
+                        style={{
+                          textShadow:
+                            "0 0 1px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.65)",
+                          WebkitTextStroke: "0.6px rgba(0,0,0,0.85)",
+                        }}
+                        aria-hidden
+                      >
+                        {arrowGlyph}
+                      </span>
+                    </div>
                   )}
                 </div>
               );

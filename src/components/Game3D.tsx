@@ -565,9 +565,9 @@ const ArrowTile = ({
   const lastTapTimeRef = useRef<number>(0);
 
   const rotations: { [key: number]: number } = {
-    7: 0,           // up - points in -Z direction
+    7: Math.PI,     // up - points in -Z direction
     8: -Math.PI / 2, // right - points in +X direction
-    9: Math.PI,     // down - points in +Z direction
+    9: 0,           // down - points in +Z direction
     10: Math.PI / 2 // left - points in -X direction
   };
 
@@ -669,13 +669,16 @@ const ArrowTile = ({
         <meshBasicMaterial map={runeTexture ?? undefined} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
       </mesh>
 
-      <mesh position={[0, 0.34, 0]} rotation={[0, rotations[direction] || 0, 0]} castShadow>
-        <boxGeometry args={[0.1, 0.05, 0.38]} />
-        <meshStandardMaterial color={accentColor} emissive={accentColor} emissiveIntensity={0.45} roughness={0.24} metalness={0.36} />
-      </mesh>
-      <mesh position={[0, 0.34, -0.23]} rotation={[0, rotations[direction] || 0, 0]} castShadow>
-        <coneGeometry args={[0.14, 0.24, 3]} />
-        <meshStandardMaterial color={accentColor} emissive={accentColor} emissiveIntensity={0.55} roughness={0.2} metalness={0.34} />
+      <mesh position={[0, 0.35, -0.25]} rotation={[-Math.PI / 2, 0, rotations[direction] || 0]} castShadow>
+        <coneGeometry args={[0.25, 0.45, 3]} />
+        <meshStandardMaterial
+          color={accentColor}
+          emissive={accentColor}
+          emissiveIntensity={0.5}
+          roughness={0.24}
+          metalness={0.28}
+          envMapIntensity={0.6}
+        />
       </mesh>
 
       {/* Yellow hollow square border on top face when selected */}
