@@ -19,6 +19,7 @@ import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { UI_SETTINGS_UPDATED_EVENT, getShowCoordsOverlay, setShowCoordsOverlay } from "@/lib/uiSettings";
+import { ADMIN_MODE_UPDATED_EVENT, getAdminMode } from "@/lib/adminMode";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
@@ -462,6 +463,7 @@ export const PuzzleGame = () => {
 
   const [overrideRevision, setOverrideRevision] = useState(0);
   const [showCoordsOverlay, setShowCoordsOverlayState] = useState(() => getShowCoordsOverlay());
+  const [isAdminMode, setIsAdminMode] = useState(() => getAdminMode());
 
   // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
   useEffect(() => {
@@ -493,6 +495,20 @@ export const PuzzleGame = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refresh = () => setIsAdminMode(getAdminMode());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'stone-age-admin-mode') refresh();
+    };
+    window.addEventListener(ADMIN_MODE_UPDATED_EVENT, refresh as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(ADMIN_MODE_UPDATED_EVENT, refresh as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
   const allLevels = useMemo(() => {
     void overrideRevision;
     return getAllLevels();
@@ -507,9 +523,12 @@ export const PuzzleGame = () => {
     () => getHighestUnlockedLevelIndex(campaignProgress, orderedLevelIds),
     [campaignProgress, orderedLevelIds]
   );
+  const effectiveHighestUnlockedIndex = isAdminMode
+    ? Math.max(0, allLevels.length - 1)
+    : highestUnlockedIndex;
   const frontierLevelId =
-    highestUnlockedIndex >= 0
-      ? allLevels[Math.min(highestUnlockedIndex, allLevels.length - 1)]?.id ?? null
+    effectiveHighestUnlockedIndex >= 0
+      ? allLevels[Math.min(effectiveHighestUnlockedIndex, allLevels.length - 1)]?.id ?? null
       : null;
   const campaignProgressValue = allLevels.length > 0 ? (completedLevelCount / allLevels.length) * 100 : 0;
   const currentLevelRecord = currentLevel ? getLevelCampaignRecord(campaignProgress, currentLevel.id) : null;
@@ -522,12 +541,12 @@ export const PuzzleGame = () => {
           theme: level.theme,
           isCurrent: level.id === currentLevel?.id,
           isCompleted: Boolean(record?.completed),
-          isUnlocked: index <= highestUnlockedIndex,
+          isUnlocked: isAdminMode || index <= highestUnlockedIndex,
           bestMoves: record?.bestMoves ?? null,
           bestTimeLeftSeconds: record?.bestTimeLeftSeconds ?? null,
         };
       }),
-    [allLevels, campaignProgress, currentLevel?.id, highestUnlockedIndex]
+    [allLevels, campaignProgress, currentLevel?.id, highestUnlockedIndex, isAdminMode]
   );
 
   useEffect(() => {
@@ -1361,7 +1380,7 @@ export const PuzzleGame = () => {
 
     const goToLevelIndex = useCallback((nextIndex: number) => {
       if (nextIndex < 0 || nextIndex >= allLevels.length) return false;
-      if (nextIndex > highestUnlockedIndex) {
+      if (!isAdminMode && nextIndex > highestUnlockedIndex) {
         const currentFrontier = allLevels[Math.min(highestUnlockedIndex, allLevels.length - 1)];
         const nextLocked = allLevels[nextIndex];
         if (currentFrontier && nextLocked) {
@@ -1377,7 +1396,7 @@ export const PuzzleGame = () => {
       setCompletionSummary(null);
       setCurrentLevelIndex(nextIndex);
       return true;
-    }, [allLevels, highestUnlockedIndex, pushHudMessage]);
+    }, [allLevels, highestUnlockedIndex, isAdminMode, pushHudMessage]);
 
     const goToLevelId = useCallback((levelId: number) => {
       const nextIndex = allLevels.findIndex((level) => level.id === levelId);
@@ -1779,7 +1798,7 @@ export const PuzzleGame = () => {
     const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite";
     const desktopShellActive = !useSplitHud && !shouldRotateGate;
     const hasNextLevel = currentLevelIndex < allLevels.length - 1;
-    const nextLevelLocked = hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
+    const nextLevelLocked = !isAdminMode && hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
     const nextLevelTitle = !hasNextLevel
       ? "No more levels"
       : nextLevelLocked

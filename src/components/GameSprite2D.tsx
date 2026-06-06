@@ -53,6 +53,87 @@ const getStartCaveSpriteFallback = () => {
   return referenceSpriteUrls.cave;
 };
 
+const renderArrowVector = (tileType: number) => {
+  const stroke = "rgba(255,255,255,0.98)";
+  const shadow = "drop-shadow(0 1px 1px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7))";
+  const common = {
+    stroke,
+    strokeWidth: 3.3,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    fill: "none",
+  };
+
+  const OneArrow = ({ dir }: { dir: "up" | "right" | "down" | "left" }) => {
+    const shaft =
+      dir === "up" ? "M16 24 L16 8" :
+      dir === "right" ? "M8 16 L24 16" :
+      dir === "down" ? "M16 8 L16 24" :
+      "M24 16 L8 16";
+    const head =
+      dir === "up" ? "M11 12 L16 7 L21 12" :
+      dir === "right" ? "M20 11 L25 16 L20 21" :
+      dir === "down" ? "M11 20 L16 25 L21 20" :
+      "M12 11 L7 16 L12 21";
+
+    return (
+      <g>
+        <path d={shaft} {...common} />
+        <path d={head} {...common} />
+      </g>
+    );
+  };
+
+  const DoubleArrowVertical = () => (
+    <g>
+      <path d="M16 24 L16 8" {...common} />
+      <path d="M11 12 L16 7 L21 12" {...common} />
+      <path d="M11 20 L16 25 L21 20" {...common} />
+    </g>
+  );
+
+  const DoubleArrowHorizontal = () => (
+    <g>
+      <path d="M8 16 L24 16" {...common} />
+      <path d="M12 11 L7 16 L12 21" {...common} />
+      <path d="M20 11 L25 16 L20 21" {...common} />
+    </g>
+  );
+
+  const OmniArrow = () => (
+    <g>
+      <path d="M16 24 L16 8 M8 16 L24 16" {...common} />
+      <path d="M11 12 L16 7 L21 12" {...common} />
+      <path d="M11 20 L16 25 L21 20" {...common} />
+      <path d="M12 11 L7 16 L12 21" {...common} />
+      <path d="M20 11 L25 16 L20 21" {...common} />
+    </g>
+  );
+
+  const shape =
+    tileType === 7 ? <OneArrow dir="up" /> :
+    tileType === 8 ? <OneArrow dir="right" /> :
+    tileType === 9 ? <OneArrow dir="down" /> :
+    tileType === 10 ? <OneArrow dir="left" /> :
+    tileType === 11 ? <DoubleArrowVertical /> :
+    tileType === 12 ? <DoubleArrowHorizontal /> :
+    tileType === 13 ? <OmniArrow /> :
+    null;
+
+  if (!shape) return null;
+
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      className="h-[78%] w-[78%]"
+      aria-hidden
+      style={{ filter: shadow }}
+    >
+      {shape}
+    </svg>
+  );
+};
+
 export function GameSprite2D({
   grid,
   atlasSourceGrid,
@@ -452,15 +533,7 @@ export function GameSprite2D({
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
               const edge = edgeMasks?.[y]?.[x] ?? null;
               const isDirectionalArrowTile = displayTileType >= 7 && displayTileType <= 13;
-              const arrowGlyph =
-                displayTileType === 7 ? "↑" :
-                displayTileType === 8 ? "→" :
-                displayTileType === 9 ? "↓" :
-                displayTileType === 10 ? "←" :
-                displayTileType === 11 ? "↕" :
-                displayTileType === 12 ? "↔" :
-                displayTileType === 13 ? "✥" :
-                null;
+              const arrowVector = isDirectionalArrowTile ? renderArrowVector(displayTileType) : null;
 
               const atlasSprite = levelAtlas?.tileSprites?.[displayTileType];
               const refSprite = latestByType.get(displayTileType)?.imageData;
@@ -571,19 +644,9 @@ export function GameSprite2D({
                       </div>
                     )
                   )}
-                  {arrowGlyph && (
+                  {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <span
-                        className="text-[22px] font-black leading-none text-white"
-                        style={{
-                          textShadow:
-                            "0 0 1px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.65)",
-                          WebkitTextStroke: "0.6px rgba(0,0,0,0.85)",
-                        }}
-                        aria-hidden
-                      >
-                        {arrowGlyph}
-                      </span>
+                      {arrowVector}
                     </div>
                   )}
                 </div>

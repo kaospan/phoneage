@@ -7,6 +7,7 @@ import GridEditorPanel from '@/components/level-mapper/GridEditorPanel';
 import JsonPanel from '@/components/level-mapper/JsonPanel';
 import { MapperDockButton, MapperMetricPill } from '@/components/level-mapper/MapperChrome';
 import { TILE_TYPES } from '@/lib/levelgrid';
+import { getAdminMode, setAdminMode } from '@/lib/adminMode';
 import { ChevronLeft, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -80,6 +81,7 @@ const LayoutInner: React.FC = () => {
     const leftPanelMin = 252; const leftPanelMax = 640;
     const [rightPanelWidth, setRightPanelWidth] = useState(288);
     const rightPanelMin = 260; const rightPanelMax = 560;
+    const [adminModeEnabled, setAdminModeEnabled] = useState(() => getAdminMode());
     const isResizingLeftRef = useRef(false);
     const isResizingRightRef = useRef(false);
 
@@ -211,6 +213,41 @@ const LayoutInner: React.FC = () => {
                                 value={timeLimitSeconds && timeLimitSeconds > 0 ? `${timeLimitSeconds}s` : 'Off'}
                                 tone={timeLimitSeconds && timeLimitSeconds > 0 ? 'info' : 'default'}
                             />
+                        </div>
+
+                        <div className="flex items-center justify-end">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const next = !adminModeEnabled;
+                                    setAdminModeEnabled(next);
+                                    setAdminMode(next);
+                                    toast.success(`Admin mode ${next ? 'enabled' : 'disabled'}.`, {
+                                        position: 'bottom-right',
+                                        duration: 2200,
+                                    });
+                                }}
+                                className={[
+                                    'inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors',
+                                    adminModeEnabled
+                                        ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
+                                        : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
+                                ].join(' ')}
+                                title="When enabled, the main game can freely skip/preview all levels."
+                                aria-pressed={adminModeEnabled}
+                            >
+                                <span>Admin</span>
+                                <span
+                                    className={[
+                                        'inline-flex min-w-[3.2rem] items-center justify-center rounded-full border px-2 py-0.5 text-[10px]',
+                                        adminModeEnabled
+                                            ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
+                                            : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
+                                    ].join(' ')}
+                                >
+                                    {adminModeEnabled ? 'ON' : 'OFF'}
+                                </span>
+                            </button>
                         </div>
                     </div>
                 </div>
