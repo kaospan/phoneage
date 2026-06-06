@@ -716,13 +716,25 @@ export const PuzzleGame = () => {
     const applyLevelState = useCallback((level: LevelData) => {
       const gridCopy = level.grid.map(row => [...row]) as CellType[][];
       const baseGridCopy = buildBaseGrid(gridCopy);
+      const rows = gridCopy.length;
+      const cols = gridCopy[0]?.length ?? 0;
+
+      const clampToGrid = (pos: Position): Position => {
+        if (rows <= 0 || cols <= 0) return { x: 0, y: 0 };
+        return {
+          x: Math.max(0, Math.min(cols - 1, pos.x)),
+          y: Math.max(0, Math.min(rows - 1, pos.y)),
+        };
+      };
+
       const actualGoalCaves = findGoalCaves(gridCopy, null);
-      const cave = actualGoalCaves[0] ?? { ...level.cavePos };
+      const cave = clampToGrid(actualGoalCaves[0] ?? { ...level.cavePos });
+      const spawn = clampToGrid(level.playerStart);
       const localId = localPlayerIdRef.current;
       const localPlayer: SimPlayer = {
         id: localId,
-        pos: { ...level.playerStart },
-        facing: facingTowardTarget(level.playerStart, cave, "down"),
+        pos: { ...spawn },
+        facing: facingTowardTarget(spawn, cave, "down"),
         isLocal: true,
         color: themes[level.theme ?? 'default']?.player ?? '#7dff9b',
         keys: { ...EMPTY_KEYS },
@@ -757,7 +769,7 @@ export const PuzzleGame = () => {
       setIsComplete(false);
       setCompletionSummary(null);
       setSelectedArrow(null);
-      setSelectorPos({ ...level.playerStart });
+      setSelectorPos({ ...spawn });
       setIsSelectorActive(false);
       setCameraOffset({ x: 0, z: 0 });
       setActiveLevel(level);
