@@ -217,7 +217,12 @@ export function GameSprite2D({
         return;
       }
 
-      setLevelAtlas({ tileSprites: {}, heroSprite: undefined, status: "Building sprites..." });
+      setLevelAtlas((prev) => ({
+        tileSprites: prev?.tileSprites ?? {},
+        heroSprite: prev?.heroSprite,
+        status: "Building sprites...",
+        confidence: prev?.confidence,
+      }));
 
       try {
         // Normalize/crop level screenshots (trim borders + HUD row) so grid detection isn't polluted.
@@ -240,11 +245,12 @@ export function GameSprite2D({
 
         const det = detectGridLines(dsCanvas, true, rows, cols, getAlignmentHints());
         if (!det) {
-          setLevelAtlas({
-            tileSprites: {},
-            heroSprite: undefined,
+          setLevelAtlas((prev) => ({
+            tileSprites: prev?.tileSprites ?? {},
+            heroSprite: prev?.heroSprite,
             status: "Sprite mode: grid detect failed (using reference sprites)",
-          });
+            confidence: prev?.confidence,
+          }));
           return;
         }
 
@@ -329,12 +335,12 @@ export function GameSprite2D({
             const mean = sum / Math.max(1, total);
             const blackFrac = nearBlack / Math.max(1, total);
             if (mean < 28 && blackFrac > 0.55) {
-              setLevelAtlas({
-                tileSprites: {},
-                heroSprite: undefined,
+              setLevelAtlas((prev) => ({
+                tileSprites: prev?.tileSprites ?? {},
+                heroSprite: prev?.heroSprite,
                 status: `Sprite mode: bad atlas crop (floor too dark) - using reference sprites`,
                 confidence: det.confidence,
-              });
+              }));
               return;
             }
           }
@@ -448,7 +454,12 @@ export function GameSprite2D({
         });
       } catch (e) {
         console.error(e);
-        setLevelAtlas({ tileSprites: {}, heroSprite: undefined, status: "Sprite mode: failed to build sprites (using reference sprites)" });
+        setLevelAtlas((prev) => ({
+          tileSprites: prev?.tileSprites ?? {},
+          heroSprite: prev?.heroSprite,
+          status: "Sprite mode: failed to build sprites (using reference sprites)",
+          confidence: prev?.confidence,
+        }));
       }
     };
 
@@ -546,40 +557,41 @@ export function GameSprite2D({
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
               const edge = edgeMasks?.[y]?.[x] ?? null;
               const isDirectionalArrowTile = displayTileType >= 7 && displayTileType <= 13;
-              const arrowVector = isDirectionalArrowTile ? renderArrowVector(displayTileType) : null;
+              // Keep arrow hidden while the player occupies that tile (DOS behavior feel).
+              const effectiveTileType = isPlayer && isDirectionalArrowTile ? 0 : displayTileType;
+              const arrowVector = isDirectionalArrowTile && !isPlayer ? renderArrowVector(displayTileType) : null;
 
-              const atlasSprite = levelAtlas?.tileSprites?.[displayTileType];
-              const refSprite = latestByType.get(displayTileType)?.imageData;
+              const atlasSprite = levelAtlas?.tileSprites?.[effectiveTileType];
+              const refSprite = latestByType.get(effectiveTileType)?.imageData;
               // Sprite mode policy (strict):
               // - If the cell is void (5), never use sampled/reference art.
               // - Keep the tile transparent so void stays blank and photo background colors
               //   cannot "bleed" into gameplay semantics.
                 const backgroundImage =
-                  displayTileType === 5 ? undefined :
-                  displayTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
-                  // Keep arrow semantics deterministic in sprite mode (avoid directional mismatch from sampled photos).
-                  !isDirectionalArrowTile && atlasSprite ? `url(${atlasSprite})` :
-                  !isDirectionalArrowTile && refSprite ? `url(${refSprite})` :
-                  displayTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
-                  displayTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
-                  displayTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
-                  displayTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
+                  effectiveTileType === 5 ? undefined :
+                  effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
+                  atlasSprite ? `url(${atlasSprite})` :
+                  refSprite ? `url(${refSprite})` :
+                  effectiveTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
+                  effectiveTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
+                  effectiveTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
+                  effectiveTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
                   undefined;
 
               const fallback =
-                displayTileType === 5 ? "transparent" :
-                displayTileType === 0 ? "rgba(255,255,255,0.08)" :
-                displayTileType === 4 ? "rgba(30,144,255,0.55)" :
-                displayTileType === 1 ? "rgba(255,80,80,0.65)" :
-                displayTileType === 2 ? "rgba(120,85,60,0.75)" :
-                displayTileType === 6 ? "rgba(160,155,140,0.80)" :
-                displayTileType === 14 ? "rgba(255,70,70,0.70)" :
-                displayTileType === 15 ? "rgba(60,210,120,0.70)" :
-                displayTileType === 16 ? "rgba(150,20,20,0.80)" :
-                displayTileType === 17 ? "rgba(20,110,35,0.80)" :
-                displayTileType === 18 ? "rgba(0,0,0,0.88)" :
-                displayTileType === 20 ? "rgba(251,191,36,0.78)" :
-                isDirectionalArrowTile ? "rgba(160,120,80,0.88)" :
+                effectiveTileType === 5 ? "transparent" :
+                effectiveTileType === 0 ? "rgba(255,255,255,0.08)" :
+                effectiveTileType === 4 ? "rgba(30,144,255,0.55)" :
+                effectiveTileType === 1 ? "rgba(255,80,80,0.65)" :
+                effectiveTileType === 2 ? "rgba(120,85,60,0.75)" :
+                effectiveTileType === 6 ? "rgba(160,155,140,0.80)" :
+                effectiveTileType === 14 ? "rgba(255,70,70,0.70)" :
+                effectiveTileType === 15 ? "rgba(60,210,120,0.70)" :
+                effectiveTileType === 16 ? "rgba(150,20,20,0.80)" :
+                effectiveTileType === 17 ? "rgba(20,110,35,0.80)" :
+                effectiveTileType === 18 ? "rgba(0,0,0,0.88)" :
+                effectiveTileType === 20 ? "rgba(251,191,36,0.78)" :
+                (effectiveTileType >= 7 && effectiveTileType <= 13) ? "rgba(160,120,80,0.88)" :
                 "rgba(255,255,255,0.06)";
 
               return (
@@ -645,7 +657,7 @@ export function GameSprite2D({
                         style={{ imageRendering: "pixelated" }}
                         draggable={false}
                       />
-                    ) : (
+                    ) : (levelImageUrl && levelAtlas?.status === "Building sprites..." ? null : (
                       // If hero extraction fails, keep the player clearly visible.
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="flex h-[80%] w-[80%] items-center justify-center rounded-full border-2 border-emerald-200/90 bg-emerald-700/55 text-[20px]"
@@ -655,9 +667,9 @@ export function GameSprite2D({
                           🦖
                         </div>
                       </div>
-                    )
+                    ))
                   )}
-                  {arrowVector && (
+                  {arrowVector && !backgroundImage && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       {arrowVector}
                     </div>
