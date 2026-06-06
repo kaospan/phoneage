@@ -727,6 +727,7 @@ const BidirectionalArrowTile = ({
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
   const accentColor = darkenHexColor(color, 0.1);
+  const isVertical = direction === 11;
   const runeTexture = useMemo(
     () => createRuneTexture({ glyph: isVertical ? '↕' : '↔', color: '#f5f2b0', glow: hexToRgba(accentColor, 0.52) }),
     [accentColor, isVertical]
@@ -734,7 +735,6 @@ const BidirectionalArrowTile = ({
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
-  const isVertical = direction === 11;
 
   const handlePointerDown = (e: MeshPointerEvent) => {
     e.stopPropagation();
