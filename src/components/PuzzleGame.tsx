@@ -309,8 +309,19 @@ export const PuzzleGame = () => {
   const [moves, setMoves] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [completionSummary, setCompletionSummary] = useState<LevelCompletionSummary | null>(null);
-  // Keep sprite mode as the default experience across all levels.
-  const [viewMode, setViewMode] = useState<ViewMode>("sprite");
+  // Keep the user's chosen view mode persistent; default to sprite if not set.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "sprite";
+    try {
+      const stored = localStorage.getItem("stone-age-view-mode");
+      if (stored && (VIEW_MODES as readonly string[]).includes(stored)) {
+        return stored as ViewMode;
+      }
+    } catch {
+      // ignore storage failures
+    }
+    return "sprite";
+  });
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
   const [cameraZoomIndex, setCameraZoomIndex] = useState(() => (
@@ -724,8 +735,6 @@ export const PuzzleGame = () => {
       setMoves(0);
       setIsComplete(false);
       setCompletionSummary(null);
-      // Ensure each level opens in sprite mode so the photo-aligned tile sprites are used everywhere.
-      setViewMode("sprite");
       setSelectedArrow(null);
       setSelectorPos({ ...level.playerStart });
       setIsSelectorActive(false);
@@ -733,6 +742,15 @@ export const PuzzleGame = () => {
       setActiveLevel(level);
       resetLevelTimer(level.timeLimitSeconds);
     }, [buildBaseGrid, resetLevelTimer]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("stone-age-view-mode", viewMode);
+    } catch {
+      // ignore storage failures
+    }
+  }, [viewMode]);
 
     // Initialize or auto-build level
     useEffect(() => {
