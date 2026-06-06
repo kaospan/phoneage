@@ -411,7 +411,8 @@ export const PuzzleGame = () => {
     setLevelTimeLimitSeconds(sec);
     setTimeLeftSeconds(sec);
     timerRemainingMsRef.current = sec * 1000;
-    setIsTimerArmed(false);
+    // Auto-start timer on level load/advance (no explicit START button required).
+    setIsTimerArmed(true);
   }, [clearTimerInterval]);
 
   const addLevelTimeSeconds = useCallback((deltaSeconds: number) => {
