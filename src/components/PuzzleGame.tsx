@@ -836,6 +836,12 @@ export const PuzzleGame = () => {
       if (!isTimerArmed) {
         clearTimerInterval();
         timerEndAtMsRef.current = null;
+        // While waiting for explicit START, ensure we never stay in a stale
+        // timed-out state from a previous run.
+        if (timerRemainingMsRef.current <= 0 && levelTimeLimitSeconds > 0) {
+          timerRemainingMsRef.current = levelTimeLimitSeconds * 1000;
+        }
+        setIsTimeUp(false);
         const sec = Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000));
         setTimeLeftSeconds((prev) => (prev === sec ? prev : sec));
         return;
@@ -1445,6 +1451,13 @@ export const PuzzleGame = () => {
 
     const startLevelWhenReady = useCallback(() => {
       if (!levelTimeLimitSeconds || isTimerArmed || isTimeUp || isBuilding || isComplete) return;
+
+      // Defensive: if a stale zero remained from a previous timeout, restore full level time.
+      if (timerRemainingMsRef.current <= 0) {
+        timerRemainingMsRef.current = levelTimeLimitSeconds * 1000;
+        setTimeLeftSeconds(levelTimeLimitSeconds);
+      }
+      setIsTimeUp(false);
       setIsTimerArmed(true);
       pushHudMessage("Timer started — good luck!", 1600);
     }, [isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, pushHudMessage]);
