@@ -566,6 +566,7 @@ export function GameSprite2D({
 
               const atlasSprite = levelAtlas?.tileSprites?.[effectiveTileType];
               const refSprite = latestByType.get(effectiveTileType)?.imageData;
+              const canUseRefSprite = !isDirectionalArrowTile;
               // Sprite mode policy (strict):
               // - If the cell is void (5), never use sampled/reference art.
               // - Keep the tile transparent so void stays blank and photo background colors
@@ -574,7 +575,7 @@ export function GameSprite2D({
                   effectiveTileType === 5 ? undefined :
                   effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
                   atlasSprite ? `url(${atlasSprite})` :
-                  refSprite ? `url(${refSprite})` :
+                  (canUseRefSprite && refSprite) ? `url(${refSprite})` :
                   effectiveTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
                   effectiveTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
                   effectiveTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
@@ -660,17 +661,7 @@ export function GameSprite2D({
                         style={{ imageRendering: "pixelated" }}
                         draggable={false}
                       />
-                    ) : (levelImageUrl && levelAtlas?.status === "Building sprites..." ? null : (
-                      // If hero extraction fails, keep the player clearly visible.
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex h-[80%] w-[80%] items-center justify-center rounded-full border-2 border-emerald-200/90 bg-emerald-700/55 text-[20px]"
-                          style={{ boxShadow: "0 0 0 2px rgba(0,0,0,0.35), 0 0 18px rgba(16,185,129,0.55)" }}
-                          aria-label="Player"
-                        >
-                          🦖
-                        </div>
-                      </div>
-                    ))
+                    ) : null
                   )}
                   {arrowVector && !backgroundImage && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
