@@ -1819,7 +1819,12 @@ export const PuzzleGame = () => {
             <aside className="pointer-events-none absolute inset-y-4 left-4 z-40 hidden w-80 xl:flex xl:flex-col xl:gap-4">
               <div className="pointer-events-auto overflow-hidden rounded-[32px] border border-[#8d6e4f]/55 bg-[#120d09]/78 shadow-[0_24px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl">
                 <div className="relative h-44 overflow-hidden border-b border-white/10">
-                  <img src={menuArt} alt="Stone Age art" className="h-full w-full object-cover opacity-80" />
+                  <div className="absolute inset-0 bg-[#0b0907]" />
+                  <img
+                    src={menuArt}
+                    alt="Stone Age art"
+                    className="h-full w-full object-contain object-left-top p-2 opacity-90"
+                  />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(14,10,8,0.08)_0%,rgba(14,10,8,0.18)_40%,rgba(14,10,8,0.82)_100%)]" />
                   <div className="absolute inset-x-5 bottom-5">
                     <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-amber-100">
