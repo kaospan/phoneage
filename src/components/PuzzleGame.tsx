@@ -44,6 +44,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { CampaignDialog } from "./CampaignDialog";
 import { HowToPlayDialog } from "./HowToPlayDialog";
 import { TouchControls } from "./TouchControls";
+import { getLevelImageUrl } from "@/components/level-mapper/levelImageStore";
 import menuArt from "@/assets/menu.png";
 
 console.log('📦 PuzzleGame.tsx loading...');
@@ -464,6 +465,7 @@ export const PuzzleGame = () => {
   const [overrideRevision, setOverrideRevision] = useState(0);
   const [showCoordsOverlay, setShowCoordsOverlayState] = useState(() => getShowCoordsOverlay());
   const [isAdminMode, setIsAdminMode] = useState(() => getAdminMode());
+  const [resolvedLevelImageUrl, setResolvedLevelImageUrl] = useState<string | null>(null);
 
   // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
   useEffect(() => {
@@ -784,6 +786,34 @@ export const PuzzleGame = () => {
       // ignore storage failures
     }
   }, [viewMode]);
+
+  // Resolve the best available screenshot for the active level:
+  // 1) mapper-uploaded image from IndexedDB, 2) bundled level.image, 3) first source image.
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentLevel) {
+      setResolvedLevelImageUrl(null);
+      return;
+    }
+
+    const fallbackUrl = currentLevel.image ?? currentLevel.sources?.[0] ?? null;
+    setResolvedLevelImageUrl(fallbackUrl);
+
+    const resolveImage = async () => {
+      try {
+        const storedUrl = await getLevelImageUrl(currentLevel.id);
+        if (cancelled) return;
+        setResolvedLevelImageUrl(storedUrl ?? fallbackUrl);
+      } catch {
+        if (!cancelled) setResolvedLevelImageUrl(fallbackUrl);
+      }
+    };
+
+    void resolveImage();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentLevel]);
 
     // Initialize or auto-build level
     useEffect(() => {
@@ -1680,7 +1710,7 @@ export const PuzzleGame = () => {
       }
     }, [viewMode]);
 
-  const levelBackground = currentLevel?.image;
+  const levelBackground = resolvedLevelImageUrl;
   const activeThemeKey = currentLevel?.theme ?? "default";
   const activeTheme = themes[activeThemeKey];
   const networkBadgeText =
@@ -2543,7 +2573,7 @@ export const PuzzleGame = () => {
                 grid={renderGrid}
                 atlasSourceGrid={activeLevel?.grid ?? currentLevel?.grid ?? renderGrid}
                 cavePos={renderCavePos}
-                levelImageUrl={currentLevel?.image ?? null}
+                levelImageUrl={resolvedLevelImageUrl}
                 playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
                 selectedArrow={selectedArrow}
                 selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
