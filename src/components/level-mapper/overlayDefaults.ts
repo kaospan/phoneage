@@ -11,10 +11,11 @@ export const LEVEL_IMAGE_SCALE_STORAGE_VERSION = 2;
 // At user scaleY=1.0 (100%), the effective vertical scale is this baseline.
 export const OVERLAY_IMAGE_SCALE_Y_BASE = 0.968;
 
-export const getDefaultOverlayImageScale = (levelId: number) => {
-    if (levelId >= 22 && levelId <= 100) {
-        return { x: 1, y: 1.15, lock: false as const };
-    }
+// Default user-facing Y stretch used when a level has no saved per-level calibration.
+// 1.124 means the Y stretcher shows 112.4%.
+export const DEFAULT_OVERLAY_USER_Y_SCALE = 1.124;
 
-    return { x: 1, y: 1, lock: false as const };
+export const getDefaultOverlayImageScale = (levelId: number) => {
+    void levelId;
+    return { x: 1, y: DEFAULT_OVERLAY_USER_Y_SCALE, lock: false as const };
 };
