@@ -1869,7 +1869,8 @@ export const PuzzleGame = () => {
                   <img
                     src={menuArt}
                     alt="Stone Age art"
-                    className="h-full w-full object-contain object-left-top p-2 opacity-90"
+                    className="pointer-events-none absolute left-2 top-2 h-[78%] w-[78%] object-contain object-left-top opacity-95"
+                    style={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.45))" }}
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(14,10,8,0.08)_0%,rgba(14,10,8,0.18)_40%,rgba(14,10,8,0.82)_100%)]" />
                   <div className="absolute inset-x-5 bottom-5">
