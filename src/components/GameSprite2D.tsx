@@ -134,6 +134,19 @@ const renderArrowVector = (tileType: number) => {
   );
 };
 
+const renderHeroFallback = () => (
+  <div
+    className="absolute inset-0 flex items-center justify-center text-[clamp(18px,4.2vw,34px)]"
+    style={{
+      filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 5px rgba(0,0,0,0.85))",
+      lineHeight: 1,
+    }}
+    aria-label="Hero"
+  >
+    🦖
+  </div>
+);
+
 export function GameSprite2D({
   grid,
   atlasSourceGrid,
@@ -654,14 +667,17 @@ export function GameSprite2D({
                   )}
                   {isPlayer && (
                     levelAtlas?.heroSprite ? (
-                      <img
-                        src={levelAtlas.heroSprite}
-                        alt="Hero"
-                        className="absolute inset-0 h-full w-full"
-                        style={{ imageRendering: "pixelated" }}
-                        draggable={false}
-                      />
-                    ) : null
+                      <>
+                        {renderHeroFallback()}
+                        <img
+                          src={levelAtlas.heroSprite}
+                          alt="Hero"
+                          className="absolute inset-0 h-full w-full"
+                          style={{ imageRendering: "pixelated" }}
+                          draggable={false}
+                        />
+                      </>
+                    ) : renderHeroFallback()
                   )}
                   {arrowVector && !backgroundImage && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
