@@ -716,8 +716,8 @@ export const PuzzleGame = () => {
     const applyLevelState = useCallback((level: LevelData) => {
       const gridCopy = level.grid.map(row => [...row]) as CellType[][];
       const baseGridCopy = buildBaseGrid(gridCopy);
-      const goalCaves = findGoalCaves(gridCopy, level.cavePos);
-      const cave = goalCaves[0] ?? { ...level.cavePos };
+      const actualGoalCaves = findGoalCaves(gridCopy, null);
+      const cave = actualGoalCaves[0] ?? { ...level.cavePos };
       const localId = localPlayerIdRef.current;
       const localPlayer: SimPlayer = {
         id: localId,
@@ -743,7 +743,9 @@ export const PuzzleGame = () => {
         breakableRockStates: new Map(),
         players,
         arrowGlides: [],
-        goalCaveKeys: buildGoalCaveKeySet(gridCopy, cave),
+        // IMPORTANT: completion should only trigger on real cave tiles in the grid.
+        // Fallback cavePos is for rendering/navigation only and must not auto-complete the level.
+        goalCaveKeys: buildGoalCaveKeySet(gridCopy, null),
         cavePos: cave,
         tick: 0
       };
