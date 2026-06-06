@@ -55,6 +55,11 @@ type InputCommand =
   | { type: "select"; x: number; y: number; seq: number }
   | { type: "deselect"; seq: number };
 
+type QueuedInputCommand =
+  | { type: "move"; dx: number; dy: number }
+  | { type: "select"; x: number; y: number }
+  | { type: "deselect" };
+
 interface SimPlayer {
   id: PlayerId;
   pos: Position;
@@ -924,7 +929,7 @@ export const PuzzleGame = () => {
       }, 300); // Flash every 300ms
     }, []);
 
-    const enqueueInput = useCallback((command: Omit<InputCommand, "seq">) => {
+    const enqueueInput = useCallback((command: QueuedInputCommand) => {
       const sim = simRef.current;
       if (!sim) return;
       const localId = localPlayerIdRef.current;
