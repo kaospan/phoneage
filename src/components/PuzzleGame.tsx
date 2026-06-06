@@ -260,8 +260,9 @@ export const PuzzleGame = () => {
 
   const isMobile = useIsMobile();
   const [isPortrait, setIsPortrait] = useState(false);
-  const shouldRotateGate = isMobile && isPortrait;
-  const isMobileLandscape = isMobile && !shouldRotateGate;
+  const shouldRotateGate = false;
+  const showRotateHint = isMobile && isPortrait;
+  const isMobileLandscape = isMobile && !isPortrait;
 
   const [isFullscreenMode, setIsFullscreenMode] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -569,9 +570,8 @@ export const PuzzleGame = () => {
 
   // Auto-fit zoom on mobile landscape + fullscreen layout so the board uses the available viewport.
   useLayoutEffect(() => {
-    if (shouldRotateGate) return;
     if (isBuilding) return;
-    if (!(isMobileLandscape || isFullscreenMode)) return;
+    if (!(isMobile || isFullscreenMode)) return;
     if (viewMode === "fps" || viewMode === "sprite") return;
     if (userZoomTouched) return;
     if (selectedArrow) return;
@@ -592,7 +592,7 @@ export const PuzzleGame = () => {
 
       // Mobile: cap auto-fit at the baseline (~122%) so it doesn't jump to the "extra zoom-in" steps by itself.
       // Users can still tap (+) to zoom further in if they want.
-      if (isMobileLandscape) {
+      if (isMobile) {
         nextIndex = Math.min(nextIndex, MOBILE_AUTO_FIT_MAX_ZOOM_IN_INDEX);
       }
       if (nextIndex !== cameraZoomIndex) setCameraZoomIndex(nextIndex);
@@ -606,9 +606,8 @@ export const PuzzleGame = () => {
     fitRevision,
     isBuilding,
     isFullscreenMode,
-    isMobileLandscape,
+    isMobile,
     selectedArrow,
-    shouldRotateGate,
     userZoomTouched,
     viewMode,
   ]);
@@ -1750,7 +1749,7 @@ export const PuzzleGame = () => {
       }
     }, [cameraZoomIndex, isFullscreenMode]);
 
-    const useSplitHud = isMobileLandscape || isFullscreenMode || viewMode === "sprite";
+    const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite";
     const desktopShellActive = !useSplitHud && !shouldRotateGate;
     const hasNextLevel = currentLevelIndex < allLevels.length - 1;
     const nextLevelLocked = hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
@@ -1783,16 +1782,11 @@ export const PuzzleGame = () => {
         )}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,205,138,0.20),transparent_24%),radial-gradient(circle_at_top_right,rgba(98,220,255,0.16),transparent_22%),linear-gradient(180deg,rgba(5,12,14,0.18)_0%,rgba(5,12,14,0.68)_58%,rgba(3,8,9,0.88)_100%)]" />
         <div className="absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
-        {shouldRotateGate && (
-          <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="mx-6 max-w-sm rounded-2xl border border-white/15 bg-black/55 px-6 py-6 text-center shadow-2xl">
-              <div className="text-lg font-black tracking-[0.18em] text-white/95">ROTATE DEVICE</div>
-              <div className="mt-2 text-sm leading-relaxed text-white/80">
-                Landscape is required on mobile so the whole gameboard fits on screen.
-              </div>
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/70">
-                Tip: disable screen rotation lock.
-              </div>
+        {showRotateHint && (
+          <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+0.4rem)] z-[75] flex justify-center px-3">
+            <div className="max-w-md rounded-2xl border border-white/15 bg-black/60 px-4 py-2 text-center shadow-xl backdrop-blur-sm">
+              <div className="text-[11px] font-black tracking-[0.14em] text-white/90">ROTATE FOR BEST VIEW</div>
+              <div className="mt-1 text-xs text-white/75">Portrait is supported, but landscape gives a wider board view.</div>
             </div>
           </div>
         )}
@@ -1816,7 +1810,7 @@ export const PuzzleGame = () => {
           disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart}
           targetRef={gestureSurfaceRef}
         />
-        {isMobile && !shouldRotateGate && (
+        {isMobile && (
           <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart} />
         )}
 
@@ -2567,7 +2561,7 @@ export const PuzzleGame = () => {
             )}
           </div>
         </div>
-        {isMobile && !shouldRotateGate && showDpad && (
+        {isMobile && showDpad && (
           <div
             className="absolute left-1/2 transform -translate-x-1/2 z-50"
             style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.35rem)' }}
