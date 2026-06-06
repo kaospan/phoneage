@@ -169,6 +169,7 @@ export function GameSprite2D({
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
   const atlasGrid = useMemo(() => sourceGrid.map((r) => [...r]), [sourceGrid]);
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
+  const atlasGoalCaveKeys = useMemo(() => buildGoalCaveKeySet(sourceGrid, cavePos), [sourceGrid, cavePos]);
 
   // Mark board edges (modern + readable): a cell is on the edge if it is non-void and
   // at least one 4-neighbor is void or out-of-bounds.
@@ -271,7 +272,7 @@ export function GameSprite2D({
             for (let c = 0; c < cols; c += 1) {
               const raw = atlasGrid[r]?.[c];
               if (raw === undefined) continue;
-              const tileType = goalCaveKeys.has(`${c},${r}`) ? 3 : raw;
+              const tileType = atlasGoalCaveKeys.has(`${c},${r}`) ? 3 : raw;
               // Void is handled separately in sprite mode (transparent).
               if (tileType === 5) continue;
               // Start cave (18) is synthetic; never sample it from the screenshot or we'll capture the hero.
@@ -343,7 +344,7 @@ export function GameSprite2D({
           const isFloorAt = (x: number, y: number) => {
             const v = sourceGrid[y]?.[x];
             if (v == null) return false;
-            if (goalCaveKeys.has(`${x},${y}`)) return false;
+            if (atlasGoalCaveKeys.has(`${x},${y}`)) return false;
             // Start cave (18) is synthetic; do not treat it as a clean floor sample.
             if (v === 18) return false;
             return v === 0;
@@ -444,7 +445,7 @@ export function GameSprite2D({
     return () => {
       cancelled = true;
     };
-  }, [levelImageUrl, rows, cols, goalCaveKeys, atlasGrid, playerStart, sourceGrid]);
+  }, [levelImageUrl, rows, cols, atlasGoalCaveKeys, atlasGrid, playerStart, sourceGrid]);
 
   const scale = useMemo(() => {
     // Keep semantics aligned with the existing % indicator: higher % = larger board.

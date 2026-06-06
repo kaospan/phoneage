@@ -774,7 +774,11 @@ export const PuzzleGame = () => {
       setSelectorPos({ ...spawn });
       setIsSelectorActive(false);
       setCameraOffset({ x: 0, z: 0 });
-      setActiveLevel(level);
+      setActiveLevel({
+        ...level,
+        playerStart: { ...spawn },
+        cavePos: { ...cave },
+      });
       resetLevelTimer(level.timeLimitSeconds);
     }, [buildBaseGrid, resetLevelTimer]);
 
