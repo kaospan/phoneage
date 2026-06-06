@@ -304,7 +304,8 @@ export const PuzzleGame = () => {
   const [moves, setMoves] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [completionSummary, setCompletionSummary] = useState<LevelCompletionSummary | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("3d");
+  // Keep sprite mode as the default experience across all levels.
+  const [viewMode, setViewMode] = useState<ViewMode>("sprite");
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
   const [cameraZoomIndex, setCameraZoomIndex] = useState(() => (
@@ -717,6 +718,8 @@ export const PuzzleGame = () => {
       setMoves(0);
       setIsComplete(false);
       setCompletionSummary(null);
+      // Ensure each level opens in sprite mode so the photo-aligned tile sprites are used everywhere.
+      setViewMode("sprite");
       setSelectedArrow(null);
       setSelectorPos({ ...level.playerStart });
       setIsSelectorActive(false);

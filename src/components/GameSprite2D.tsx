@@ -468,9 +468,10 @@ export function GameSprite2D({
 
               const atlasSprite = levelAtlas?.tileSprites?.[displayTileType];
               const refSprite = latestByType.get(displayTileType)?.imageData;
-              // Sprite mode policy:
-              // - Void must be visually empty (transparent) so the game background shows through.
-              // - Do not use atlas/ref sprites for void even if present.
+              // Sprite mode policy (strict):
+              // - If the cell is void (5), never use sampled/reference art.
+              // - Keep the tile transparent so void stays blank and photo background colors
+              //   cannot "bleed" into gameplay semantics.
                 const backgroundImage =
                   displayTileType === 5 ? undefined :
                   displayTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
