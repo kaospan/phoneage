@@ -422,10 +422,13 @@ export function GameSprite2D({
                   }
                 }
 
-                const minPixels = 24;
+                // Require a meaningful extracted silhouette; very sparse alpha masks
+                // can appear invisible on some levels (e.g. 1/4/8/13).
+                const minPixels = Math.round(outW * outH * 0.055); // ~225 px for 64x64
                 if (nonFloorPixels >= minPixels) {
-                  oc.putImageData(outData, 0, 0);
-                  heroSprite = out.toDataURL("image/png");
+                  // Prefer raw start-cell crop to preserve the original in-level dino look
+                  // consistently across levels (without transparent-mask artifacts).
+                  heroSprite = heroCanvas.toDataURL("image/png");
                 } else if (heroCanvas) {
                   // Some levels (notably level 1) can have low-contrast floor/hero colors,
                   // making strict background subtraction too aggressive. Prefer the
