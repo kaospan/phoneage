@@ -420,9 +420,21 @@ export function GameSprite2D({
                 if (nonFloorPixels >= minPixels) {
                   oc.putImageData(outData, 0, 0);
                   heroSprite = out.toDataURL("image/png");
+                } else if (heroCanvas) {
+                  // Some levels (notably level 1) can have low-contrast floor/hero colors,
+                  // making strict background subtraction too aggressive. Prefer the
+                  // original screenshot crop over the generic emoji fallback.
+                  heroSprite = heroCanvas.toDataURL("image/png");
                 }
               }
             }
+          }
+        } else if (playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
+          // If we couldn't find a clean floor reference, still preserve the authentic
+          // look by using the raw start-cell crop.
+          const heroCanvas = cropCell(playerStart.y, playerStart.x, Math.max(0, inset - 1));
+          if (heroCanvas) {
+            heroSprite = heroCanvas.toDataURL("image/png");
           }
         }
 
