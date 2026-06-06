@@ -36,7 +36,6 @@ type LevelSpriteAtlas = {
 // Sprite mode atlas building is useful even at moderate confidence; only bail out
 // when detection is clearly wrong (e.g. sampling black borders/HUD).
 const ATLAS_MIN_CONFIDENCE = 0.08;
-const HERO_SPRITE_CACHE_KEY = "stone-age-spr-hero-sprite-v1";
 
 const pickLatestByType = (refs: CellReference[]) => {
   const latest = new Map<number, CellReference>();
@@ -136,17 +135,7 @@ export function GameSprite2D({
         return;
       }
 
-      const cachedHeroSprite = (() => {
-        if (typeof window === "undefined") return undefined;
-        try {
-          const s = localStorage.getItem(HERO_SPRITE_CACHE_KEY);
-          return s || undefined;
-        } catch {
-          return undefined;
-        }
-      })();
-
-      setLevelAtlas({ tileSprites: {}, heroSprite: cachedHeroSprite, status: "Building sprites..." });
+      setLevelAtlas({ tileSprites: {}, heroSprite: undefined, status: "Building sprites..." });
 
       try {
         // Normalize/crop level screenshots (trim borders + HUD row) so grid detection isn't polluted.
@@ -171,7 +160,7 @@ export function GameSprite2D({
         if (!det) {
           setLevelAtlas({
             tileSprites: {},
-            heroSprite: cachedHeroSprite,
+            heroSprite: undefined,
             status: "Sprite mode: grid detect failed (using reference sprites)",
           });
           return;
@@ -260,7 +249,7 @@ export function GameSprite2D({
             if (mean < 28 && blackFrac > 0.55) {
               setLevelAtlas({
                 tileSprites: {},
-                heroSprite: cachedHeroSprite,
+                heroSprite: undefined,
                 status: `Sprite mode: bad atlas crop (floor too dark) - using reference sprites`,
                 confidence: det.confidence,
               });
@@ -355,12 +344,6 @@ export function GameSprite2D({
           }
         }
 
-        if (heroSprite) {
-          try { localStorage.setItem(HERO_SPRITE_CACHE_KEY, heroSprite); } catch { /* ignore */ }
-        } else {
-          heroSprite = cachedHeroSprite;
-        }
-
         setLevelAtlas({
           tileSprites,
           heroSprite,
@@ -371,7 +354,7 @@ export function GameSprite2D({
         });
       } catch (e) {
         console.error(e);
-        setLevelAtlas({ tileSprites: {}, heroSprite: cachedHeroSprite, status: "Sprite mode: failed to build sprites (using reference sprites)" });
+        setLevelAtlas({ tileSprites: {}, heroSprite: undefined, status: "Sprite mode: failed to build sprites (using reference sprites)" });
       }
     };
 
@@ -468,6 +451,7 @@ export function GameSprite2D({
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
               const edge = edgeMasks?.[y]?.[x] ?? null;
+              const isDirectionalArrowTile = displayTileType >= 7 && displayTileType <= 13;
               const arrowGlyph =
                 displayTileType === 7 ? "↑" :
                 displayTileType === 8 ? "→" :
@@ -487,8 +471,9 @@ export function GameSprite2D({
                 const backgroundImage =
                   displayTileType === 5 ? undefined :
                   displayTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
-                  atlasSprite ? `url(${atlasSprite})` :
-                  refSprite ? `url(${refSprite})` :
+                  // Keep arrow semantics deterministic in sprite mode (avoid directional mismatch from sampled photos).
+                  !isDirectionalArrowTile && atlasSprite ? `url(${atlasSprite})` :
+                  !isDirectionalArrowTile && refSprite ? `url(${refSprite})` :
                   displayTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
                   displayTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
                   displayTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
@@ -508,6 +493,7 @@ export function GameSprite2D({
                 displayTileType === 17 ? "rgba(20,110,35,0.80)" :
                 displayTileType === 18 ? "rgba(0,0,0,0.88)" :
                 displayTileType === 20 ? "rgba(251,191,36,0.78)" :
+                isDirectionalArrowTile ? "rgba(160,120,80,0.88)" :
                 "rgba(255,255,255,0.06)";
 
               return (
@@ -574,16 +560,14 @@ export function GameSprite2D({
                         draggable={false}
                       />
                     ) : (
-                      // Avoid non-nostalgic fallbacks (emoji/new hero). If the hero sprite hasn't been
-                      // extracted yet, show a subtle marker so play is still possible.
+                      // If hero extraction fails, keep the player clearly visible.
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div
-                          className="h-[70%] w-[70%] rounded-full border-2 border-emerald-200/90 bg-emerald-400/20"
-                          style={{
-                            boxShadow:
-                              "0 0 0 2px rgba(0,0,0,0.35), 0 0 18px rgba(16,185,129,0.55)",
-                          }}
-                        />
+                        <div className="flex h-[80%] w-[80%] items-center justify-center rounded-full border-2 border-emerald-200/90 bg-emerald-700/55 text-[20px]"
+                          style={{ boxShadow: "0 0 0 2px rgba(0,0,0,0.35), 0 0 18px rgba(16,185,129,0.55)" }}
+                          aria-label="Player"
+                        >
+                          🦖
+                        </div>
                       </div>
                     )
                   )}

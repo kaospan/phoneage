@@ -2487,7 +2487,7 @@ export const PuzzleGame = () => {
                 atlasSourceGrid={activeLevel?.grid ?? currentLevel?.grid ?? renderGrid}
                 cavePos={renderCavePos}
                 levelImageUrl={currentLevel?.image ?? null}
-                playerStart={currentLevel?.playerStart ?? null}
+                playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
                 selectedArrow={selectedArrow}
                 selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
                 players={renderPlayers}
