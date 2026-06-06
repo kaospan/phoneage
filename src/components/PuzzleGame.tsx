@@ -330,6 +330,7 @@ export const PuzzleGame = () => {
   const [levelTimeLimitSeconds, setLevelTimeLimitSeconds] = useState<number | null>(null);
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number | null>(null);
   const [isTimeUp, setIsTimeUp] = useState(false);
+  const [isTimerArmed, setIsTimerArmed] = useState(true);
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
@@ -399,6 +400,7 @@ export const PuzzleGame = () => {
     if (!Number.isFinite(n) || n <= 0) {
       setLevelTimeLimitSeconds(null);
       setTimeLeftSeconds(null);
+      setIsTimerArmed(true);
       return;
     }
 
@@ -406,6 +408,7 @@ export const PuzzleGame = () => {
     setLevelTimeLimitSeconds(sec);
     setTimeLeftSeconds(sec);
     timerRemainingMsRef.current = sec * 1000;
+    setIsTimerArmed(false);
   }, [clearTimerInterval]);
 
   const addLevelTimeSeconds = useCallback((deltaSeconds: number) => {
@@ -829,6 +832,14 @@ export const PuzzleGame = () => {
         return;
       }
 
+      if (!isTimerArmed) {
+        clearTimerInterval();
+        timerEndAtMsRef.current = null;
+        const sec = Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000));
+        setTimeLeftSeconds((prev) => (prev === sec ? prev : sec));
+        return;
+      }
+
       if (shouldRotateGate || isComplete || isTimeUp) {
         clearTimerInterval();
         timerEndAtMsRef.current = null;
@@ -876,7 +887,7 @@ export const PuzzleGame = () => {
         window.clearInterval(id);
         if (timerIntervalRef.current === id) timerIntervalRef.current = null;
       };
-    }, [clearTimerInterval, isBuilding, isComplete, isTimeUp, levelTimeLimitSeconds, shouldRotateGate, currentLevelIndex]);
+    }, [clearTimerInterval, isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, shouldRotateGate, currentLevelIndex]);
 
     // Show drag hint on first load
     useEffect(() => {
@@ -919,7 +930,7 @@ export const PuzzleGame = () => {
     }, []);
 
     const queueMove = useCallback((dx: number, dy: number) => {
-      if (isComplete || isBuilding || isTimeUp || shouldRotateGate) return;
+      if (isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart) return;
 
       // FPS view uses "relative" controls:
       // Up = forward (keep going straight), Down = backward, Left/Right = strafe relative to facing.
@@ -937,7 +948,7 @@ export const PuzzleGame = () => {
       }
 
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding, isTimeUp, shouldRotateGate, viewMode]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -1314,6 +1325,7 @@ export const PuzzleGame = () => {
     const campaignProgressText = `${completedLevelCount}/${allLevels.length}`;
     const completionClockText = formatCampaignClock(completionSummary?.timeLeftSeconds ?? null);
     const completionBestClockText = formatCampaignClock(completionSummary?.bestTimeLeftSeconds ?? null);
+    const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
 
     const goToLevelIndex = useCallback((nextIndex: number) => {
       if (nextIndex < 0 || nextIndex >= allLevels.length) return false;
@@ -1430,6 +1442,12 @@ export const PuzzleGame = () => {
       applyLevelState(levelToReset);
       pushHudMessage("Level reset");
     }, [activeLevel, applyLevelState, currentLevel, pushHudMessage]);
+
+    const startLevelWhenReady = useCallback(() => {
+      if (!levelTimeLimitSeconds || isTimerArmed || isTimeUp || isBuilding || isComplete) return;
+      setIsTimerArmed(true);
+      pushHudMessage("Timer started — good luck!", 1600);
+    }, [isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, pushHudMessage]);
 
     // Keyboard controls (player movement + keyboard arrow selection)
     useEffect(() => {
@@ -1782,11 +1800,11 @@ export const PuzzleGame = () => {
         )}
         <TouchControls
           onMove={queueMove}
-          disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate}
+          disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart}
           targetRef={gestureSurfaceRef}
         />
         {isMobile && !shouldRotateGate && (
-          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate} />
+          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart} />
         )}
 
         {desktopShellActive && (
@@ -2060,6 +2078,18 @@ export const PuzzleGame = () => {
                       <span>{timeLeftText}</span>
                    </span>
                  )}
+                 {isWaitingToStart && (
+                   <Button
+                     onClick={startLevelWhenReady}
+                     variant="default"
+                     size="sm"
+                     className="h-8 px-2 text-[11px] font-black tracking-wide"
+                     title="Start timer when ready"
+                   >
+                     <Play className="mr-1 h-3.5 w-3.5" />
+                     START
+                   </Button>
+                 )}
                  <div className="flex items-center gap-1">
                    <span
                      className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[11px] font-black text-white px-1.5 py-0.5"
@@ -2289,6 +2319,19 @@ export const PuzzleGame = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-white/10 bg-black/20 px-3 py-2">
+                  {isWaitingToStart && (
+                    <Button
+                      onClick={startLevelWhenReady}
+                      variant="default"
+                      size="sm"
+                      className="h-10 rounded-2xl bg-emerald-500 px-3 text-xs font-black tracking-[0.12em] text-emerald-950 hover:bg-emerald-400"
+                      title="Start timer when ready"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      START WHEN READY
+                    </Button>
+                  )}
+
                   <Button
                     onClick={resetLevel}
                     variant="ghost"
