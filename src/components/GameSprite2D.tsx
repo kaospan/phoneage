@@ -147,6 +147,24 @@ const renderHeroFallback = () => (
   </div>
 );
 
+const scoreDinoCrop = (canvas: HTMLCanvasElement) => {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return 0;
+
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  let greenPixels = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    if (g > 70 && g - r > 24 && g - b > 18) {
+      greenPixels += 1;
+    }
+  }
+
+  return greenPixels;
+};
+
 export function GameSprite2D({
   grid,
   atlasSourceGrid,
@@ -320,6 +338,38 @@ export function GameSprite2D({
           return out;
         };
 
+        const minDinoPixels = Math.round(outW * outH * 0.012);
+        const findBestDinoCrop = () => {
+          if (!playerStart || playerStart.x < 0 || playerStart.y < 0) return null;
+
+          const heroInset = Math.max(0, inset - 1);
+          const startCanvas = cropCell(playerStart.y, playerStart.x, heroInset);
+          const startScore = startCanvas ? scoreDinoCrop(startCanvas) : 0;
+          if (startCanvas && startScore >= minDinoPixels) return startCanvas;
+
+          let bestCanvas: HTMLCanvasElement | null = null;
+          let bestScore = 0;
+          for (let y = 0; y < rows; y += 1) {
+            for (let x = 0; x < cols; x += 1) {
+              const tile = sourceGrid[y]?.[x];
+              if (tile == null) continue;
+              if (tile !== 0 && tile !== 18) continue;
+              if (atlasGoalCaveKeys.has(`${x},${y}`)) continue;
+
+              const canvas = cropCell(y, x, heroInset);
+              if (!canvas) continue;
+              const dist = Math.abs(x - playerStart.x) + Math.abs(y - playerStart.y);
+              const score = scoreDinoCrop(canvas) - dist * 8;
+              if (score > bestScore) {
+                bestScore = score;
+                bestCanvas = canvas;
+              }
+            }
+          }
+
+          return bestCanvas && bestScore >= minDinoPixels ? bestCanvas : null;
+        };
+
         const tileSprites: Record<number, string> = {};
         let floorCanvasForSanity: HTMLCanvasElement | null = null;
         sampleByType.forEach((pos, tileType) => {
@@ -397,10 +447,18 @@ export function GameSprite2D({
           return null;
         };
 
-        // Extract a transparent hero sprite by diffing player-start cell against a clean floor cell.
+        // Prefer the original screenshot dino crop, but only if the crop actually
+        // contains the green dinosaur. A bad opaque crop would hide the fallback.
         let heroSprite: string | undefined;
+        const bestDinoCrop = findBestDinoCrop();
+        if (bestDinoCrop) {
+          heroSprite = bestDinoCrop.toDataURL("image/png");
+        }
+
+        // Keep the older floor-diff path as a backup for non-green variants, but
+        // never accept a raw opaque crop unless it passes the dino color check above.
         const cleanFloor = findCleanFloorCell();
-        if (cleanFloor && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
+        if (!heroSprite && cleanFloor && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
           const floorCanvas = cropCell(cleanFloor.y, cleanFloor.x);
           // Slightly smaller inset for the hero crop so we don't clip the sprite.
           const heroCanvas = cropCell(playerStart.y, playerStart.x, Math.max(0, inset - 1));
@@ -439,24 +497,11 @@ export function GameSprite2D({
                 // can appear invisible on some levels (e.g. 1/4/8/13).
                 const minPixels = Math.round(outW * outH * 0.055); // ~225 px for 64x64
                 if (nonFloorPixels >= minPixels) {
-                  // Prefer raw start-cell crop to preserve the original in-level dino look
-                  // consistently across levels (without transparent-mask artifacts).
-                  heroSprite = heroCanvas.toDataURL("image/png");
-                } else if (heroCanvas) {
-                  // Some levels (notably level 1) can have low-contrast floor/hero colors,
-                  // making strict background subtraction too aggressive. Prefer the
-                  // original screenshot crop over the generic emoji fallback.
-                  heroSprite = heroCanvas.toDataURL("image/png");
+                  oc.putImageData(outData, 0, 0);
+                  heroSprite = out.toDataURL("image/png");
                 }
               }
             }
-          }
-        } else if (playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
-          // If we couldn't find a clean floor reference, still preserve the authentic
-          // look by using the raw start-cell crop.
-          const heroCanvas = cropCell(playerStart.y, playerStart.x, Math.max(0, inset - 1));
-          if (heroCanvas) {
-            heroSprite = heroCanvas.toDataURL("image/png");
           }
         }
 
@@ -667,16 +712,13 @@ export function GameSprite2D({
                   )}
                   {isPlayer && (
                     levelAtlas?.heroSprite ? (
-                      <>
-                        {renderHeroFallback()}
-                        <img
-                          src={levelAtlas.heroSprite}
-                          alt="Hero"
-                          className="absolute inset-0 h-full w-full"
-                          style={{ imageRendering: "pixelated" }}
-                          draggable={false}
-                        />
-                      </>
+                      <img
+                        src={levelAtlas.heroSprite}
+                        alt="Hero"
+                        className="absolute inset-0 h-full w-full"
+                        style={{ imageRendering: "pixelated" }}
+                        draggable={false}
+                      />
                     ) : renderHeroFallback()
                   )}
                   {arrowVector && !backgroundImage && (
