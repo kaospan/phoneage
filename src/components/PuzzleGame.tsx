@@ -331,6 +331,7 @@ export const PuzzleGame = () => {
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number | null>(null);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [isTimerArmed, setIsTimerArmed] = useState(true);
+  const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
@@ -1325,7 +1326,6 @@ export const PuzzleGame = () => {
     const campaignProgressText = `${completedLevelCount}/${allLevels.length}`;
     const completionClockText = formatCampaignClock(completionSummary?.timeLeftSeconds ?? null);
     const completionBestClockText = formatCampaignClock(completionSummary?.bestTimeLeftSeconds ?? null);
-    const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
 
     const goToLevelIndex = useCallback((nextIndex: number) => {
       if (nextIndex < 0 || nextIndex >= allLevels.length) return false;
