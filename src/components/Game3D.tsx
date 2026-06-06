@@ -133,6 +133,162 @@ const hexToRgba = (hex: string, alpha: number) => {
   return `rgba(${r},${g},${b},${a})`;
 };
 
+type ArrowGlyphKind = 'single' | 'vertical' | 'horizontal' | 'omni';
+
+const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
+  if (typeof document === 'undefined') return null;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, size, size);
+  const glow = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.08, size * 0.5, size * 0.5, size * 0.48);
+  glow.addColorStop(0, hexToRgba(accentColor, 0.34));
+  glow.addColorStop(1, hexToRgba(accentColor, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, size, size);
+
+  const stroke = '#fff5c2';
+  const fill = accentColor;
+
+  const drawArrow = (cx: number, cy: number, angle: number, scale = 1) => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.scale(scale, scale);
+    ctx.beginPath();
+    ctx.moveTo(-16, 42);
+    ctx.lineTo(-16, -8);
+    ctx.lineTo(-36, -8);
+    ctx.lineTo(0, -54);
+    ctx.lineTo(36, -8);
+    ctx.lineTo(16, -8);
+    ctx.lineTo(16, 42);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 8;
+    ctx.lineJoin = 'round';
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  if (kind === 'single') {
+    drawArrow(size * 0.5, size * 0.55, 0, 1.12);
+  } else if (kind === 'vertical') {
+    drawArrow(size * 0.5, size * 0.40, 0, 0.88);
+    drawArrow(size * 0.5, size * 0.60, Math.PI, 0.88);
+  } else if (kind === 'horizontal') {
+    drawArrow(size * 0.40, size * 0.5, -Math.PI / 2, 0.88);
+    drawArrow(size * 0.60, size * 0.5, Math.PI / 2, 0.88);
+  } else {
+    drawArrow(size * 0.5, size * 0.36, 0, 0.74);
+    drawArrow(size * 0.64, size * 0.5, -Math.PI / 2, 0.74);
+    drawArrow(size * 0.5, size * 0.64, Math.PI, 0.74);
+    drawArrow(size * 0.36, size * 0.5, Math.PI / 2, 0.74);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.anisotropy = 1;
+  texture.needsUpdate = true;
+  return texture;
+};
+
+const StoneRockTile = ({
+  position,
+  color,
+  noiseMap,
+}: {
+  position: [number, number, number];
+  color: string;
+  noiseMap?: THREE.Texture | null;
+}) => {
+  const dark = darkenHexColor(color, 0.36);
+  const deep = darkenHexColor(color, 0.54);
+  const moss = '#6ea16f';
+
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.14, 0]} castShadow receiveShadow>
+        <dodecahedronGeometry args={[0.36, 1]} />
+        <meshStandardMaterial
+          color={color}
+          roughness={0.74}
+          metalness={0.2}
+          emissive={dark}
+          emissiveIntensity={0.08}
+          roughnessMap={noiseMap ?? undefined}
+          bumpMap={noiseMap ?? undefined}
+          bumpScale={0.09}
+          envMapIntensity={0.58}
+        />
+      </mesh>
+      <mesh position={[-0.14, 0.2, -0.08]} rotation={[0.2, 0.45, 0]} castShadow>
+        <dodecahedronGeometry args={[0.21, 0]} />
+        <meshStandardMaterial color={dark} roughness={0.84} metalness={0.08} emissive={deep} emissiveIntensity={0.1} />
+      </mesh>
+      <mesh position={[0.16, 0.18, 0.07]} rotation={[0.12, -0.62, 0]} castShadow>
+        <dodecahedronGeometry args={[0.17, 0]} />
+        <meshStandardMaterial color={dark} roughness={0.88} metalness={0.06} emissive={deep} emissiveIntensity={0.08} />
+      </mesh>
+      <mesh position={[0.05, 0.33, -0.05]} rotation={[-0.5, 0.1, 0.05]} castShadow>
+        <sphereGeometry args={[0.12, 12, 10, 0, Math.PI * 1.8, 0, Math.PI * 0.7]} />
+        <meshStandardMaterial color={moss} roughness={0.96} emissive={'#355238'} emissiveIntensity={0.08} />
+      </mesh>
+    </group>
+  );
+};
+
+const createRuneTexture = ({
+  glyph,
+  color,
+  glow,
+}: {
+  glyph: string;
+  color: string;
+  glow: string;
+}) => {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const gradient = ctx.createRadialGradient(128, 128, 16, 128, 128, 120);
+  gradient.addColorStop(0, glow);
+  gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 256, 256);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(22, 22, 212, 212);
+
+  ctx.font = '900 170px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 28;
+  ctx.fillStyle = color;
+  ctx.fillText(glyph, 128, 140);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.anisotropy = 1;
+  texture.needsUpdate = true;
+  return texture;
+};
+
 const KeyTile = ({
   position,
   glowColor,
@@ -400,6 +556,10 @@ const ArrowTile = ({
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
   const accentColor = darkenHexColor(color, 0.12);
+  const runeTexture = useMemo(
+    () => createRuneTexture({ glyph: '↑', color: '#f5f2b0', glow: hexToRgba(accentColor, 0.5) }),
+    [accentColor]
+  );
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
@@ -482,34 +642,40 @@ const ArrowTile = ({
         <meshStandardMaterial
           color={baseColor}
           emissive={baseColor}
-          emissiveIntensity={isSelected ? 0.4 : 0.14}
-          roughness={0.55}
-          metalness={0.38}
+          emissiveIntensity={isSelected ? 0.5 : 0.22}
+          roughness={0.48}
+          metalness={0.46}
           roughnessMap={noiseMap ?? undefined}
           bumpMap={noiseMap ?? undefined}
-          bumpScale={0.05}
-          envMapIntensity={0.65}
+          bumpScale={0.08}
+          envMapIntensity={0.9}
         />
       </mesh>
 
-      {/* Large arrow indicator pointing in direction */}
-      <mesh
-        position={[0, 0.35, 0]}
-        rotation={[-Math.PI / 2, 0, rotations[direction] || 0]}
-        castShadow
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      >
-        <coneGeometry args={[0.35, 0.6, 3]} />
+      <mesh position={[0, 0.26, 0]} castShadow>
+        <boxGeometry args={[0.76, 0.08, 0.76]} />
         <meshStandardMaterial
-          color={accentColor}
+          color={darkenHexColor(baseColor, 0.25)}
           emissive={accentColor}
-          emissiveIntensity={0.45}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
+          emissiveIntensity={0.16}
+          roughness={0.36}
+          metalness={0.62}
+          envMapIntensity={0.9}
         />
+      </mesh>
+
+      <mesh position={[0, 0.305, 0]} rotation={[-Math.PI / 2, 0, rotations[direction] || 0]} renderOrder={12}>
+        <planeGeometry args={[0.64, 0.64]} />
+        <meshBasicMaterial map={runeTexture ?? undefined} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
+      </mesh>
+
+      <mesh position={[0, 0.34, 0]} rotation={[0, rotations[direction] || 0, 0]} castShadow>
+        <boxGeometry args={[0.1, 0.05, 0.38]} />
+        <meshStandardMaterial color={accentColor} emissive={accentColor} emissiveIntensity={0.45} roughness={0.24} metalness={0.36} />
+      </mesh>
+      <mesh position={[0, 0.34, -0.23]} rotation={[0, rotations[direction] || 0, 0]} castShadow>
+        <coneGeometry args={[0.14, 0.24, 3]} />
+        <meshStandardMaterial color={accentColor} emissive={accentColor} emissiveIntensity={0.55} roughness={0.2} metalness={0.34} />
       </mesh>
 
       {/* Yellow hollow square border on top face when selected */}
@@ -561,6 +727,10 @@ const BidirectionalArrowTile = ({
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
   const accentColor = darkenHexColor(color, 0.1);
+  const runeTexture = useMemo(
+    () => createRuneTexture({ glyph: isVertical ? '↕' : '↔', color: '#f5f2b0', glow: hexToRgba(accentColor, 0.52) }),
+    [accentColor, isVertical]
+  );
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
@@ -636,14 +806,31 @@ const BidirectionalArrowTile = ({
         <meshStandardMaterial
           color={baseColor}
           emissive={baseColor}
-          emissiveIntensity={isSelected ? 0.4 : 0.14}
-          roughness={0.55}
-          metalness={0.38}
+          emissiveIntensity={isSelected ? 0.5 : 0.2}
+          roughness={0.48}
+          metalness={0.46}
           roughnessMap={noiseMap ?? undefined}
           bumpMap={noiseMap ?? undefined}
-          bumpScale={0.05}
-          envMapIntensity={0.65}
+          bumpScale={0.08}
+          envMapIntensity={0.9}
         />
+      </mesh>
+
+      <mesh position={[0, 0.26, 0]} castShadow>
+        <boxGeometry args={[0.76, 0.08, 0.76]} />
+        <meshStandardMaterial
+          color={darkenHexColor(baseColor, 0.25)}
+          emissive={accentColor}
+          emissiveIntensity={0.16}
+          roughness={0.36}
+          metalness={0.62}
+          envMapIntensity={0.9}
+        />
+      </mesh>
+
+      <mesh position={[0, 0.305, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
+        <planeGeometry args={[0.64, 0.64]} />
+        <meshBasicMaterial map={runeTexture ?? undefined} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
       </mesh>
 
       {/* First arrow */}
@@ -733,6 +920,10 @@ const OmnidirectionalArrowTile = ({
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
   const accentColor = darkenHexColor(color, 0.08);
+  const runeTexture = useMemo(
+    () => createRuneTexture({ glyph: '✥', color: '#f5f2b0', glow: hexToRgba(accentColor, 0.55) }),
+    [accentColor]
+  );
   const touchStartTimeRef = useRef<number | null>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapTimeRef = useRef<number>(0);
@@ -807,14 +998,31 @@ const OmnidirectionalArrowTile = ({
         <meshStandardMaterial
           color={baseColor}
           emissive={baseColor}
-          emissiveIntensity={isSelected ? 0.4 : 0.14}
-          roughness={0.55}
-          metalness={0.38}
+          emissiveIntensity={isSelected ? 0.5 : 0.2}
+          roughness={0.48}
+          metalness={0.46}
           roughnessMap={noiseMap ?? undefined}
           bumpMap={noiseMap ?? undefined}
-          bumpScale={0.05}
-          envMapIntensity={0.65}
+          bumpScale={0.08}
+          envMapIntensity={0.9}
         />
+      </mesh>
+
+      <mesh position={[0, 0.26, 0]} castShadow>
+        <boxGeometry args={[0.76, 0.08, 0.76]} />
+        <meshStandardMaterial
+          color={darkenHexColor(baseColor, 0.25)}
+          emissive={accentColor}
+          emissiveIntensity={0.16}
+          roughness={0.36}
+          metalness={0.62}
+          envMapIntensity={0.9}
+        />
+      </mesh>
+
+      <mesh position={[0, 0.305, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
+        <planeGeometry args={[0.64, 0.64]} />
+        <meshBasicMaterial map={runeTexture ?? undefined} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
       </mesh>
 
       {/* Four arrows pointing in all directions */}
@@ -1152,13 +1360,13 @@ const Player = ({
   const blinkTimerRef = useRef(0);
 
   const palette = useMemo(() => {
-    const base = new THREE.Color(color).lerp(new THREE.Color('#27d36b'), 0.65);
+    const base = new THREE.Color(color).lerp(new THREE.Color('#39d980'), 0.68);
     return {
       base,
-      belly: base.clone().lerp(new THREE.Color('#b7ff9a'), 0.55),
-      dark: base.clone().multiplyScalar(0.65),
+      belly: base.clone().lerp(new THREE.Color('#f6e6b4'), 0.42),
+      dark: base.clone().multiplyScalar(0.62),
       spike: new THREE.Color('#1f6b3a'),
-      stripe: base.clone().multiplyScalar(0.8),
+      stripe: base.clone().multiplyScalar(0.78),
       highlight: base.clone().lerp(new THREE.Color('#eaffd6'), 0.5),
     };
   }, [color]);
@@ -1350,6 +1558,10 @@ const Player = ({
           <boxGeometry args={[0.22, 0.08, 0.26]} />
           <meshStandardMaterial color={palette.belly} roughness={0.6} />
         </mesh>
+        <mesh position={[0, -0.09, 0.38]} castShadow>
+          <capsuleGeometry args={[0.05, 0.1, 8, 8]} />
+          <meshStandardMaterial color={palette.belly} roughness={0.5} />
+        </mesh>
         {/* Nostrils */}
         {[-0.05, 0.05].map((x, idx) => (
           <mesh key={`nostril-${idx}`} position={[x, -0.02, 0.36]}>
@@ -1373,6 +1585,20 @@ const Player = ({
             <meshStandardMaterial color="#111111" />
           </mesh>
         ))}
+        {[-0.12, 0.12].map((x, idx) => (
+          <mesh key={`iris-${idx}`} position={[x, 0.055, 0.292]}>
+            <sphereGeometry args={[0.012, 8, 8]} />
+            <meshStandardMaterial color="#2b8bff" emissive="#2b8bff" emissiveIntensity={0.25} />
+          </mesh>
+        ))}
+        <mesh position={[0, -0.16, 0.28]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.055, 0.012, 10, 26, Math.PI]} />
+          <meshStandardMaterial color="#2f2417" emissive="#1f1208" emissiveIntensity={0.2} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, 0.32, 0.1]} rotation={[0, 0, Math.PI]} castShadow>
+          <coneGeometry args={[0.06, 0.16, 6]} />
+          <meshStandardMaterial color={palette.spike} roughness={0.65} />
+        </mesh>
       </group>
 
       {/* Ambient glow */}
@@ -2048,7 +2274,7 @@ export const Game3D = ({
           wallBase.push([pos[0], 0.1, pos[2]]);
           wallBars.push([pos[0], 0.12, pos[2]]);
         }
-        if (cell === 2) stone.push([pos[0], 0.25, pos[2]]);
+        if (cell === 2) stone.push([pos[0], 0.04, pos[2]]);
         if (cell === 6) breakable.push([pos[0], 0.16, pos[2]]);
         if (cell === 14) redKeys.push([pos[0], 0, pos[2]]);
         if (cell === 15) greenKeys.push([pos[0], 0, pos[2]]);
@@ -2154,7 +2380,6 @@ export const Game3D = ({
   const edgeRailVGeometry = useMemo(() => new THREE.BoxGeometry(0.06, 0.08, 1.03), []);
   const wallGeometry = useMemo(() => new THREE.BoxGeometry(0.98, 0.2, 0.98), []);
   const wallBarGeometry = useMemo(() => new THREE.BoxGeometry(0.96, 0.02, 0.08), []);
-  const stoneGeometry = useMemo(() => new THREE.DodecahedronGeometry(0.45, 1), []);
   const breakableGeometry = useMemo(() => new THREE.BoxGeometry(0.92, 0.24, 0.92, 1, 1, 1), []);
   const planeRotation = useMemo(() => new THREE.Euler(-Math.PI / 2, 0, 0), []);
   const wallBarRotA = useMemo(() => new THREE.Euler(0, Math.PI / 4, 0), []);
@@ -2166,7 +2391,6 @@ export const Game3D = ({
   const edgeRailMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const wallMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const wallBarMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
-  const stoneMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const breakableMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
 
   useEffect(() => {
@@ -2226,17 +2450,6 @@ export const Game3D = ({
     wallBarMaterial.roughness = 0.8;
     wallBarMaterial.needsUpdate = true;
 
-    stoneMaterial.color = new THREE.Color(themeColors.stone);
-    stoneMaterial.roughness = 0.8;
-    stoneMaterial.metalness = 0.2;
-    stoneMaterial.emissive = new THREE.Color(themeColors.stone);
-    stoneMaterial.emissiveIntensity = 0.05;
-    stoneMaterial.roughnessMap = noiseTexture ?? null;
-    stoneMaterial.bumpMap = noiseTexture ?? null;
-    stoneMaterial.bumpScale = 0.08;
-    stoneMaterial.envMapIntensity = 0.45;
-    stoneMaterial.needsUpdate = true;
-
     breakableMaterial.map = breakableTexture ?? null;
     breakableMaterial.color = new THREE.Color('#ffffff');
     breakableMaterial.emissive = new THREE.Color('#111111');
@@ -2250,7 +2463,7 @@ export const Game3D = ({
     breakableMaterial.bumpScale = 0.06;
     breakableMaterial.envMapIntensity = 0.35;
     breakableMaterial.needsUpdate = true;
-  }, [themeColors, noiseTexture, breakableTexture, floorMaterial, floorBorderMaterial, waterMaterial, edgeRailMaterial, wallMaterial, wallBarMaterial, stoneMaterial, breakableMaterial]);
+  }, [themeColors, noiseTexture, breakableTexture, floorMaterial, floorBorderMaterial, waterMaterial, edgeRailMaterial, wallMaterial, wallBarMaterial, breakableMaterial]);
 
   const floorBorderPositions = useMemo(
     () => tileData.floor.map(([x, y, z]) => [x, y + 0.001, z] as [number, number, number]),
@@ -2404,13 +2617,14 @@ export const Game3D = ({
           receiveShadow
           rotation={wallBarRotB}
         />
-        <InstancedMeshSet
-          positions={tileData.stone}
-          geometry={stoneGeometry}
-          material={stoneMaterial}
-          castShadow
-          receiveShadow
-        />
+        {tileData.stone.map((position, index) => (
+          <StoneRockTile
+            key={`stone-${index}-${position[0]}-${position[2]}`}
+            position={position}
+            color={themeColors.stone}
+            noiseMap={noiseTexture}
+          />
+        ))}
         <InstancedMeshSet
           positions={tileData.breakable}
           geometry={breakableGeometry}
