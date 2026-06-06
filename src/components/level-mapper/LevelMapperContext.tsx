@@ -226,7 +226,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         console.log('✓ Basic state initialized');
 
         const canvasRef = useRef<HTMLCanvasElement | null>(null);
-        // Default mapper layout is 12x20 unless a level has a saved manual layout override.
+        // Default mapper layout is 11x20.
         const [rows, setRows] = useState(DEFAULT_MAPPER_ROWS);
         const [cols, setCols] = useState(DEFAULT_MAPPER_COLS);
         const [activeTile, setActiveTile] = useState(0);
@@ -455,7 +455,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }, [imageURL]);
 
         // Persist per-level layout (rows/cols) so placeholder auto-build levels can remember a user-chosen size
-        // like "Level 21 is 12 rows" even before the grid is fully mapped.
+        // like "Level 21 is 11 rows" even before the grid is fully mapped.
         useEffect(() => {
             if (importLevelIndex === null) return;
             const lvl = allLevels[importLevelIndex];
@@ -594,11 +594,26 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                             return;
                         }
 
+                        const targetRows = Math.max(1, rows || DEFAULT_MAPPER_ROWS);
+                        const targetCols = Math.max(1, cols || DEFAULT_MAPPER_COLS);
+                        const fittedGrid = reshapeGridPreservingOverlap(
+                            baseline.grid,
+                            targetRows,
+                            targetCols,
+                            5
+                        );
+                        const fittedPlayerStart = baseline.playerStart
+                            ? {
+                                x: Math.min(Math.max(0, baseline.playerStart.x), targetCols - 1),
+                                y: Math.min(Math.max(0, baseline.playerStart.y), targetRows - 1),
+                            }
+                            : null;
+
                         skipAutoResizeRef.current = true;
-                        prevSizeRef.current = { rows: baseline.rows, cols: baseline.cols };
-                        setRows(baseline.rows);
-                        setCols(baseline.cols);
-                        setGrid(cloneGrid(baseline.grid));
+                        prevSizeRef.current = { rows: targetRows, cols: targetCols };
+                        setRows(targetRows);
+                        setCols(targetCols);
+                        setGrid(cloneGrid(fittedGrid));
                         setHourglassBonusByCell({ ...(baseline.hourglassBonusByCell ?? {}) });
                         setTimeLimitSeconds(baseline.timeLimitSeconds);
                         setImageURL(baseline.imageURL);
@@ -615,13 +630,13 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setGridOffsetY(baseline.gridOffsetY);
                         setGridFrameWidth(baseline.gridFrameWidth);
                         setGridFrameHeight(baseline.gridFrameHeight);
-                        setPlayerStart(baseline.playerStart ? { ...baseline.playerStart } : null);
+                        setPlayerStart(fittedPlayerStart);
                         setCurrentLevelProvenance(baseline.provenance);
                         setTheme(baseline.theme);
                         setLoadedSnapshot({
                             levelId: baseline.levelId,
-                            grid: baseline.grid,
-                            playerStart: baseline.playerStart,
+                            grid: fittedGrid,
+                            playerStart: fittedPlayerStart,
                             provenance: baseline.provenance,
                             theme: baseline.theme,
                             timeLimitSeconds: baseline.timeLimitSeconds,

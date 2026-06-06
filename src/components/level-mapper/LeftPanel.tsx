@@ -17,6 +17,19 @@ import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT }
 import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperMetricPill, MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
+
+const fitGridToShape = (source: number[][], nextRows: number, nextCols: number, fill = 5) => {
+    const out = Array.from({ length: nextRows }, () => Array(nextCols).fill(fill));
+    const rowMax = Math.min(source.length, nextRows);
+    const colMax = Math.min(source[0]?.length ?? 0, nextCols);
+    for (let r = 0; r < rowMax; r += 1) {
+        for (let c = 0; c < colMax; c += 1) {
+            out[r][c] = source[r][c];
+        }
+    }
+    return out;
+};
+
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; resizable?: boolean; }> = ({ width, onStartResize, min, max, resizable = true }) => {
     type IdleWindow = Window & typeof globalThis & {
         requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
@@ -214,9 +227,20 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         if (!lvl?.grid) return;
 
         const baseline = await resolveLevelMapperBaseline(lvl);
-        setRows(baseline.rows);
-        setCols(baseline.cols);
-        setGrid(baseline.grid.map((row) => [...row]));
+        const targetRows = Math.max(1, rows || DEFAULT_MAPPER_ROWS);
+        const targetCols = Math.max(1, cols || DEFAULT_MAPPER_COLS);
+        const fittedGrid = fitGridToShape(baseline.grid, targetRows, targetCols, 5);
+        const fittedPlayerStart = baseline.playerStart
+            ? {
+                x: Math.min(Math.max(0, baseline.playerStart.x), targetCols - 1),
+                y: Math.min(Math.max(0, baseline.playerStart.y), targetRows - 1),
+            }
+            : null;
+
+        // Keep board size stable across levels unless the user manually changes rows/cols.
+        setRows(targetRows);
+        setCols(targetCols);
+        setGrid(fittedGrid);
         setHourglassBonusByCell({ ...(baseline.hourglassBonusByCell ?? {}) });
         setImageURL(baseline.imageURL);
         setOverlayEnabled(baseline.overlayEnabled);
@@ -232,14 +256,14 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         setImageOffsetX(baseline.imageOffsetX);
         setImageOffsetY(baseline.imageOffsetY);
         setLockImageAspect(baseline.lockImageAspect);
-        setPlayerStart(baseline.playerStart ? { ...baseline.playerStart } : null);
+        setPlayerStart(fittedPlayerStart);
         setTheme(baseline.theme);
         setTimeLimitSeconds(baseline.timeLimitSeconds);
 
         setLoadedSnapshot({
             levelId: baseline.levelId,
-            grid: baseline.grid,
-            playerStart: baseline.playerStart,
+            grid: fittedGrid,
+            playerStart: fittedPlayerStart,
             provenance: baseline.provenance,
             theme: baseline.theme,
             timeLimitSeconds: baseline.timeLimitSeconds,
