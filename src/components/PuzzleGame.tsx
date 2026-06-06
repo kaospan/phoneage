@@ -791,8 +791,9 @@ export const PuzzleGame = () => {
     }
   }, [viewMode]);
 
-  // Resolve the best available screenshot for the active level:
-  // 1) mapper-uploaded image from IndexedDB, 2) bundled level.image, 3) first source image.
+  // Resolve the best available screenshot for the active level.
+  // For built-in stages, always prefer the bundled image so gameplay matches the
+  // original screenshots. Mapper uploads are a fallback for levels without bundled art.
   useEffect(() => {
     let cancelled = false;
     if (!currentLevel) {
@@ -802,6 +803,9 @@ export const PuzzleGame = () => {
 
     const fallbackUrl = currentLevel.image ?? currentLevel.sources?.[0] ?? null;
     setResolvedLevelImageUrl(fallbackUrl);
+
+    // If this level already has packaged artwork, keep it authoritative.
+    if (fallbackUrl) return;
 
     const resolveImage = async () => {
       try {
