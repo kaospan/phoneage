@@ -2572,6 +2572,14 @@ export const PuzzleGame = () => {
         {selectedArrow && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
         )}
+        {isWaitingToStart && (
+          <div className="absolute inset-x-0 top-[calc(env(safe-area-inset-top)+5.25rem)] z-[65] flex justify-center px-4">
+            <div className="pointer-events-auto rounded-2xl border border-emerald-300/45 bg-emerald-700/92 px-4 py-2 text-center text-white shadow-2xl">
+              <div className="text-[11px] font-black tracking-[0.14em]">READY CHECK</div>
+              <div className="mt-1 text-sm">Timer is paused. Press START when ready.</div>
+            </div>
+          </div>
+        )}
         {hudMessage && !isComplete && (
           <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 -translate-x-1/2 px-4">
             <div className="rounded-full border border-white/10 bg-black/55 px-4 py-2 text-sm font-medium text-stone-100 shadow-xl backdrop-blur-md">
