@@ -426,11 +426,11 @@ export function GameSprite2D({
         const outW = 64;
         const outH = 64;
 
-        const cropCell = (row: number, col: number, insetPx = inset) => {
-          const sx = offsetX + col * cellW + insetPx;
-          const sy = offsetY + row * cellH + insetPx;
+        const cropCell = (row: number, col: number, insetPx = inset, shiftX = 0, shiftY = 0) => {
           const sw = Math.max(1, cellW - insetPx * 2);
           const sh = Math.max(1, cellH - insetPx * 2);
+          const sx = Math.max(0, Math.min(srcCanvas.width - sw, offsetX + col * cellW + insetPx + shiftX));
+          const sy = Math.max(0, Math.min(srcCanvas.height - sh, offsetY + row * cellH + insetPx + shiftY));
           const out = document.createElement("canvas");
           out.width = outW;
           out.height = outH;
@@ -446,31 +446,64 @@ export function GameSprite2D({
           if (!playerStart || playerStart.x < 0 || playerStart.y < 0) return null;
 
           const heroInset = Math.max(0, inset - 1);
-          const startCanvas = cropCell(playerStart.y, playerStart.x, heroInset);
-          const startScore = startCanvas ? scoreDinoCrop(startCanvas) : 0;
-          if (startCanvas && startScore >= minDinoPixels) return startCanvas;
-
+          const strongDinoPixels = Math.round(outW * outH * 0.035);
           let bestCanvas: HTMLCanvasElement | null = null;
           let bestScore = 0;
+          let bestRawScore = 0;
+
+          const considerCrop = (x: number, y: number, distancePenalty: number, shiftX = 0, shiftY = 0) => {
+            if (x < 0 || x >= cols || y < 0 || y >= rows) return;
+            if (atlasGoalCaveKeys.has(`${x},${y}`)) return;
+            const tile = sourceGrid[y]?.[x];
+            if (tile == null || tile === 3 || tile === 5) return;
+
+            const canvas = cropCell(y, x, heroInset, shiftX, shiftY);
+            if (!canvas) return;
+
+            const rawScore = scoreDinoCrop(canvas);
+            const dist = Math.abs(x - playerStart.x) + Math.abs(y - playerStart.y);
+            const shiftPenalty =
+              (Math.abs(shiftX) / Math.max(1, cellW) + Math.abs(shiftY) / Math.max(1, cellH)) * 18;
+            const score = rawScore - dist * distancePenalty - shiftPenalty;
+            if (score > bestScore) {
+              bestScore = score;
+              bestRawScore = rawScore;
+              bestCanvas = canvas;
+            }
+          };
+
+          considerCrop(playerStart.x, playerStart.y, 0);
+          if (bestCanvas && bestRawScore >= strongDinoPixels) return bestCanvas;
+
+          const stepX = Math.max(1, Math.round(cellW * 0.1));
+          const stepY = Math.max(1, Math.round(cellH * 0.1));
+          const maxShiftX = Math.round(cellW * 1.1);
+          const maxShiftY = Math.round(cellH * 2.2);
+          for (let shiftY = -maxShiftY; shiftY <= maxShiftY; shiftY += stepY) {
+            for (let shiftX = -maxShiftX; shiftX <= maxShiftX; shiftX += stepX) {
+              considerCrop(playerStart.x, playerStart.y, 0, shiftX, shiftY);
+            }
+          }
+          if (bestCanvas && bestRawScore >= strongDinoPixels) return bestCanvas;
+
+          // Some DOS screenshots include the selected hero slightly above/below the
+          // logical start cell. Search nearby cells before accepting a weak strip.
+          for (let y = playerStart.y - 2; y <= playerStart.y + 2; y += 1) {
+            for (let x = playerStart.x - 2; x <= playerStart.x + 2; x += 1) {
+              considerCrop(x, y, 10);
+            }
+          }
+          if (bestCanvas && bestRawScore >= strongDinoPixels) return bestCanvas;
+
           for (let y = 0; y < rows; y += 1) {
             for (let x = 0; x < cols; x += 1) {
               const tile = sourceGrid[y]?.[x];
-              if (tile == null) continue;
               if (tile !== 0 && tile !== 18) continue;
-              if (atlasGoalCaveKeys.has(`${x},${y}`)) continue;
-
-              const canvas = cropCell(y, x, heroInset);
-              if (!canvas) continue;
-              const dist = Math.abs(x - playerStart.x) + Math.abs(y - playerStart.y);
-              const score = scoreDinoCrop(canvas) - dist * 8;
-              if (score > bestScore) {
-                bestScore = score;
-                bestCanvas = canvas;
-              }
+              considerCrop(x, y, 14);
             }
           }
 
-          return bestCanvas && bestScore >= minDinoPixels ? bestCanvas : null;
+          return bestCanvas && bestRawScore >= minDinoPixels ? bestCanvas : null;
         };
 
         const tileSprites: Record<number, string> = {};
