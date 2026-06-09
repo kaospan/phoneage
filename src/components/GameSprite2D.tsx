@@ -426,11 +426,9 @@ export function GameSprite2D({
         const outW = 64;
         const outH = 64;
 
-        const cropCell = (row: number, col: number, insetPx = inset, shiftX = 0, shiftY = 0) => {
-          const sw = Math.max(1, cellW - insetPx * 2);
-          const sh = Math.max(1, cellH - insetPx * 2);
-          const sx = Math.max(0, Math.min(srcCanvas.width - sw, offsetX + col * cellW + insetPx + shiftX));
-          const sy = Math.max(0, Math.min(srcCanvas.height - sh, offsetY + row * cellH + insetPx + shiftY));
+        const cropSourceRect = (sxRaw: number, syRaw: number, sw: number, sh: number) => {
+          const sx = Math.max(0, Math.min(srcCanvas.width - sw, sxRaw));
+          const sy = Math.max(0, Math.min(srcCanvas.height - sh, syRaw));
           const out = document.createElement("canvas");
           out.width = outW;
           out.height = outH;
@@ -439,6 +437,17 @@ export function GameSprite2D({
           outCtx.imageSmoothingEnabled = false;
           outCtx.drawImage(srcCanvas, sx, sy, sw, sh, 0, 0, outW, outH);
           return out;
+        };
+
+        const cropCell = (row: number, col: number, insetPx = inset, shiftX = 0, shiftY = 0) => {
+          const sw = Math.max(1, cellW - insetPx * 2);
+          const sh = Math.max(1, cellH - insetPx * 2);
+          return cropSourceRect(
+            offsetX + col * cellW + insetPx + shiftX,
+            offsetY + row * cellH + insetPx + shiftY,
+            sw,
+            sh,
+          );
         };
 
         const minDinoPixels = Math.round(outW * outH * 0.012);
@@ -450,6 +459,46 @@ export function GameSprite2D({
           let bestCanvas: HTMLCanvasElement | null = null;
           let bestScore = 0;
           let bestRawScore = 0;
+
+          const findGreenClusterNearStart = () => {
+            const searchRadiusX = Math.round(cellW * 2.4);
+            const searchRadiusY = Math.round(cellH * 2.8);
+            const expectedX = Math.round(offsetX + (playerStart.x + 0.5) * cellW);
+            const expectedY = Math.round(offsetY + (playerStart.y + 0.5) * cellH);
+            const x0 = Math.max(0, expectedX - searchRadiusX);
+            const y0 = Math.max(0, expectedY - searchRadiusY);
+            const w = Math.max(1, Math.min(srcCanvas.width - x0, searchRadiusX * 2));
+            const h = Math.max(1, Math.min(srcCanvas.height - y0, searchRadiusY * 2));
+            const data = srcCtx.getImageData(x0, y0, w, h).data;
+            let count = 0;
+            let minX = w;
+            let minY = h;
+            let maxX = 0;
+            let maxY = 0;
+
+            for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              if (!(g > 58 && g - r > 18 && g - b > 14)) continue;
+
+              const x = p % w;
+              const y = Math.floor(p / w);
+              count += 1;
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+
+            if (count < Math.round(cellW * cellH * 0.012)) return null;
+
+            const clusterCx = x0 + (minX + maxX) / 2;
+            const clusterCy = y0 + (minY + maxY) / 2;
+            const sw = Math.max(1, cellW - heroInset * 2);
+            const sh = Math.max(1, cellH - heroInset * 2);
+            return cropSourceRect(clusterCx - sw / 2, clusterCy - sh / 2, sw, sh);
+          };
 
           const considerCrop = (x: number, y: number, distancePenalty: number, shiftX = 0, shiftY = 0) => {
             if (x < 0 || x >= cols || y < 0 || y >= rows) return;
@@ -494,6 +543,9 @@ export function GameSprite2D({
             }
           }
           if (bestCanvas && bestRawScore >= strongDinoPixels) return bestCanvas;
+
+          const clusterCanvas = findGreenClusterNearStart();
+          if (clusterCanvas && scoreDinoCrop(clusterCanvas) >= minDinoPixels) return clusterCanvas;
 
           for (let y = 0; y < rows; y += 1) {
             for (let x = 0; x < cols; x += 1) {
