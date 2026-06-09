@@ -37,6 +37,7 @@ import {
 } from './mapperHooks';
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { getAlignmentHints } from './alignmentProfile';
+import { normalizeOverlayUserScaleY } from './overlayDefaults';
 import { resolveLevelMapperBaseline } from './levelBaseline';
 import { detectDeterministicGridWithTraining } from './geometryGridFitter';
 import {
@@ -377,7 +378,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     : 1;
             const nextImageScaleY =
                 Number.isFinite(Number(draft.imageScaleY))
-                    ? Math.max(0.85, Math.min(1.15, Number(draft.imageScaleY)))
+                    ? normalizeOverlayUserScaleY(Number(draft.imageScaleY), null)
                     : 1;
             const nextImageOffsetX =
                 Number.isFinite(Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
@@ -491,7 +492,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 const offsetY = Number((saved as any).offsetY ?? 0);
                 const lock = Boolean(saved.lock);
                 if (Number.isFinite(x)) setImageScaleX(Math.max(0.85, Math.min(1.15, x)));
-                if (Number.isFinite(y)) setImageScaleY(Math.max(0.85, Math.min(1.15, y)));
+                if (Number.isFinite(y)) setImageScaleY(y);
                 if (Number.isFinite(offsetX)) setImageOffsetX(Math.max(0, offsetX));
                 if (Number.isFinite(offsetY)) setImageOffsetY(Math.max(0, offsetY));
                 setLockImageAspect(lock);

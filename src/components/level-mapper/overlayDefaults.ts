@@ -9,6 +9,7 @@ export const LEVEL_IMAGE_SCALE_STORAGE_VERSION = 3;
 // Baseline vertical correction (applied to Y only).
 // At user scaleY=1.0 (100%), the effective vertical scale is this baseline.
 export const OVERLAY_IMAGE_SCALE_Y_BASE = 1.15;
+export const LEGACY_OVERLAY_IMAGE_SCALE_Y_BASE = 0.968;
 
 // Default user-facing Y stretch used when a level has no saved per-level calibration.
 export const DEFAULT_OVERLAY_USER_Y_SCALE = 1;
@@ -22,10 +23,10 @@ export const normalizeOverlayUserScaleY = (
     savedBaseY: number | null | undefined,
 ) => {
     if (!Number.isFinite(value)) return DEFAULT_OVERLAY_USER_Y_SCALE;
-    if (!Number.isFinite(Number(savedBaseY)) || Number(savedBaseY) <= 0) {
-        return clampOverlayUserScale(value);
-    }
-    return clampOverlayUserScale((value * Number(savedBaseY)) / OVERLAY_IMAGE_SCALE_Y_BASE);
+    const baseline = Number.isFinite(Number(savedBaseY)) && Number(savedBaseY) > 0
+        ? Number(savedBaseY)
+        : LEGACY_OVERLAY_IMAGE_SCALE_Y_BASE;
+    return clampOverlayUserScale((value * baseline) / OVERLAY_IMAGE_SCALE_Y_BASE);
 };
 
 export const getDefaultOverlayImageScale = (levelId: number) => {

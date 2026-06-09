@@ -37,6 +37,7 @@ export interface LevelMapperDraft {
   overlayStretch: boolean;
   imageScaleX: number;
   imageScaleY: number;
+  overlayScaleBaseY?: number;
   imageOffsetX: number;
   imageOffsetY: number;
   lockImageAspect: boolean;
@@ -64,6 +65,7 @@ export interface LevelMapperSavedState {
   overlayStretch: boolean;
   imageScaleX: number;
   imageScaleY: number;
+  overlayScaleBaseY?: number;
   imageOffsetX: number;
   imageOffsetY: number;
   lockImageAspect: boolean;
