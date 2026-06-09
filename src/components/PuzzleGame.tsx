@@ -351,6 +351,7 @@ export const PuzzleGame = () => {
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number | null>(null);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [isTimerArmed, setIsTimerArmed] = useState(true);
+  const [hasStartedGame, setHasStartedGame] = useState(false);
   const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
@@ -930,6 +931,15 @@ export const PuzzleGame = () => {
         return;
       }
 
+      if (!hasStartedGame) {
+        clearTimerInterval();
+        timerEndAtMsRef.current = null;
+        timerRemainingMsRef.current = levelTimeLimitSeconds * 1000;
+        setTimeLeftSeconds(levelTimeLimitSeconds);
+        setIsTimeUp(false);
+        return;
+      }
+
       if (!isTimerArmed) {
         clearTimerInterval();
         timerEndAtMsRef.current = null;
@@ -991,7 +1001,7 @@ export const PuzzleGame = () => {
         window.clearInterval(id);
         if (timerIntervalRef.current === id) timerIntervalRef.current = null;
       };
-    }, [clearTimerInterval, isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, shouldRotateGate, currentLevelIndex]);
+    }, [clearTimerInterval, hasStartedGame, isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, shouldRotateGate, currentLevelIndex]);
 
     // Show drag hint on first load
     useEffect(() => {
@@ -1559,6 +1569,16 @@ export const PuzzleGame = () => {
       pushHudMessage("Timer started — good luck!", 1600);
     }, [isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, pushHudMessage]);
 
+    const startGameFromTitle = useCallback(() => {
+      if (levelTimeLimitSeconds) {
+        timerRemainingMsRef.current = levelTimeLimitSeconds * 1000;
+        setTimeLeftSeconds(levelTimeLimitSeconds);
+      }
+      setIsTimeUp(false);
+      setIsTimerArmed(true);
+      setHasStartedGame(true);
+    }, [levelTimeLimitSeconds]);
+
     // Keyboard controls (player movement + keyboard arrow selection)
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
@@ -1868,6 +1888,35 @@ export const PuzzleGame = () => {
         onSelectLevel={goToLevelId}
       />
     );
+
+    if (!hasStartedGame) {
+      return (
+        <div className="relative flex h-[100svh] w-full items-center justify-center overflow-hidden bg-[#080b08] px-5 py-6">
+          <img
+            src={menuArt}
+            alt="Stone Age"
+            className="absolute inset-0 h-full w-full object-cover opacity-80"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.28)_0%,rgba(0,0,0,0.45)_48%,rgba(0,0,0,0.72)_100%)]" />
+          <div className="relative z-10 flex w-full max-w-3xl flex-col items-center text-center">
+            <div
+              className="text-[clamp(4rem,13vw,9rem)] font-black uppercase leading-none text-stone-50"
+              style={{ textShadow: "0 8px 0 rgba(54,32,15,0.75), 0 20px 42px rgba(0,0,0,0.75)" }}
+            >
+              Stone Age
+            </div>
+            <Button
+              onClick={startGameFromTitle}
+              size="lg"
+              className="mt-10 h-20 min-w-[18rem] rounded-[28px] border-4 border-amber-100/80 bg-emerald-500 px-12 text-3xl font-black uppercase tracking-[0.12em] text-emerald-950 shadow-[0_18px_0_rgba(18,83,49,0.75),0_30px_70px_rgba(0,0,0,0.55)] hover:bg-emerald-400"
+            >
+              <Play className="mr-4 h-9 w-9" />
+              Start
+            </Button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-[#081214]`}>
