@@ -77,7 +77,7 @@ export const resolveLevelMapperBaseline = async (
           : 1,
       imageScaleY:
         Number.isFinite(Number(savedState.imageScaleY))
-          ? normalizeOverlayUserScaleY(Number(savedState.imageScaleY), null)
+          ? normalizeOverlayUserScaleY(Number(savedState.imageScaleY), savedState.overlayScaleBaseY)
           : 1,
       imageOffsetX:
         Number.isFinite(Number(savedState.imageOffsetX)) ? Math.max(0, Number(savedState.imageOffsetX)) : 0,

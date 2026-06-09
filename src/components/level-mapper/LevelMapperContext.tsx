@@ -37,7 +37,7 @@ import {
 } from './mapperHooks';
 import { getCellReferences as getStoredCellReferences, loadImageData } from '@/lib/spriteMatching';
 import { getAlignmentHints } from './alignmentProfile';
-import { normalizeOverlayUserScaleY } from './overlayDefaults';
+import { OVERLAY_IMAGE_SCALE_Y_BASE, normalizeOverlayUserScaleY } from './overlayDefaults';
 import { resolveLevelMapperBaseline } from './levelBaseline';
 import { detectDeterministicGridWithTraining } from './geometryGridFitter';
 import {
@@ -378,7 +378,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     : 1;
             const nextImageScaleY =
                 Number.isFinite(Number(draft.imageScaleY))
-                    ? normalizeOverlayUserScaleY(Number(draft.imageScaleY), null)
+                    ? normalizeOverlayUserScaleY(
+                        Number(draft.imageScaleY),
+                        Number((draft as Partial<LevelMapperDraft>).overlayScaleBaseY)
+                    )
                     : 1;
             const nextImageOffsetX =
                 Number.isFinite(Number((draft as Partial<LevelMapperDraft>).imageOffsetX))
@@ -534,6 +537,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     overlayStretch,
                     imageScaleX,
                     imageScaleY,
+                    overlayScaleBaseY: OVERLAY_IMAGE_SCALE_Y_BASE,
                     imageOffsetX,
                     imageOffsetY,
                     lockImageAspect,
@@ -1406,6 +1410,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     overlayStretch,
                     imageScaleX,
                     imageScaleY,
+                    overlayScaleBaseY: OVERLAY_IMAGE_SCALE_Y_BASE,
                     imageOffsetX,
                     imageOffsetY,
                     lockImageAspect,
