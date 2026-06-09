@@ -274,7 +274,39 @@ export function GameSprite2D({
         dsCtx.imageSmoothingEnabled = false;
         dsCtx.drawImage(img, 0, 0, dsW, dsH);
 
-        const det = detectGridLines(dsCanvas, true, rows, cols, getAlignmentHints());
+        const buildDosGridFallback = () => {
+          if (rows !== 12 || cols !== 20) return null;
+          if (dsW < 1200 || dsH < 650) return null;
+
+          const cell = dsW / cols;
+          if (dsH < cell * (rows - 1)) return null;
+
+          return {
+            rows,
+            cols,
+            offsetX: 0,
+            offsetY: 0,
+            cellWidth: cell,
+            cellHeight: cell,
+            runLenX: cols + 1,
+            runLenY: rows + 1,
+            scoreX: 1,
+            scoreY: 1,
+            confidence: 0.92,
+            durationMs: 0,
+            usedRunCounts: false,
+          };
+        };
+
+        let usedDosGridFallback = false;
+        let det = detectGridLines(dsCanvas, true, rows, cols, getAlignmentHints());
+        if (!det || det.confidence < ATLAS_MIN_CONFIDENCE) {
+          const dosFallback = buildDosGridFallback();
+          if (dosFallback) {
+            det = dosFallback;
+            usedDosGridFallback = true;
+          }
+        }
         if (!det) {
           setLevelAtlas((prev) => ({
             tileSprites: prev?.tileSprites ?? {},
@@ -508,7 +540,9 @@ export function GameSprite2D({
         setLevelAtlas({
           tileSprites,
           heroSprite,
-          status: allowAtlas
+          status: usedDosGridFallback
+            ? "Sprites ready (DOS grid fallback)"
+            : allowAtlas
             ? `Sprites ready (conf ${det.confidence.toFixed(2)})`
             : `Sprite mode: low grid confidence (conf ${det.confidence.toFixed(2)}) - using reference sprites`,
           confidence: det.confidence,
