@@ -156,6 +156,19 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
   const stroke = '#fff8c8';
   const fill = '#f6c84f';
 
+  const paintGlyph = () => {
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 20;
+    ctx.stroke();
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 8;
+    ctx.fill();
+    ctx.stroke();
+  };
+
   const drawArrow = (cx: number, cy: number, angle: number, scale = 1) => {
     ctx.save();
     ctx.translate(cx, cy);
@@ -172,32 +185,76 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
     ctx.lineTo(22, 58);
     ctx.closePath();
 
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = outline;
-    ctx.lineWidth = 20;
-    ctx.stroke();
-    ctx.fillStyle = fill;
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 8;
-    ctx.fill();
-    ctx.stroke();
+    paintGlyph();
+    ctx.restore();
+  };
+
+  const drawPathGlyph = (scale = 1, buildPath: () => void) => {
+    ctx.save();
+    ctx.translate(size * 0.5, size * 0.5);
+    ctx.scale(scale, scale);
+    ctx.beginPath();
+    buildPath();
+    ctx.closePath();
+    paintGlyph();
     ctx.restore();
   };
 
   if (kind === 'single') {
     drawArrow(size * 0.5, size * 0.54, 0, 1.05);
   } else if (kind === 'vertical') {
-    drawArrow(size * 0.5, size * 0.37, 0, 0.74);
-    drawArrow(size * 0.5, size * 0.63, Math.PI, 0.74);
+    drawPathGlyph(0.92, () => {
+      ctx.moveTo(0, -76);
+      ctx.lineTo(50, -22);
+      ctx.lineTo(20, -22);
+      ctx.lineTo(20, 22);
+      ctx.lineTo(50, 22);
+      ctx.lineTo(0, 76);
+      ctx.lineTo(-50, 22);
+      ctx.lineTo(-20, 22);
+      ctx.lineTo(-20, -22);
+      ctx.lineTo(-50, -22);
+    });
   } else if (kind === 'horizontal') {
-    drawArrow(size * 0.37, size * 0.5, -Math.PI / 2, 0.74);
-    drawArrow(size * 0.63, size * 0.5, Math.PI / 2, 0.74);
+    drawPathGlyph(0.92, () => {
+      ctx.moveTo(-76, 0);
+      ctx.lineTo(-22, -50);
+      ctx.lineTo(-22, -20);
+      ctx.lineTo(22, -20);
+      ctx.lineTo(22, -50);
+      ctx.lineTo(76, 0);
+      ctx.lineTo(22, 50);
+      ctx.lineTo(22, 20);
+      ctx.lineTo(-22, 20);
+      ctx.lineTo(-22, 50);
+    });
   } else {
-    drawArrow(size * 0.5, size * 0.31, 0, 0.56);
-    drawArrow(size * 0.69, size * 0.5, Math.PI / 2, 0.56);
-    drawArrow(size * 0.5, size * 0.69, Math.PI, 0.56);
-    drawArrow(size * 0.31, size * 0.5, -Math.PI / 2, 0.56);
+    drawPathGlyph(0.86, () => {
+      ctx.moveTo(0, -82);
+      ctx.lineTo(44, -38);
+      ctx.lineTo(26, -38);
+      ctx.lineTo(26, -26);
+      ctx.lineTo(38, -26);
+      ctx.lineTo(38, -44);
+      ctx.lineTo(82, 0);
+      ctx.lineTo(38, 44);
+      ctx.lineTo(38, 26);
+      ctx.lineTo(26, 26);
+      ctx.lineTo(26, 38);
+      ctx.lineTo(44, 38);
+      ctx.lineTo(0, 82);
+      ctx.lineTo(-44, 38);
+      ctx.lineTo(-26, 38);
+      ctx.lineTo(-26, 26);
+      ctx.lineTo(-38, 26);
+      ctx.lineTo(-38, 44);
+      ctx.lineTo(-82, 0);
+      ctx.lineTo(-38, -44);
+      ctx.lineTo(-38, -26);
+      ctx.lineTo(-26, -26);
+      ctx.lineTo(-26, -38);
+      ctx.lineTo(-44, -38);
+    });
   }
 
   const texture = new THREE.CanvasTexture(canvas);
