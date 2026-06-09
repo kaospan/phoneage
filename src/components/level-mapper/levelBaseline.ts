@@ -3,7 +3,7 @@ import { voidGrid } from '@/lib/levelgrid';
 import { normalizeMapperImage } from './imageNormalization';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { getLevelImageUrl } from './levelImageStore';
-import { getDefaultOverlayImageScale } from './overlayDefaults';
+import { getDefaultOverlayImageScale, normalizeOverlayUserScaleY } from './overlayDefaults';
 import {
   loadLevelImageScale,
   loadLevelLayoutOverride,
@@ -77,7 +77,7 @@ export const resolveLevelMapperBaseline = async (
           : 1,
       imageScaleY:
         Number.isFinite(Number(savedState.imageScaleY))
-          ? Math.max(0.85, Math.min(1.15, Number(savedState.imageScaleY)))
+          ? normalizeOverlayUserScaleY(Number(savedState.imageScaleY), null)
           : 1,
       imageOffsetX:
         Number.isFinite(Number(savedState.imageOffsetX)) ? Math.max(0, Number(savedState.imageOffsetX)) : 0,

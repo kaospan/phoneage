@@ -1,6 +1,10 @@
 import { getAllLevels, isPlaceholderGrid, type ColorTheme, type LevelProvenance } from '@/data/levels';
 import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
-import { LEVEL_IMAGE_SCALE_STORAGE_VERSION, OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
+import {
+    LEVEL_IMAGE_SCALE_STORAGE_VERSION,
+    OVERLAY_IMAGE_SCALE_Y_BASE,
+    normalizeOverlayUserScaleY,
+} from './overlayDefaults';
 import type { LevelMapperDraft, LevelMapperSavedState } from './LevelMapperStore';
 
 /**
@@ -237,11 +241,13 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
         const v = Number((parsed as any).v ?? 1);
         if (!Number.isFinite(x) || !Number.isFinite(yRaw)) return null;
 
-        // v1 stored the effective Y scale directly. v2 stores user-facing adjustment (1.0 = baseline).
+        // v1 stored the effective Y scale directly.
+        // v2+ stores user-facing adjustment plus the baseline used at save time.
+        const storedBaseY = Number((parsed as any).baseY);
         const y =
-            v >= LEVEL_IMAGE_SCALE_STORAGE_VERSION
-                ? yRaw
-                : yRaw / Math.max(1e-6, OVERLAY_IMAGE_SCALE_Y_BASE);
+            v <= 1
+                ? yRaw / Math.max(1e-6, OVERLAY_IMAGE_SCALE_Y_BASE)
+                : normalizeOverlayUserScaleY(yRaw, storedBaseY);
 
         return {
             x,
