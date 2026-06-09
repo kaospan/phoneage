@@ -276,7 +276,7 @@ export function GameSprite2D({
 
         const buildDosGridFallback = () => {
           if (rows !== 12 || cols !== 20) return null;
-          if (dsW < 1200 || dsH < 650) return null;
+          if (dsW < 900 || dsH < 600) return null;
 
           const cell = dsW / cols;
           if (dsH < cell * (rows - 1)) return null;

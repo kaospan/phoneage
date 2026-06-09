@@ -19,7 +19,7 @@ for (const level of [8, 13]) {
     );
   }, level);
 
-  await page.goto("http://127.0.0.1:5176", { waitUntil: "networkidle" });
+  await page.goto("http://127.0.0.1:5176", { waitUntil: "domcontentloaded", timeout: 15000 });
   await page.waitForTimeout(7000);
   await page.screenshot({ path: `.tmp-level-${level}-sprite.png`, fullPage: false });
 
