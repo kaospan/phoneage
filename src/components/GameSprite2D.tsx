@@ -171,6 +171,71 @@ const scoreDinoCrop = (canvas: HTMLCanvasElement) => {
   return greenPixels;
 };
 
+const createDinoSilhouetteCanvas = (canvas: HTMLCanvasElement) => {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+
+  const { width, height } = canvas;
+  const image = ctx.getImageData(0, 0, width, height);
+  const pixels = image.data;
+  const greenMask = new Uint8Array(width * height);
+  let greenPixels = 0;
+
+  for (let i = 0, p = 0; i < pixels.length; i += 4, p += 1) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+    if (g > 58 && g - r > 18 && g - b > 14) {
+      greenMask[p] = 1;
+      greenPixels += 1;
+    }
+  }
+
+  if (greenPixels < Math.round(width * height * 0.01)) return null;
+
+  const keepMask = new Uint8Array(width * height);
+  const radius = 4;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (!greenMask[index]) continue;
+
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= height) continue;
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= width) continue;
+          if (dx * dx + dy * dy > radius * radius) continue;
+          keepMask[yy * width + xx] = 1;
+        }
+      }
+    }
+  }
+
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = height;
+  const outCtx = out.getContext("2d");
+  if (!outCtx) return null;
+
+  const outImage = outCtx.createImageData(width, height);
+  for (let i = 0, p = 0; i < pixels.length; i += 4, p += 1) {
+    if (!keepMask[p]) {
+      outImage.data[i + 3] = 0;
+      continue;
+    }
+
+    outImage.data[i] = pixels[i];
+    outImage.data[i + 1] = pixels[i + 1];
+    outImage.data[i + 2] = pixels[i + 2];
+    outImage.data[i + 3] = pixels[i + 3];
+  }
+
+  outCtx.putImageData(outImage, 0, 0);
+  return out;
+};
+
 export function GameSprite2D({
   grid,
   atlasSourceGrid,
@@ -490,7 +555,8 @@ export function GameSprite2D({
         let heroSprite: string | undefined;
         const bestDinoCrop = findBestDinoCrop();
         if (bestDinoCrop) {
-          heroSprite = bestDinoCrop.toDataURL("image/png");
+          const silhouette = createDinoSilhouetteCanvas(bestDinoCrop);
+          heroSprite = (silhouette ?? bestDinoCrop).toDataURL("image/png");
         }
 
         // Keep the older floor-diff path as a backup for non-green variants, but
@@ -662,7 +728,7 @@ export function GameSprite2D({
               const effectiveTileType = isPlayer && isDirectionalArrowTile ? 0 : displayTileType;
               const arrowVector = isDirectionalArrowTile && !isPlayer ? renderArrowVector(displayTileType) : null;
 
-              const atlasSprite = levelAtlas?.tileSprites?.[effectiveTileType];
+              const atlasSprite = isDirectionalArrowTile ? undefined : levelAtlas?.tileSprites?.[effectiveTileType];
               const refSprite = latestByType.get(effectiveTileType)?.imageData;
               const canUseRefSprite = !isDirectionalArrowTile;
               // Sprite mode policy (strict):

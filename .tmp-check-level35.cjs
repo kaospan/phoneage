@@ -5,7 +5,7 @@ const baseUrl = "http://127.0.0.1:4180/";
 (async () => {
   const browser = await chromium.launch({ headless: true });
 
-  for (const levelId of [3, 5]) {
+  for (const levelId of [3, 5, 7]) {
     const page = await browser.newPage({
       viewport: { width: 1280, height: 720 },
       deviceScaleFactor: 1,
