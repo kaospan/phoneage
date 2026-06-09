@@ -77,53 +77,25 @@ const renderArrowVector = (tileType: number) => {
     );
   };
 
-  const DoubleArrowVertical = () => (
-    <g>
-      <g transform="translate(0 -3) scale(0.82 0.82) translate(3.5 3.5)">
-        <OneArrow dir="up" />
-      </g>
-      <g transform="translate(0 3) scale(0.82 0.82) translate(3.5 3.5)">
-        <OneArrow dir="down" />
-      </g>
-    </g>
+  const GlyphPath = ({ d }: { d: string }) => (
+    <>
+      <path d={d} stroke="rgba(16,18,12,0.92)" strokeWidth="4.2" {...common} />
+      <path d={d} stroke="#fff8c8" strokeWidth="1.7" {...common} />
+    </>
   );
 
-  const DoubleArrowHorizontal = () => (
-    <g>
-      <g transform="translate(-3 0) scale(0.82 0.82) translate(3.5 3.5)">
-        <OneArrow dir="left" />
-      </g>
-      <g transform="translate(3 0) scale(0.82 0.82) translate(3.5 3.5)">
-        <OneArrow dir="right" />
-      </g>
-    </g>
-  );
-
-  const OmniArrow = () => (
-    <g>
-      <g transform="translate(0 -6) scale(0.58 0.58) translate(11.6 11.6)">
-        <OneArrow dir="up" />
-      </g>
-      <g transform="translate(6 0) scale(0.58 0.58) translate(11.6 11.6)">
-        <OneArrow dir="right" />
-      </g>
-      <g transform="translate(0 6) scale(0.58 0.58) translate(11.6 11.6)">
-        <OneArrow dir="down" />
-      </g>
-      <g transform="translate(-6 0) scale(0.58 0.58) translate(11.6 11.6)">
-        <OneArrow dir="left" />
-      </g>
-    </g>
-  );
+  const doubleVerticalPath = "M16 3 L26 13 L21 13 L21 19 L26 19 L16 29 L6 19 L11 19 L11 13 L6 13 Z";
+  const doubleHorizontalPath = "M3 16 L13 6 L13 11 L19 11 L19 6 L29 16 L19 26 L19 21 L13 21 L13 26 Z";
+  const omniPath = "M16 3 L23 10 L20 10 L20 13 L22 13 L29 16 L22 19 L20 19 L20 22 L23 22 L16 29 L9 22 L12 22 L12 19 L10 19 L3 16 L10 13 L12 13 L12 10 L9 10 Z";
 
   const shape =
     tileType === 7 ? <OneArrow dir="up" /> :
     tileType === 8 ? <OneArrow dir="right" /> :
     tileType === 9 ? <OneArrow dir="down" /> :
     tileType === 10 ? <OneArrow dir="left" /> :
-    tileType === 11 ? <DoubleArrowVertical /> :
-    tileType === 12 ? <DoubleArrowHorizontal /> :
-    tileType === 13 ? <OmniArrow /> :
+    tileType === 11 ? <GlyphPath d={doubleVerticalPath} /> :
+    tileType === 12 ? <GlyphPath d={doubleHorizontalPath} /> :
+    tileType === 13 ? <GlyphPath d={omniPath} /> :
     null;
 
   if (!shape) return null;
