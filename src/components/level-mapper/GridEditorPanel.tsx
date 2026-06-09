@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDownUp, ArrowLeftRight, Crosshair, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Scissors, Trash2, Undo2, UserRound, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
-import { cropOuterVoidCells, learnReferencesFromAlignedMap } from './learningOperations';
+import { learnReferencesFromAlignedMap } from './learningOperations';
 import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
 import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
@@ -20,9 +20,8 @@ export const GridEditorPanel: React.FC = () => {
         lastGridDetection,
         saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
         hourglassBrushSeconds, setHourglassBonusByCell,
-        rows, cols, grid, activeTile, setGrid, setRows, setCols,
+        rows, cols, grid, activeTile, setGrid,
         pushUndo, pushUndoSnapshot,
-        addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         addMultipleColumns, addMultipleRows, contextMenu, setContextMenu,
         imageURL,
         canvasRef,
@@ -33,17 +32,14 @@ export const GridEditorPanel: React.FC = () => {
         replaceGridShape,
     } = useLevelMapper();
 
-    const [isSettingPlayerStart, setIsSettingPlayerStart] = React.useState(false);
     const [isDragMode, setIsDragMode] = React.useState(false);
     const [isDraggingGrid, setIsDraggingGrid] = React.useState(false);
-    const [outerVoidMargin, setOuterVoidMargin] = React.useState(3);
     const [isResizingImageX, setIsResizingImageX] = React.useState(false);
     const [isResizingImageY, setIsResizingImageY] = React.useState(false);
     const resizeXStartRef = React.useRef<{ x: number; scaleX: number; offsetX: number; direction: 1 | -1; rightPx?: number } | null>(null);
     const resizeYStartRef = React.useRef<{ y: number; scaleY: number; offsetY: number; direction: 1 | -1; bottomPx?: number } | null>(null);
     // Track cells the user manually painted/confirmed so learning can use trusted labels only.
     const trustedCellsRef = React.useRef<Set<string>>(new Set());
-    const [showAlignmentGuide, setShowAlignmentGuide] = React.useState(true);
     const [guideGrid, setGuideGrid] = React.useState<null | {
         rows: number;
         cols: number;
@@ -52,7 +48,6 @@ export const GridEditorPanel: React.FC = () => {
         cellWidth: number;
         cellHeight: number;
     }>(null);
-    const [guideStatus, setGuideStatus] = React.useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
     const containerRef = useRef<HTMLDivElement>(null);
     const [cellWidth, setCellWidth] = React.useState(32);
     const [cellHeight, setCellHeight] = React.useState(32);
@@ -91,7 +86,6 @@ export const GridEditorPanel: React.FC = () => {
         if (!imageURL) {
             setImageNaturalSize(null);
             setGuideGrid(null);
-            setGuideStatus('idle');
             return;
         }
         let cancelled = false;
@@ -110,22 +104,18 @@ export const GridEditorPanel: React.FC = () => {
     React.useEffect(() => {
         if (!overlayEnabled || !imageURL || !imageNaturalSize) {
             setGuideGrid(null);
-            setGuideStatus('idle');
             return;
         }
         if (!lastGridDetection) {
             setGuideGrid(null);
-            setGuideStatus('idle');
             return;
         }
         const asGuide = lastGridDetection as unknown as DetectedGrid;
         if (asGuide.rows !== rows || asGuide.cols !== cols) {
             setGuideGrid(null);
-            setGuideStatus('idle');
             return;
         }
         setGuideGrid(asGuide);
-        setGuideStatus('ready');
     }, [overlayEnabled, imageURL, imageNaturalSize, lastGridDetection, rows, cols]);
 
     // Calculate cell size based on available viewport space (avoid scroll by default).
@@ -382,41 +372,6 @@ export const GridEditorPanel: React.FC = () => {
         maybeSnapToGuideGrid();
     }, [maybeSnapToGuideGrid]);
 
-    const cropInsets = React.useMemo(() => {
-        if (!imageNaturalSize) return null;
-
-        const left = Math.max(0, Math.round(gridOffsetX));
-        const top = Math.max(0, Math.round(gridOffsetY));
-        const right = Math.max(0, Math.round(imageNaturalSize.width - (gridOffsetX + naturalFrameWidth)));
-        const bottom = Math.max(0, Math.round(imageNaturalSize.height - (gridOffsetY + naturalFrameHeight)));
-
-        return { left, top, right, bottom };
-    }, [gridOffsetX, gridOffsetY, imageNaturalSize, naturalFrameHeight, naturalFrameWidth]);
-
-    const applyCropInsets = React.useCallback((next: {
-        left?: number;
-        top?: number;
-        right?: number;
-        bottom?: number;
-    }) => {
-        if (!imageNaturalSize || !cropInsets) return;
-        pushUndoSnapshot();
-        markUnsaved();
-
-        const left = Math.max(0, Math.min(imageNaturalSize.width - 1, Math.round(next.left ?? cropInsets.left)));
-        const top = Math.max(0, Math.min(imageNaturalSize.height - 1, Math.round(next.top ?? cropInsets.top)));
-        const right = Math.max(0, Math.min(imageNaturalSize.width - 1, Math.round(next.right ?? cropInsets.right)));
-        const bottom = Math.max(0, Math.min(imageNaturalSize.height - 1, Math.round(next.bottom ?? cropInsets.bottom)));
-
-        const frameWidth = Math.max(1, imageNaturalSize.width - left - right);
-        const frameHeight = Math.max(1, imageNaturalSize.height - top - bottom);
-
-        setGridOffsetX(left);
-        setGridOffsetY(top);
-        setGridFrameWidth(frameWidth);
-        setGridFrameHeight(frameHeight);
-    }, [cropInsets, imageNaturalSize, markUnsaved, pushUndoSnapshot, setGridFrameHeight, setGridFrameWidth, setGridOffsetX, setGridOffsetY]);
-
     const beginPaint = (r: number, c: number) => {
         if (isDragMode) return;
 
@@ -440,12 +395,6 @@ export const GridEditorPanel: React.FC = () => {
             });
             trustedCellsRef.current.add(`${row},${col}`);
         };
-
-        if (isSettingPlayerStart) {
-            applyStartCaveAt(r, c);
-            setIsSettingPlayerStart(false);
-            return;
-        }
 
         // Painting a START CAVE tile is equivalent to setting player start.
         if (activeTile === 18) {
@@ -471,7 +420,6 @@ export const GridEditorPanel: React.FC = () => {
     };
     const continuePaint = (r: number, c: number) => {
         if (isDragMode) return;
-        if (isSettingPlayerStart) return;
         if (!isPaintingRef.current) return;
 
         if (activeTile !== 18 && playerStart?.x === c && playerStart?.y === r) {
@@ -586,44 +534,6 @@ export const GridEditorPanel: React.FC = () => {
         if (!options?.silent) {
             alert(`Learned ${learnedCount} reference cells from the current map`);
         }
-    };
-
-    const cropCurrentMap = () => {
-        if (!imageNaturalSize) {
-            alert('Load an aligned image first');
-            return;
-        }
-
-        const result = cropOuterVoidCells({
-            grid,
-            keepMargin: Math.max(0, Math.min(5, Math.round(outerVoidMargin))),
-            playerStart,
-            frame: {
-                offsetX: gridOffsetX,
-                offsetY: gridOffsetY,
-                width: naturalFrameWidth,
-                height: naturalFrameHeight,
-            },
-        });
-
-        if (
-            result.removed.top === 0 &&
-            result.removed.right === 0 &&
-            result.removed.bottom === 0 &&
-            result.removed.left === 0
-        ) {
-            alert('No extra outer void cells to crop');
-            return;
-        }
-
-        pushUndo();
-        replaceGridShape(result.grid);
-        setPlayerStart(result.playerStart);
-        setGridOffsetX(Math.round(result.frame.offsetX));
-        setGridOffsetY(Math.round(result.frame.offsetY));
-        setGridFrameWidth(result.frame.width);
-        setGridFrameHeight(result.frame.height);
-        alert(`Cropped void border (kept ${Math.max(0, Math.min(5, Math.round(outerVoidMargin)))}-cell margin): top ${result.removed.top}, right ${result.removed.right}, bottom ${result.removed.bottom}, left ${result.removed.left}`);
     };
 
     const saveCurrentMap = async () => {
