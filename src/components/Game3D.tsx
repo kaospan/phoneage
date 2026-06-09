@@ -145,51 +145,59 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
   if (!ctx) return null;
 
   ctx.clearRect(0, 0, size, size);
-  const glow = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.08, size * 0.5, size * 0.5, size * 0.48);
-  glow.addColorStop(0, hexToRgba(accentColor, 0.34));
-  glow.addColorStop(1, hexToRgba(accentColor, 0));
-  ctx.fillStyle = glow;
+  const halo = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.05, size * 0.5, size * 0.5, size * 0.48);
+  halo.addColorStop(0, 'rgba(255,255,255,0.26)');
+  halo.addColorStop(0.58, hexToRgba(accentColor, 0.22));
+  halo.addColorStop(1, hexToRgba(accentColor, 0));
+  ctx.fillStyle = halo;
   ctx.fillRect(0, 0, size, size);
 
-  const stroke = '#fff5c2';
-  const fill = accentColor;
+  const outline = 'rgba(16,18,12,0.92)';
+  const stroke = '#fff8c8';
+  const fill = '#f6c84f';
 
   const drawArrow = (cx: number, cy: number, angle: number, scale = 1) => {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(angle);
     ctx.scale(scale, scale);
+
     ctx.beginPath();
-    ctx.moveTo(-16, 42);
-    ctx.lineTo(-16, -8);
-    ctx.lineTo(-36, -8);
-    ctx.lineTo(0, -54);
-    ctx.lineTo(36, -8);
-    ctx.lineTo(16, -8);
-    ctx.lineTo(16, 42);
+    ctx.moveTo(-22, 58);
+    ctx.lineTo(-22, -12);
+    ctx.lineTo(-50, -12);
+    ctx.lineTo(0, -72);
+    ctx.lineTo(50, -12);
+    ctx.lineTo(22, -12);
+    ctx.lineTo(22, 58);
     ctx.closePath();
+
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 20;
+    ctx.stroke();
     ctx.fillStyle = fill;
     ctx.strokeStyle = stroke;
     ctx.lineWidth = 8;
-    ctx.lineJoin = 'round';
     ctx.fill();
     ctx.stroke();
     ctx.restore();
   };
 
   if (kind === 'single') {
-    drawArrow(size * 0.5, size * 0.55, 0, 1.12);
+    drawArrow(size * 0.5, size * 0.54, 0, 1.05);
   } else if (kind === 'vertical') {
-    drawArrow(size * 0.5, size * 0.40, 0, 0.88);
-    drawArrow(size * 0.5, size * 0.60, Math.PI, 0.88);
+    drawArrow(size * 0.5, size * 0.37, 0, 0.74);
+    drawArrow(size * 0.5, size * 0.63, Math.PI, 0.74);
   } else if (kind === 'horizontal') {
-    drawArrow(size * 0.40, size * 0.5, -Math.PI / 2, 0.88);
-    drawArrow(size * 0.60, size * 0.5, Math.PI / 2, 0.88);
+    drawArrow(size * 0.37, size * 0.5, Math.PI / 2, 0.74);
+    drawArrow(size * 0.63, size * 0.5, -Math.PI / 2, 0.74);
   } else {
-    drawArrow(size * 0.5, size * 0.36, 0, 0.74);
-    drawArrow(size * 0.64, size * 0.5, -Math.PI / 2, 0.74);
-    drawArrow(size * 0.5, size * 0.64, Math.PI, 0.74);
-    drawArrow(size * 0.36, size * 0.5, Math.PI / 2, 0.74);
+    drawArrow(size * 0.5, size * 0.31, 0, 0.56);
+    drawArrow(size * 0.69, size * 0.5, -Math.PI / 2, 0.56);
+    drawArrow(size * 0.5, size * 0.69, Math.PI, 0.56);
+    drawArrow(size * 0.31, size * 0.5, Math.PI / 2, 0.56);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -556,8 +564,8 @@ const ArrowTile = ({
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
   const accentColor = darkenHexColor(color, 0.12);
-  const runeTexture = useMemo(
-    () => createRuneTexture({ glyph: '↑', color: '#f5f2b0', glow: hexToRgba(accentColor, 0.5) }),
+  const arrowTexture = useMemo(
+    () => createArrowGlyphTexture('single', accentColor),
     [accentColor]
   );
   const touchStartTimeRef = useRef<number | null>(null);
@@ -664,21 +672,9 @@ const ArrowTile = ({
         />
       </mesh>
 
-      <mesh position={[0, 0.305, 0]} rotation={[-Math.PI / 2, 0, rotations[direction] || 0]} renderOrder={12}>
-        <planeGeometry args={[0.64, 0.64]} />
-        <meshBasicMaterial map={runeTexture ?? undefined} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
-      </mesh>
-
-      <mesh position={[0, 0.35, -0.25]} rotation={[-Math.PI / 2, 0, rotations[direction] || 0]} castShadow>
-        <coneGeometry args={[0.25, 0.45, 3]} />
-        <meshStandardMaterial
-          color={accentColor}
-          emissive={accentColor}
-          emissiveIntensity={0.5}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
-        />
+      <mesh position={[0, 0.307, 0]} rotation={[-Math.PI / 2, 0, rotations[direction] || 0]} renderOrder={12}>
+        <planeGeometry args={[0.82, 0.82]} />
+        <meshBasicMaterial map={arrowTexture ?? undefined} transparent opacity={1} depthWrite={false} toneMapped={false} />
       </mesh>
 
       {/* Yellow hollow square border on top face when selected */}
@@ -731,8 +727,8 @@ const BidirectionalArrowTile = ({
   const baseColor = darkenHexColor(color, 0.38);
   const accentColor = darkenHexColor(color, 0.1);
   const isVertical = direction === 11;
-  const runeTexture = useMemo(
-    () => createRuneTexture({ glyph: isVertical ? '↕' : '↔', color: '#f5f2b0', glow: hexToRgba(accentColor, 0.52) }),
+  const arrowTexture = useMemo(
+    () => createArrowGlyphTexture(isVertical ? 'vertical' : 'horizontal', accentColor),
     [accentColor, isVertical]
   );
   const touchStartTimeRef = useRef<number | null>(null);
@@ -831,49 +827,9 @@ const BidirectionalArrowTile = ({
         />
       </mesh>
 
-      <mesh position={[0, 0.305, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
-        <planeGeometry args={[0.64, 0.64]} />
-        <meshBasicMaterial map={runeTexture ?? undefined} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
-      </mesh>
-
-      {/* First arrow */}
-      <mesh
-        position={isVertical ? [0, 0.35, -0.25] : [-0.25, 0.35, 0]}
-        rotation={[-Math.PI / 2, 0, isVertical ? 0 : Math.PI / 2]}
-        castShadow
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      >
-        <coneGeometry args={[0.2, 0.35, 3]} />
-        <meshStandardMaterial
-          color={accentColor}
-          emissive={accentColor}
-          emissiveIntensity={0.5}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
-        />
-      </mesh>
-
-      {/* Second arrow */}
-      <mesh
-        position={isVertical ? [0, 0.35, 0.25] : [0.25, 0.35, 0]}
-        rotation={[-Math.PI / 2, 0, isVertical ? Math.PI : -Math.PI / 2]}
-        castShadow
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      >
-        <coneGeometry args={[0.2, 0.35, 3]} />
-        <meshStandardMaterial
-          color={accentColor}
-          emissive={accentColor}
-          emissiveIntensity={0.5}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
-        />
+      <mesh position={[0, 0.307, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
+        <planeGeometry args={[0.84, 0.84]} />
+        <meshBasicMaterial map={arrowTexture ?? undefined} transparent opacity={1} depthWrite={false} toneMapped={false} />
       </mesh>
 
       {/* Yellow hollow square border on top face when selected */}
@@ -923,8 +879,8 @@ const OmnidirectionalArrowTile = ({
 }) => {
   const baseColor = darkenHexColor(color, 0.38);
   const accentColor = darkenHexColor(color, 0.08);
-  const runeTexture = useMemo(
-    () => createRuneTexture({ glyph: '✥', color: '#f5f2b0', glow: hexToRgba(accentColor, 0.55) }),
+  const arrowTexture = useMemo(
+    () => createArrowGlyphTexture('omni', accentColor),
     [accentColor]
   );
   const touchStartTimeRef = useRef<number | null>(null);
@@ -1023,90 +979,9 @@ const OmnidirectionalArrowTile = ({
         />
       </mesh>
 
-      <mesh position={[0, 0.305, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
-        <planeGeometry args={[0.64, 0.64]} />
-        <meshBasicMaterial map={runeTexture ?? undefined} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
-      </mesh>
-
-      {/* Four arrows pointing in all directions */}
-      {/* Up arrow */}
-      <mesh
-        position={[0, 0.35, -0.25]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        castShadow
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      >
-        <coneGeometry args={[0.2, 0.35, 3]} />
-        <meshStandardMaterial
-          color={accentColor}
-          emissive={accentColor}
-          emissiveIntensity={0.5}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
-        />
-      </mesh>
-
-      {/* Right arrow */}
-      <mesh
-        position={[0.25, 0.35, 0]}
-        rotation={[-Math.PI / 2, 0, -Math.PI / 2]}
-        castShadow
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      >
-        <coneGeometry args={[0.2, 0.35, 3]} />
-        <meshStandardMaterial
-          color={accentColor}
-          emissive={accentColor}
-          emissiveIntensity={0.5}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
-        />
-      </mesh>
-
-      {/* Down arrow */}
-      <mesh
-        position={[0, 0.35, 0.25]}
-        rotation={[-Math.PI / 2, 0, Math.PI]}
-        castShadow
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      >
-        <coneGeometry args={[0.25, 0.45, 3]} />
-        <meshStandardMaterial
-          color={accentColor}
-          emissive={accentColor}
-          emissiveIntensity={0.5}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
-        />
-      </mesh>
-
-      {/* Left arrow */}
-      <mesh
-        position={[-0.25, 0.35, 0]}
-        rotation={[-Math.PI / 2, 0, Math.PI / 2]}
-        castShadow
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      >
-        <coneGeometry args={[0.25, 0.45, 3]} />
-        <meshStandardMaterial
-          color={accentColor}
-          emissive={accentColor}
-          emissiveIntensity={0.5}
-          roughness={0.24}
-          metalness={0.28}
-          envMapIntensity={0.6}
-        />
+      <mesh position={[0, 0.307, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
+        <planeGeometry args={[0.86, 0.86]} />
+        <meshBasicMaterial map={arrowTexture ?? undefined} transparent opacity={1} depthWrite={false} toneMapped={false} />
       </mesh>
 
       {/* Yellow hollow square border on top face when selected */}
