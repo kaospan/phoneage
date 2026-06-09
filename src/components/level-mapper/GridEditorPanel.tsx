@@ -29,7 +29,6 @@ export const GridEditorPanel: React.FC = () => {
         zoom, setZoom,
         gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
-        replaceGridShape,
     } = useLevelMapper();
 
     const [isDragMode, setIsDragMode] = React.useState(false);
