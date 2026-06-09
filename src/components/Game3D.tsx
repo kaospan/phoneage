@@ -191,13 +191,13 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
     drawArrow(size * 0.5, size * 0.37, 0, 0.74);
     drawArrow(size * 0.5, size * 0.63, Math.PI, 0.74);
   } else if (kind === 'horizontal') {
-    drawArrow(size * 0.37, size * 0.5, Math.PI / 2, 0.74);
-    drawArrow(size * 0.63, size * 0.5, -Math.PI / 2, 0.74);
+    drawArrow(size * 0.37, size * 0.5, -Math.PI / 2, 0.74);
+    drawArrow(size * 0.63, size * 0.5, Math.PI / 2, 0.74);
   } else {
     drawArrow(size * 0.5, size * 0.31, 0, 0.56);
-    drawArrow(size * 0.69, size * 0.5, -Math.PI / 2, 0.56);
+    drawArrow(size * 0.69, size * 0.5, Math.PI / 2, 0.56);
     drawArrow(size * 0.5, size * 0.69, Math.PI, 0.56);
-    drawArrow(size * 0.31, size * 0.5, Math.PI / 2, 0.56);
+    drawArrow(size * 0.31, size * 0.5, -Math.PI / 2, 0.56);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
