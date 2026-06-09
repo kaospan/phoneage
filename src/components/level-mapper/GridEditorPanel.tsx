@@ -571,6 +571,7 @@ export const GridEditorPanel: React.FC = () => {
             : null;
     const compactIconButtonClass = "h-7 w-7";
     const compactButtonClass = "h-8 px-2.5";
+    const sliderClass = "w-20 sm:w-24";
     const toolRowClass = "flex flex-wrap items-center gap-1 rounded-xl border border-border/60 bg-background/20 p-1";
 
     return (
@@ -636,34 +637,6 @@ export const GridEditorPanel: React.FC = () => {
                 </div>
                 <div className="mt-1 grid gap-1">
                 <div className={toolRowClass}>
-                    {imageURL && overlayEnabled && (
-                        <Button
-                            size="icon"
-                            variant={showAlignmentGuide ? "secondary" : "outline"}
-                            className={compactIconButtonClass}
-                            onClick={() => setShowAlignmentGuide((s) => !s)}
-                            title={showAlignmentGuide ? "Alignment guide: on" : "Alignment guide: off"}
-                            aria-pressed={showAlignmentGuide}
-                        >
-                            <Crosshair />
-                        </Button>
-                    )}
-                    {imageURL && overlayEnabled && showAlignmentGuide && (
-                        <span
-                            className={[
-                                "rounded-md border px-2 py-1 text-xs tabular-nums",
-                                alignment?.aligned
-                                    ? "border-green-500/50 bg-green-500/10 text-green-100"
-                                    : "border-amber-500/40 bg-amber-500/10 text-amber-100",
-                            ].join(' ')}
-                            title={guideStatus === 'detecting' ? "Detecting grid lines in the screenshot..." : "Average / max alignment error (px)"}
-                        >
-                            {guideStatus === 'detecting' && '⏳'}
-                            {guideStatus === 'failed' && '⚠'}
-                            {guideStatus === 'ready' && (alignment?.aligned ? '✓' : '≈')}
-                            {guideStatus === 'ready' && alignment ? ` ${alignment.avg.toFixed(2)} / ${alignment.max.toFixed(2)}px` : ''}
-                        </span>
-                    )}
                     <Button
                         size="icon"
                         variant={overlayEnabled ? "secondary" : "outline"}
@@ -677,7 +650,7 @@ export const GridEditorPanel: React.FC = () => {
                     {overlayEnabled && (
                         <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-xs">
                             <span className="text-muted-foreground" title="Overlay opacity">α</span>
-                            <input type="range" min={0} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
+                            <input className={sliderClass} type="range" min={0} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
                             <span className="tabular-nums">{Math.round(overlayOpacity * 100)}%</span>
                         </div>
                     )}
@@ -695,6 +668,7 @@ export const GridEditorPanel: React.FC = () => {
                                 step={0.05}
                                 value={zoom}
                                 onChange={(e) => setZoom(Number(e.target.value))}
+                                className={sliderClass}
                             />
                             <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))} aria-label="Zoom in">
                                 <ZoomIn />
@@ -761,6 +735,7 @@ export const GridEditorPanel: React.FC = () => {
                                     if (lockImageAspect) setImageScaleY(next);
                                 }}
                                 aria-label="Image scale X"
+                                className={sliderClass}
                             />
                             <Button
                                 size="icon"
@@ -814,6 +789,7 @@ export const GridEditorPanel: React.FC = () => {
                                             setImageScaleY(Number(e.target.value));
                                         }}
                                         aria-label="Image scale Y"
+                                        className={sliderClass}
                                     />
                                     <Button
                                         size="icon"
@@ -852,154 +828,36 @@ export const GridEditorPanel: React.FC = () => {
                     )}
                 </div>
 
-                <div className={toolRowClass}>
-                    {imageURL && overlayEnabled && (
-                        <div className="flex items-center gap-1 text-xs">
-                            <Button
-                                size="icon"
-                                variant={isDragMode ? "secondary" : "outline"}
-                                className={compactIconButtonClass}
-                                onClick={() => {
-                                    setIsDragMode((prev) => !prev);
-                                    setIsDraggingGrid(false);
-                                }}
-                                title="Drag the grid layer over the image overlay"
-                                aria-pressed={isDragMode}
-                            >
-                                <Move />
-                            </Button>
-                            <span className="tabular-nums text-muted-foreground" title="Overlay frame offset (px)">({gridOffsetX}, {gridOffsetY})</span>
-                            <Button
-                                size="icon"
-                                variant="outline"
-                                className={compactIconButtonClass}
-                                onClick={() => {
-                                    setGridOffsetX(0);
-                                    setGridOffsetY(0);
-                                }}
-                                aria-label="Reset offset"
-                            >
-                                <Maximize2 />
-                            </Button>
-                        </div>
-                    )}
-                    {imageURL && overlayEnabled && imageNaturalSize && cropInsets && (
-                        <div className="flex flex-wrap items-center gap-1 rounded border border-border/60 bg-background/60 px-2 py-1 text-xs">
-                            <span className="font-medium text-foreground">Crop</span>
-                            <label className="flex items-center gap-1">
-                                <span>L</span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    max={imageNaturalSize.width - 1}
-                                    value={cropInsets.left}
-                                    onChange={(e) => applyCropInsets({ left: Number(e.target.value) || 0 })}
-                                    className="h-7 w-12 rounded border bg-background px-1"
-                                />
-                            </label>
-                            <label className="flex items-center gap-1">
-                                <span>T</span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    max={imageNaturalSize.height - 1}
-                                    value={cropInsets.top}
-                                    onChange={(e) => applyCropInsets({ top: Number(e.target.value) || 0 })}
-                                    className="h-7 w-12 rounded border bg-background px-1"
-                                />
-                            </label>
-                            <label className="flex items-center gap-1">
-                                <span>R</span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    max={imageNaturalSize.width - 1}
-                                    value={cropInsets.right}
-                                    onChange={(e) => applyCropInsets({ right: Number(e.target.value) || 0 })}
-                                    className="h-7 w-12 rounded border bg-background px-1"
-                                />
-                            </label>
-                            <label className="flex items-center gap-1">
-                                <span>B</span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    max={imageNaturalSize.height - 1}
-                                    value={cropInsets.bottom}
-                                    onChange={(e) => applyCropInsets({ bottom: Number(e.target.value) || 0 })}
-                                    className="h-7 w-12 rounded border bg-background px-1"
-                                />
-                            </label>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className={compactButtonClass}
-                                onClick={() => {
-                                    setGridOffsetX(0);
-                                    setGridOffsetY(0);
-                                    setGridFrameWidth(imageNaturalSize.width);
-                                    setGridFrameHeight(imageNaturalSize.height);
-                                }}
-                                title="Reset manual image crop"
-                            >
-                                Reset Crop
-                            </Button>
-                        </div>
-                    )}
-                    {imageURL && overlayEnabled && (
-                        <>
-                            <div className="flex items-center gap-2">
-                                <label className="flex items-center gap-1 text-xs text-muted-foreground" title="How many void cells to keep around the outside when cropping">
-                                    <span>Void margin</span>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={5}
-                                        value={outerVoidMargin}
-                                        onChange={(e) => setOuterVoidMargin(Number(e.target.value))}
-                                        className="h-7 w-14 rounded border bg-background px-1 text-foreground"
-                                    />
-                                </label>
-                                <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={cropCurrentMap} title="Crop excess outer void cells (keep margin)" aria-label="Crop outer void">
-                                    <Scissors />
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                    <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={() => { pushUndo(); setGrid(g => g.map(r => r.map(() => 5))); }} title="Fill all cells with Void" aria-label="All void">
-                        <Trash2 />
-                    </Button>
-                    <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2 py-1">
+                {imageURL && overlayEnabled && (
+                    <div className={toolRowClass}>
                         <Button
                             size="icon"
-                            variant={isSettingPlayerStart ? "secondary" : "outline"}
+                            variant={isDragMode ? "secondary" : "outline"}
                             className={compactIconButtonClass}
-                            onClick={() => setIsSettingPlayerStart(!isSettingPlayerStart)}
-                            title="Click a cell to set player start position"
-                            aria-pressed={isSettingPlayerStart}
-                            aria-label={isSettingPlayerStart ? "Setting player start: on" : "Setting player start: off"}
+                            onClick={() => {
+                                setIsDragMode((prev) => !prev);
+                                setIsDraggingGrid(false);
+                            }}
+                            title="Drag the grid layer over the image overlay"
+                            aria-pressed={isDragMode}
                         >
-                            <UserRound />
+                            <Move />
                         </Button>
-                        {playerStart && (
-                            <>
-                                <span className="text-xs text-muted-foreground tabular-nums" title="Player start (col,row)">
-                                    ({playerStart.x}, {playerStart.y})
-                                </span>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => setPlayerStart(null)}
-                                    className={compactIconButtonClass}
-                                    title="Clear player start position"
-                                    aria-label="Clear player start"
-                                >
-                                    ✕
-                                </Button>
-                            </>
-                        )}
+                        <span className="tabular-nums text-muted-foreground" title="Overlay frame offset (px)">({gridOffsetX}, {gridOffsetY})</span>
+                        <Button
+                            size="icon"
+                            variant="outline"
+                            className={compactIconButtonClass}
+                            onClick={() => {
+                                setGridOffsetX(0);
+                                setGridOffsetY(0);
+                            }}
+                            aria-label="Reset offset"
+                        >
+                            <Maximize2 />
+                        </Button>
                     </div>
-                </div>
+                )}
                 {isDragMode && (
                     <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-1 text-[11px] leading-snug text-amber-600">
                         Drag anywhere on the grid to fine-tune alignment. Mouse wheel zooms the view; hold Alt to scale only the overlay image. Turn drag mode off to paint or click cells.
@@ -1273,65 +1131,6 @@ export const GridEditorPanel: React.FC = () => {
                                         <ArrowDownUp className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                 )}
-                                {overlayEnabled && imageURL && showAlignmentGuide && alignment && (
-                                    <svg
-                                        className="absolute top-0 left-0 pointer-events-none"
-                                        width={Math.max(1, Math.round(contentWidthPx))}
-                                        height={Math.max(1, Math.round(contentHeightPx))}
-                                        viewBox={`0 0 ${Math.max(1, contentWidthPx)} ${Math.max(1, contentHeightPx)}`}
-                                        style={{ zIndex: 16 }}
-                                    >
-                                        {/* Detected grid bounds */}
-                                        <rect
-                                            x={alignment.guideOffsetX}
-                                            y={alignment.guideOffsetY}
-                                            width={alignment.guideCellW * cols}
-                                            height={alignment.guideCellH * rows}
-                                            fill="none"
-                                            stroke={alignment.aligned ? "rgba(34,197,94,0.9)" : "rgba(251,191,36,0.75)"}
-                                            strokeWidth={1.25}
-                                        />
-                                        {/* Vertical detected lines */}
-                                        {alignment.v.map((line, idx) => {
-                                            const color =
-                                                line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
-                                                    line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
-                                                        "rgba(239,68,68,0.75)";
-                                            return (
-                                                <line
-                                                    key={`v-${idx}`}
-                                                    x1={line.x}
-                                                    y1={alignment.guideOffsetY}
-                                                    x2={line.x}
-                                                    y2={alignment.guideOffsetY + alignment.guideCellH * rows}
-                                                    stroke={color}
-                                                    strokeWidth={1}
-                                                    strokeDasharray={alignment.aligned ? undefined : "4 4"}
-                                                />
-                                            );
-                                        })}
-                                        {/* Horizontal detected lines */}
-                                        {alignment.h.map((line, idx) => {
-                                            const color =
-                                                line.diff < 0.5 ? "rgba(34,197,94,0.85)" :
-                                                    line.diff < 1.2 ? "rgba(251,191,36,0.8)" :
-                                                        "rgba(239,68,68,0.75)";
-                                            return (
-                                                <line
-                                                    key={`h-${idx}`}
-                                                    x1={alignment.guideOffsetX}
-                                                    y1={line.y}
-                                                    x2={alignment.guideOffsetX + alignment.guideCellW * cols}
-                                                    y2={line.y}
-                                                    stroke={color}
-                                                    strokeWidth={1}
-                                                    strokeDasharray={alignment.aligned ? undefined : "4 4"}
-                                                />
-                                            );
-                                        })}
-                                    </svg>
-                                )}
-
                                 <div
                                     className="relative z-10"
                                     style={{
