@@ -1,4 +1,5 @@
 const { chromium } = require("playwright");
+const fs = require("fs");
 
 const baseUrl = "http://127.0.0.1:4180/";
 
@@ -33,10 +34,18 @@ const baseUrl = "http://127.0.0.1:4180/";
     const info = await page.evaluate(() => ({
       text: document.body.innerText.replace(/\s+/g, " ").slice(0, 240),
       heroCount: document.querySelectorAll('img[alt="Hero"]').length,
+      heroSrc: document.querySelector('img[alt="Hero"]')?.getAttribute("src") || "",
       statusText: Array.from(document.querySelectorAll("div"))
         .map((el) => el.textContent || "")
         .find((text) => text.includes("Sprites ready") || text.includes("Sprite mode")) || "",
     }));
+    if (info.heroSrc.startsWith("data:image/png;base64,")) {
+      fs.writeFileSync(
+        `.verify-level${levelId}-hero-current.png`,
+        Buffer.from(info.heroSrc.replace(/^data:image\/png;base64,/, ""), "base64"),
+      );
+    }
+    delete info.heroSrc;
 
     console.log(JSON.stringify({ levelId, ...info }));
     await page.close();
