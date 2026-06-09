@@ -153,22 +153,48 @@ const renderHeroFallback = () => (
   </div>
 );
 
-const scoreDinoCrop = (canvas: HTMLCanvasElement) => {
+const measureDinoCrop = (canvas: HTMLCanvasElement) => {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return 0;
+  if (!ctx) return { greenPixels: 0, width: 0, height: 0 };
 
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   let greenPixels = 0;
+  let minX = canvas.width;
+  let minY = canvas.height;
+  let maxX = -1;
+  let maxY = -1;
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
     if (g > 70 && g - r > 24 && g - b > 18) {
+      const pixel = i / 4;
+      const x = pixel % canvas.width;
+      const y = Math.floor(pixel / canvas.width);
       greenPixels += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
     }
   }
 
-  return greenPixels;
+  return {
+    greenPixels,
+    width: maxX >= minX ? maxX - minX + 1 : 0,
+    height: maxY >= minY ? maxY - minY + 1 : 0,
+  };
+};
+
+const scoreDinoCrop = (canvas: HTMLCanvasElement) => measureDinoCrop(canvas).greenPixels;
+
+const hasUsableDinoShape = (canvas: HTMLCanvasElement, minPixels: number) => {
+  const measurement = measureDinoCrop(canvas);
+  return (
+    measurement.greenPixels >= minPixels &&
+    measurement.width >= Math.round(canvas.width * 0.14) &&
+    measurement.height >= Math.round(canvas.height * 0.18)
+  );
 };
 
 const createDinoSilhouetteCanvas = (canvas: HTMLCanvasElement) => {
@@ -522,7 +548,7 @@ export function GameSprite2D({
           };
 
           considerCrop(playerStart.x, playerStart.y, 0);
-          if (bestCanvas && bestRawScore >= strongDinoPixels) return bestCanvas;
+          if (bestCanvas && hasUsableDinoShape(bestCanvas, strongDinoPixels)) return bestCanvas;
 
           const stepX = Math.max(1, Math.round(cellW * 0.1));
           const stepY = Math.max(1, Math.round(cellH * 0.1));
@@ -533,7 +559,7 @@ export function GameSprite2D({
               considerCrop(playerStart.x, playerStart.y, 0, shiftX, shiftY);
             }
           }
-          if (bestCanvas && bestRawScore >= strongDinoPixels) return bestCanvas;
+          if (bestCanvas && hasUsableDinoShape(bestCanvas, strongDinoPixels)) return bestCanvas;
 
           // Some DOS screenshots include the selected hero slightly above/below the
           // logical start cell. Search nearby cells before accepting a weak strip.
@@ -542,10 +568,10 @@ export function GameSprite2D({
               considerCrop(x, y, 10);
             }
           }
-          if (bestCanvas && bestRawScore >= strongDinoPixels) return bestCanvas;
+          if (bestCanvas && hasUsableDinoShape(bestCanvas, strongDinoPixels)) return bestCanvas;
 
           const clusterCanvas = findGreenClusterNearStart();
-          if (clusterCanvas && scoreDinoCrop(clusterCanvas) >= minDinoPixels) return clusterCanvas;
+          if (clusterCanvas && hasUsableDinoShape(clusterCanvas, minDinoPixels)) return clusterCanvas;
 
           for (let y = 0; y < rows; y += 1) {
             for (let x = 0; x < cols; x += 1) {
@@ -555,7 +581,7 @@ export function GameSprite2D({
             }
           }
 
-          return bestCanvas && bestRawScore >= minDinoPixels ? bestCanvas : null;
+          return bestCanvas && hasUsableDinoShape(bestCanvas, minDinoPixels) ? bestCanvas : null;
         };
 
         const tileSprites: Record<number, string> = {};
