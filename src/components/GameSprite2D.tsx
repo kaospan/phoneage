@@ -54,59 +54,65 @@ const getStartCaveSpriteFallback = () => {
 };
 
 const renderArrowVector = (tileType: number) => {
-  const stroke = "rgba(255,255,255,0.98)";
-  const shadow = "drop-shadow(0 1px 1px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7))";
+  const shadow = "drop-shadow(0 1px 1px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.72))";
   const common = {
-    stroke,
-    strokeWidth: 3.3,
+    fill: "#f6c84f",
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
-    fill: "none",
   };
 
   const OneArrow = ({ dir }: { dir: "up" | "right" | "down" | "left" }) => {
-    const shaft =
-      dir === "up" ? "M16 24 L16 8" :
-      dir === "right" ? "M8 16 L24 16" :
-      dir === "down" ? "M16 8 L16 24" :
-      "M24 16 L8 16";
-    const head =
-      dir === "up" ? "M11 12 L16 7 L21 12" :
-      dir === "right" ? "M20 11 L25 16 L20 21" :
-      dir === "down" ? "M11 20 L16 25 L21 20" :
-      "M12 11 L7 16 L12 21";
+    const rotations = {
+      up: 0,
+      right: 90,
+      down: 180,
+      left: 270,
+    };
 
     return (
-      <g>
-        <path d={shaft} {...common} />
-        <path d={head} {...common} />
+      <g transform={`rotate(${rotations[dir]} 16 16)`}>
+        <path d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z" stroke="rgba(16,18,12,0.92)" strokeWidth="4.2" {...common} />
+        <path d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z" stroke="#fff8c8" strokeWidth="1.7" {...common} />
       </g>
     );
   };
 
   const DoubleArrowVertical = () => (
     <g>
-      <path d="M16 24 L16 8" {...common} />
-      <path d="M11 12 L16 7 L21 12" {...common} />
-      <path d="M11 20 L16 25 L21 20" {...common} />
+      <g transform="translate(0 -3) scale(0.82 0.82) translate(3.5 3.5)">
+        <OneArrow dir="up" />
+      </g>
+      <g transform="translate(0 3) scale(0.82 0.82) translate(3.5 3.5)">
+        <OneArrow dir="down" />
+      </g>
     </g>
   );
 
   const DoubleArrowHorizontal = () => (
     <g>
-      <path d="M8 16 L24 16" {...common} />
-      <path d="M12 11 L7 16 L12 21" {...common} />
-      <path d="M20 11 L25 16 L20 21" {...common} />
+      <g transform="translate(-3 0) scale(0.82 0.82) translate(3.5 3.5)">
+        <OneArrow dir="left" />
+      </g>
+      <g transform="translate(3 0) scale(0.82 0.82) translate(3.5 3.5)">
+        <OneArrow dir="right" />
+      </g>
     </g>
   );
 
   const OmniArrow = () => (
     <g>
-      <path d="M16 24 L16 8 M8 16 L24 16" {...common} />
-      <path d="M11 12 L16 7 L21 12" {...common} />
-      <path d="M11 20 L16 25 L21 20" {...common} />
-      <path d="M12 11 L7 16 L12 21" {...common} />
-      <path d="M20 11 L25 16 L20 21" {...common} />
+      <g transform="translate(0 -6) scale(0.58 0.58) translate(11.6 11.6)">
+        <OneArrow dir="up" />
+      </g>
+      <g transform="translate(6 0) scale(0.58 0.58) translate(11.6 11.6)">
+        <OneArrow dir="right" />
+      </g>
+      <g transform="translate(0 6) scale(0.58 0.58) translate(11.6 11.6)">
+        <OneArrow dir="down" />
+      </g>
+      <g transform="translate(-6 0) scale(0.58 0.58) translate(11.6 11.6)">
+        <OneArrow dir="left" />
+      </g>
     </g>
   );
 
