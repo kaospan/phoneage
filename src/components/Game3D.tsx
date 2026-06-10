@@ -156,17 +156,19 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
   const stroke = '#fff8c8';
   const fill = '#f6c84f';
 
-  const paintGlyph = () => {
+  const paintGlyph = (highlight = true) => {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.strokeStyle = outline;
-    ctx.lineWidth = 20;
+    ctx.lineWidth = highlight ? 20 : 26;
     ctx.stroke();
     ctx.fillStyle = fill;
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 8;
     ctx.fill();
-    ctx.stroke();
+    if (highlight) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 8;
+      ctx.stroke();
+    }
   };
 
   const drawArrow = (cx: number, cy: number, angle: number, scale = 1) => {
@@ -189,14 +191,14 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
     ctx.restore();
   };
 
-  const drawPathGlyph = (scale = 1, buildPath: () => void) => {
+  const drawPathGlyph = (scale = 1, buildPath: () => void, highlight = true) => {
     ctx.save();
     ctx.translate(size * 0.5, size * 0.5);
     ctx.scale(scale, scale);
     ctx.beginPath();
     buildPath();
     ctx.closePath();
-    paintGlyph();
+    paintGlyph(highlight);
     ctx.restore();
   };
 
@@ -229,32 +231,32 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
       ctx.lineTo(-22, 50);
     });
   } else {
-    drawPathGlyph(0.86, () => {
-      ctx.moveTo(0, -82);
-      ctx.lineTo(44, -38);
-      ctx.lineTo(26, -38);
-      ctx.lineTo(26, -26);
-      ctx.lineTo(38, -26);
-      ctx.lineTo(38, -44);
-      ctx.lineTo(82, 0);
-      ctx.lineTo(38, 44);
-      ctx.lineTo(38, 26);
-      ctx.lineTo(26, 26);
-      ctx.lineTo(26, 38);
-      ctx.lineTo(44, 38);
-      ctx.lineTo(0, 82);
-      ctx.lineTo(-44, 38);
-      ctx.lineTo(-26, 38);
-      ctx.lineTo(-26, 26);
-      ctx.lineTo(-38, 26);
-      ctx.lineTo(-38, 44);
-      ctx.lineTo(-82, 0);
-      ctx.lineTo(-38, -44);
-      ctx.lineTo(-38, -26);
-      ctx.lineTo(-26, -26);
-      ctx.lineTo(-26, -38);
-      ctx.lineTo(-44, -38);
-    });
+    drawPathGlyph(0.84, () => {
+      ctx.moveTo(0, -88);
+      ctx.lineTo(52, -36);
+      ctx.lineTo(26, -36);
+      ctx.lineTo(26, -18);
+      ctx.lineTo(36, -18);
+      ctx.lineTo(36, -52);
+      ctx.lineTo(88, 0);
+      ctx.lineTo(36, 52);
+      ctx.lineTo(36, 18);
+      ctx.lineTo(26, 18);
+      ctx.lineTo(26, 36);
+      ctx.lineTo(52, 36);
+      ctx.lineTo(0, 88);
+      ctx.lineTo(-52, 36);
+      ctx.lineTo(-26, 36);
+      ctx.lineTo(-26, 18);
+      ctx.lineTo(-36, 18);
+      ctx.lineTo(-36, 52);
+      ctx.lineTo(-88, 0);
+      ctx.lineTo(-36, -52);
+      ctx.lineTo(-36, -18);
+      ctx.lineTo(-26, -18);
+      ctx.lineTo(-26, -36);
+      ctx.lineTo(-52, -36);
+    }, false);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -630,9 +632,9 @@ const ArrowTile = ({
   const lastTapTimeRef = useRef<number>(0);
 
   const rotations: { [key: number]: number } = {
-    7: Math.PI,     // up - points in -Z direction
+    7: 0,           // down - points in +Z direction
     8: -Math.PI / 2, // right - points in +X direction
-    9: 0,           // down - points in +Z direction
+    9: Math.PI,     // up - points in -Z direction
     10: Math.PI / 2 // left - points in -X direction
   };
 

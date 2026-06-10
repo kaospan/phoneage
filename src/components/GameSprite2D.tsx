@@ -77,25 +77,25 @@ const renderArrowVector = (tileType: number) => {
     );
   };
 
-  const GlyphPath = ({ d }: { d: string }) => (
+  const GlyphPath = ({ d, highlight = true }: { d: string; highlight?: boolean }) => (
     <>
       <path d={d} stroke="rgba(16,18,12,0.92)" strokeWidth="4.2" {...common} />
-      <path d={d} stroke="#fff8c8" strokeWidth="1.7" {...common} />
+      {highlight && <path d={d} stroke="#fff8c8" strokeWidth="1.7" {...common} />}
     </>
   );
 
   const doubleVerticalPath = "M16 3 L26 13 L21 13 L21 19 L26 19 L16 29 L6 19 L11 19 L11 13 L6 13 Z";
   const doubleHorizontalPath = "M3 16 L13 6 L13 11 L19 11 L19 6 L29 16 L19 26 L19 21 L13 21 L13 26 Z";
-  const omniPath = "M16 3 L23 10 L20 10 L20 13 L22 13 L29 16 L22 19 L20 19 L20 22 L23 22 L16 29 L9 22 L12 22 L12 19 L10 19 L3 16 L10 13 L12 13 L12 10 L9 10 Z";
+  const omniPath = "M16 2 L26 12 L21 12 L21 13 L24 13 L24 8 L31 16 L24 24 L24 19 L21 19 L21 20 L26 20 L16 30 L6 20 L11 20 L11 19 L8 19 L8 24 L1 16 L8 8 L8 13 L11 13 L11 12 L6 12 Z";
 
   const shape =
-    tileType === 7 ? <OneArrow dir="up" /> :
+    tileType === 7 ? <OneArrow dir="down" /> :
     tileType === 8 ? <OneArrow dir="right" /> :
-    tileType === 9 ? <OneArrow dir="down" /> :
+    tileType === 9 ? <OneArrow dir="up" /> :
     tileType === 10 ? <OneArrow dir="left" /> :
     tileType === 11 ? <GlyphPath d={doubleVerticalPath} /> :
     tileType === 12 ? <GlyphPath d={doubleHorizontalPath} /> :
-    tileType === 13 ? <GlyphPath d={omniPath} /> :
+    tileType === 13 ? <GlyphPath d={omniPath} highlight={false} /> :
     null;
 
   if (!shape) return null;
