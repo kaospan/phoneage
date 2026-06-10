@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
 import { createClockIconDataUrl, createKeyIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
@@ -266,6 +266,8 @@ export function GameSprite2D({
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
   const sourceGrid = atlasSourceGrid ?? grid;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
   const atlasGrid = useMemo(() => sourceGrid.map((r) => [...r]), [sourceGrid]);
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
@@ -725,6 +727,42 @@ export function GameSprite2D({
     return Math.max(0.75, Math.min(1.35, 1 / Math.max(0.01, zoomFactor)));
   }, [zoomFactor]);
 
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const updateSize = () => {
+      const rect = node.getBoundingClientRect();
+      setAvailableSize({
+        width: Math.max(0, Math.floor(rect.width)),
+        height: Math.max(0, Math.floor(rect.height)),
+      });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const boardSize = useMemo(() => {
+    if (rows <= 0 || cols <= 0 || availableSize.width <= 0 || availableSize.height <= 0) {
+      return { width: 0, height: 0 };
+    }
+
+    const aspect = cols / rows;
+    const frameInset = fullBleed ? 0 : 16;
+    const maxWidth = Math.max(1, availableSize.width - frameInset);
+    const maxHeight = Math.max(1, availableSize.height - frameInset);
+    const fitWidth = Math.min(maxWidth, maxHeight * aspect);
+    const containedScale = Math.min(scale, 1);
+    const width = Math.max(cols, Math.floor(fitWidth * containedScale));
+    return {
+      width,
+      height: Math.max(rows, Math.floor(width / aspect)),
+    };
+  }, [availableSize.height, availableSize.width, cols, fullBleed, rows, scale]);
+
   const teleportFallbackUrl = useMemo(() => {
     return createVortexIconDataUrl(32);
   }, []);
@@ -752,10 +790,10 @@ export function GameSprite2D({
 
   return (
     <div
+      ref={containerRef}
       className={[
         "w-full h-full flex overflow-hidden touch-none select-none",
-        // In fullscreen mode, keep the board visually lower so the HUD never occludes rows.
-        fullBleed ? "items-end justify-center" : "items-center justify-center",
+        "items-center justify-center",
       ].join(" ")}
       style={{
         // Outside the board perimeter we show the original level screenshot for nostalgia.
@@ -770,23 +808,27 @@ export function GameSprite2D({
     >
       <div
         className={[
-          fullBleed ? "border-0 shadow-none p-0 rounded-none" : "rounded-xl border border-border/40 shadow-lg p-2 md:p-3",
-          "bg-transparent",
+          fullBleed ? "border-0 shadow-none rounded-none" : "rounded-xl border border-border/40 shadow-lg",
+          "relative bg-transparent",
         ].join(" ")}
-        style={{ transform: `scale(${scale})`, transformOrigin: "center" }}
+        style={{
+          width: boardSize.width > 0 ? `${boardSize.width}px` : undefined,
+          height: boardSize.height > 0 ? `${boardSize.height}px` : undefined,
+          maxWidth: "100%",
+          maxHeight: "100%",
+        }}
       >
         <div
           className={[
             // The board itself is always black so void reads as empty even if the screenshot has detail.
-            "grid gap-[2px] bg-black",
-            fullBleed ? "p-0 rounded-none" : "p-2 rounded-lg",
+            "grid gap-0 bg-black",
+            fullBleed ? "rounded-none" : "rounded-lg",
           ].join(" ")}
           style={{
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-            width: fullBleed
-              ? "calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right))"
-              : "min(92vw, 980px)",
-            aspectRatio: cols > 0 && rows > 0 ? `${cols} / ${rows}` : undefined,
+            gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+            width: "100%",
+            height: "100%",
             imageRendering: "pixelated",
             // Full grid frame (rows×cols): inner black border + subtle outer highlight
             // so the whole board reads as a bounded rectangle even on black outside.
@@ -849,7 +891,7 @@ export function GameSprite2D({
                 <div
                   key={`${x}-${y}`}
                   className={[
-                    "relative aspect-square rounded-[4px] overflow-hidden",
+                    "relative min-h-0 min-w-0 overflow-hidden",
                     isArrow ? "cursor-pointer hover:brightness-110" : "",
                     isSelected ? "ring-2 ring-white" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
@@ -921,7 +963,7 @@ export function GameSprite2D({
           )}
         </div>
         {levelAtlas?.status && (
-          <div className="mt-2 text-center text-[11px] text-white/70">
+          <div className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-[11px] text-white/70">
             {levelAtlas.status}
           </div>
         )}
