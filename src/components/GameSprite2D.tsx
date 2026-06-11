@@ -113,19 +113,6 @@ const renderArrowVector = (tileType: number) => {
   );
 };
 
-const renderHeroFallback = () => (
-  <div
-    className="absolute inset-0 flex items-center justify-center text-[clamp(18px,4.2vw,34px)]"
-    style={{
-      filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 5px rgba(0,0,0,0.85))",
-      lineHeight: 1,
-    }}
-    aria-label="Hero"
-  >
-    🦖
-  </div>
-);
-
 const measureDinoCrop = (canvas: HTMLCanvasElement) => {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return { greenPixels: 0, width: 0, height: 0 };
@@ -322,8 +309,8 @@ export function GameSprite2D({
 
       setLevelAtlas((prev) => ({
         tileSprites: prev?.tileSprites ?? {},
-        heroSprite: prev?.heroSprite,
-        boardBackground: prev?.boardBackground,
+        heroSprite: undefined,
+        boardBackground: undefined,
         status: "Building sprites...",
         confidence: prev?.confidence,
       }));
@@ -449,6 +436,29 @@ export function GameSprite2D({
             sw,
             sh,
           );
+        };
+
+        const createBoardBackground = () => {
+          const frameW = Math.max(1, Math.min(srcCanvas.width - offsetX, Math.round(cellW * cols)));
+          const frameH = Math.max(1, Math.min(srcCanvas.height - offsetY, Math.round(cellH * rows)));
+          const boardCanvas = document.createElement("canvas");
+          boardCanvas.width = Math.max(1, cols * outW);
+          boardCanvas.height = Math.max(1, rows * outH);
+          const boardCtx = boardCanvas.getContext("2d");
+          if (!boardCtx) return undefined;
+          boardCtx.imageSmoothingEnabled = false;
+          boardCtx.drawImage(
+            srcCanvas,
+            offsetX,
+            offsetY,
+            frameW,
+            frameH,
+            0,
+            0,
+            boardCanvas.width,
+            boardCanvas.height,
+          );
+          return boardCanvas.toDataURL("image/png");
         };
 
         const minDinoPixels = Math.round(outW * outH * 0.012);
@@ -699,7 +709,7 @@ export function GameSprite2D({
         setLevelAtlas({
           tileSprites,
           heroSprite,
-          boardBackground: normalizedUrl,
+          boardBackground: createBoardBackground(),
           status: usedDosGridFallback
             ? "Sprites ready (DOS grid fallback)"
             : allowAtlas
@@ -796,7 +806,7 @@ export function GameSprite2D({
   const startCaveFallbackUrl = useMemo(() => getStartCaveSpriteFallback(), []);
   const startCaveSpriteUrl = levelAtlas?.tileSprites?.[3] ?? startCaveFallbackUrl;
   const goalCaveFallbackUrl = useMemo(() => referenceSpriteUrls.cave, []);
-  const boardBackgroundUrl = levelAtlas?.boardBackground ?? levelImageUrl ?? null;
+  const boardBackgroundUrl = levelAtlas?.boardBackground ?? null;
   const useScreenshotBase = Boolean(boardBackgroundUrl);
 
   return (
@@ -854,6 +864,7 @@ export function GameSprite2D({
             row.map((cell, x) => {
               const isCave = goalCaveKeys.has(`${x},${y}`);
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
+              const isPlayerWithoutSprite = isPlayer && useScreenshotBase && !levelAtlas?.heroSprite;
               const tileType = isCave ? 3 : cell;
               // If the player is standing on the start-marker cave (18), render the base tile as floor
               // so the cave appears only after the hero moves off the spawn tile (nostalgia behavior).
@@ -879,11 +890,13 @@ export function GameSprite2D({
                 );
               const tileChangedFromScreenshot = effectiveTileType !== originalTileType;
               const shouldPaintStaticTile =
-                !useScreenshotBase ||
-                effectiveIsArrow ||
-                originalIsArrow ||
-                tileChangedFromScreenshot ||
-                playerStartNeedsCleanup;
+                !isPlayerWithoutSprite && (
+                  !useScreenshotBase ||
+                  effectiveIsArrow ||
+                  originalIsArrow ||
+                  tileChangedFromScreenshot ||
+                  playerStartNeedsCleanup
+                );
 
               const atlasSprite = effectiveIsArrow ? undefined : levelAtlas?.tileSprites?.[effectiveTileType];
               const refSprite = latestByType.get(effectiveTileType)?.imageData;
@@ -972,8 +985,7 @@ export function GameSprite2D({
                       {y}
                     </div>
                   )}
-                  {isPlayer && (
-                    levelAtlas?.heroSprite ? (
+                  {isPlayer && levelAtlas?.heroSprite && (
                       <img
                         src={levelAtlas.heroSprite}
                         alt="Hero"
@@ -981,7 +993,6 @@ export function GameSprite2D({
                         style={{ imageRendering: "pixelated" }}
                         draggable={false}
                       />
-                    ) : renderHeroFallback()
                   )}
                   {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
