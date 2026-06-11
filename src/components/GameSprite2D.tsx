@@ -791,6 +791,7 @@ export function GameSprite2D({
 
   const startCaveFallbackUrl = useMemo(() => getStartCaveSpriteFallback(), []);
   const startCaveSpriteUrl = levelAtlas?.tileSprites?.[3] ?? startCaveFallbackUrl;
+  const goalCaveFallbackUrl = useMemo(() => referenceSpriteUrls.cave, []);
 
   return (
     <div
@@ -867,6 +868,7 @@ export function GameSprite2D({
                 const backgroundImage =
                   effectiveTileType === 5 ? undefined :
                   effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
+                  effectiveTileType === 3 && goalCaveFallbackUrl ? `url(${goalCaveFallbackUrl})` :
                   effectiveTileType === 6 && breakableRockFallbackUrl ? `url(${breakableRockFallbackUrl})` :
                   atlasSprite ? `url(${atlasSprite})` :
                   (canUseRefSprite && refSprite) ? `url(${refSprite})` :
