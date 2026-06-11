@@ -283,15 +283,6 @@ export const PuzzleGame = () => {
       return false;
     }
   });
-  const [showDpad, setShowDpad] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      // Default to ON; user can hide it via the in-game toggle (mobile only).
-      return localStorage.getItem("stone-age-show-dpad") !== "0";
-    } catch {
-      return true;
-    }
-  });
   const prevZoomIndexRef = useRef<number | null>(null);
   const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
   const [userZoomTouched, setUserZoomTouched] = useState(false);
@@ -1812,15 +1803,6 @@ export const PuzzleGame = () => {
     }
   }, [isFullscreenMode]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem("stone-age-show-dpad", showDpad ? "1" : "0");
-    } catch {
-      // ignore
-    }
-  }, [showDpad]);
-
     useEffect(() => {
       const doc = typeof document !== "undefined" ? document : null;
       if (!doc) return;
@@ -2435,19 +2417,6 @@ export const PuzzleGame = () => {
                 ⛶
               </Button>
 
-              {isMobile && (
-                <Button
-                  onClick={() => setShowDpad(v => !v)}
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 w-9 p-0 text-base font-bold hover:bg-primary/20"
-                  title={showDpad ? "Hide D-pad" : "Show D-pad"}
-                  aria-pressed={showDpad}
-                >
-                  ⊞
-                </Button>
-              )}
-
               {!isFullscreenMode && (cameraOffset.x !== 0 || cameraOffset.z !== 0) && (
                 <Button
                   onClick={() => {
@@ -2773,21 +2742,6 @@ export const PuzzleGame = () => {
             )}
           </div>
         </div>
-        {isMobile && showDpad && (
-          <div
-            className="absolute left-1/2 transform -translate-x-1/2 z-50"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.35rem)' }}
-          >
-            <div className="bg-card/95 backdrop-blur border border-border/50 px-2 py-1 rounded shadow-md">
-              <div className="grid grid-cols-4 gap-1">
-                <Button onClick={() => queueMove(0, -1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↑</Button>
-                <Button onClick={() => queueMove(0, 1)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">↓</Button>
-                <Button onClick={() => queueMove(-1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">←</Button>
-                <Button onClick={() => queueMove(1, 0)} className="h-11 w-11 p-0 text-base" variant="secondary" size="sm">→</Button>
-              </div>
-            </div>
-          </div>
-        )}
         {selectedArrow && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
         )}
