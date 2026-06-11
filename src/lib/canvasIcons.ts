@@ -358,9 +358,9 @@ export type BreakableRockTileOptions = {
 function getBreakableRockDefaults(opts?: BreakableRockTileOptions): Required<BreakableRockTileOptions> {
   return {
     // Defaults chosen to resemble the original DOS "breakable rock" tile (brown stone with cracks).
-    base: opts?.base ?? "rgba(146, 92, 58, 1)",
-    highlight: opts?.highlight ?? "rgba(205, 152, 104, 1)",
-    shadow: opts?.shadow ?? "rgba(64, 34, 18, 1)",
+    base: opts?.base ?? "rgba(178, 124, 72, 1)",
+    highlight: opts?.highlight ?? "rgba(232, 183, 108, 1)",
+    shadow: opts?.shadow ?? "rgba(88, 52, 30, 1)",
     crack: opts?.crack ?? "rgba(26, 14, 8, 1)",
     crackRim: opts?.crackRim ?? "rgba(255, 240, 210, 0.35)",
   };
@@ -374,100 +374,101 @@ export function drawBreakableRockTile(ctx: CanvasRenderingContext2D, size: numbe
   const { base, highlight, shadow, crack, crackRim } = getBreakableRockDefaults(opts);
 
   ctx.clearRect(0, 0, size, size);
+  const u = size / 64;
+  const px = (v: number) => v * u;
 
-  // Base fill.
-  ctx.fillStyle = base;
+  // Deep mortar/gaps behind the individual rock chunks.
+  ctx.fillStyle = shadow;
   ctx.fillRect(0, 0, size, size);
 
-  // Gentle diagonal shading (gives the tile some "block" depth without a full gradient wash).
+  // Warm underpaint so tiny gaps still read like stone instead of empty black.
   const diag = ctx.createLinearGradient(0, 0, size, size);
-  diag.addColorStop(0, "rgba(255,255,255,0.10)");
-  diag.addColorStop(0.55, "rgba(0,0,0,0.00)");
-  diag.addColorStop(1, "rgba(0,0,0,0.18)");
+  diag.addColorStop(0, "rgba(255,255,255,0.08)");
+  diag.addColorStop(0.55, "rgba(0,0,0,0.02)");
+  diag.addColorStop(1, "rgba(0,0,0,0.24)");
   ctx.fillStyle = diag;
   ctx.fillRect(0, 0, size, size);
 
-  // Right-side face shadow (matches the reference: darker strip on the right).
-  ctx.fillStyle = "rgba(0,0,0,0.14)";
-  ctx.fillRect(Math.floor(size * 0.72), 0, Math.ceil(size * 0.28), size);
-
-  // Bevel border (DOS-like): top/left highlight, bottom/right shadow.
-  ctx.fillStyle = highlight;
-  ctx.fillRect(0, 0, size, 1);
-  ctx.fillRect(0, 0, 1, size);
-  ctx.fillStyle = shadow;
-  ctx.fillRect(0, size - 1, size, 1);
-  ctx.fillRect(size - 1, 0, 1, size);
-
-  // Inner bevel (subtle).
-  ctx.fillStyle = "rgba(255,255,255,0.10)";
-  ctx.fillRect(1, 1, size - 2, 1);
-  ctx.fillRect(1, 1, 1, size - 2);
-  ctx.fillStyle = "rgba(0,0,0,0.16)";
-  ctx.fillRect(1, size - 2, size - 2, 1);
-  ctx.fillRect(size - 2, 1, 1, size - 2);
-
-  // A few deterministic "chips"/speckles (keeps it from looking flat).
-  const specks: Array<[number, number, "l" | "d"]> = [
-    [4, 5, "l"], [8, 7, "d"], [12, 4, "l"], [18, 6, "d"],
-    [6, 14, "d"], [10, 12, "l"], [22, 10, "d"], [26, 8, "l"],
-    [5, 22, "d"], [9, 24, "l"], [20, 22, "d"], [25, 26, "l"],
+  const rockShapes: Array<Array<[number, number]>> = [
+    [[4, 5], [18, 5], [23, 12], [18, 24], [5, 22]],
+    [[20, 4], [39, 5], [39, 19], [24, 20], [21, 13]],
+    [[41, 6], [59, 5], [60, 21], [47, 24], [39, 17]],
+    [[4, 24], [21, 24], [25, 38], [13, 43], [4, 36]],
+    [[25, 22], [43, 22], [46, 39], [31, 45], [23, 35]],
+    [[47, 25], [60, 23], [59, 43], [48, 46], [43, 38]],
+    [[5, 44], [23, 43], [22, 59], [4, 58]],
+    [[25, 45], [43, 43], [42, 59], [23, 60]],
+    [[45, 47], [60, 44], [59, 59], [44, 60]],
   ];
-  for (const [x, y, t] of specks) {
-    ctx.fillStyle = t === "l" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.12)";
-    ctx.fillRect(x, y, 1, 1);
-  }
+
+  const drawPoly = (points: Array<[number, number]>, index: number) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(px(points[0][0]), px(points[0][1]));
+    for (let i = 1; i < points.length; i += 1) ctx.lineTo(px(points[i][0]), px(points[i][1]));
+    ctx.closePath();
+    ctx.fillStyle = base;
+    ctx.fill();
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = shadow;
+    ctx.lineWidth = Math.max(2, px(3.2));
+    ctx.stroke();
+
+    ctx.clip();
+    const shade = ctx.createLinearGradient(0, 0, size, size);
+    shade.addColorStop(0, "rgba(255,255,255,0.16)");
+    shade.addColorStop(0.5, "rgba(255,255,255,0.02)");
+    shade.addColorStop(1, "rgba(0,0,0,0.22)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.strokeStyle = "rgba(255,244,210,0.36)";
+    ctx.lineWidth = Math.max(1, px(1.25));
+    ctx.beginPath();
+    ctx.moveTo(px(points[0][0] + 2), px(points[0][1] + 2));
+    const hi = points[Math.min(2, points.length - 1)];
+    ctx.lineTo(px(hi[0] - 2), px(hi[1] + 1));
+    ctx.stroke();
+
+    ctx.fillStyle = index % 3 === 0 ? "rgba(255,235,190,0.16)" : "rgba(0,0,0,0.10)";
+    ctx.fillRect(px(points[0][0] + 3), px(points[0][1] + 4), Math.max(1, px(5)), Math.max(1, px(2)));
+    ctx.restore();
+  };
+
+  rockShapes.forEach(drawPoly);
 
   const strokeCrack = (pts: Array<[number, number]>) => {
-    // Dark core.
     ctx.strokeStyle = crack;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(1, px(1.8));
     ctx.lineCap = "butt";
     ctx.lineJoin = "miter";
     ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.moveTo(px(pts[0][0]), px(pts[0][1]));
+    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(px(pts[i][0]), px(pts[i][1]));
     ctx.stroke();
 
-    // Rim highlight (slightly offset like etched pixels).
     ctx.strokeStyle = crackRim;
+    ctx.lineWidth = Math.max(1, px(0.9));
     ctx.beginPath();
-    ctx.moveTo(pts[0][0] + 1, pts[0][1]);
-    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i][0] + 1, pts[i][1]);
+    ctx.moveTo(px(pts[0][0] - 0.9), px(pts[0][1] - 0.9));
+    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(px(pts[i][0] - 0.9), px(pts[i][1] - 0.9));
     ctx.stroke();
   };
 
-  // Cracks: a "cross" + small branches to match the classic breakable block feel.
-  const m = Math.floor(size / 2);
-  strokeCrack([
-    [Math.floor(size * 0.28), Math.floor(size * 0.30)],
-    [m - 2, Math.floor(size * 0.34)],
-    [m + 1, m - 1],
-    [m + 2, Math.floor(size * 0.70)],
-  ]);
-  strokeCrack([
-    [Math.floor(size * 0.22), m + 2],
-    [m - 2, m],
-    [Math.floor(size * 0.78), m + 3],
-  ]);
-  strokeCrack([
-    [m + 2, Math.floor(size * 0.18)],
-    [m + 4, m - 2],
-    [Math.floor(size * 0.86), m - 6],
-  ]);
-  strokeCrack([
-    [Math.floor(size * 0.40), Math.floor(size * 0.82)],
-    [m - 1, m + 4],
-    [Math.floor(size * 0.30), Math.floor(size * 0.62)],
-  ]);
+  strokeCrack([[8, 8], [14, 13], [16, 21]]);
+  strokeCrack([[26, 8], [31, 15], [37, 18]]);
+  strokeCrack([[48, 9], [52, 15], [57, 18]]);
+  strokeCrack([[9, 28], [16, 33], [21, 39]]);
+  strokeCrack([[30, 26], [36, 32], [43, 36]]);
+  strokeCrack([[53, 28], [50, 35], [55, 42]]);
+  strokeCrack([[9, 49], [15, 55], [20, 58]]);
+  strokeCrack([[30, 49], [35, 54], [39, 58]]);
+  strokeCrack([[49, 50], [54, 55], [58, 57]]);
 
-  // Corner chunk shadow (tiny 2x2) to mimic the sprite's fractured pieces.
-  ctx.fillStyle = "rgba(0,0,0,0.14)";
-  ctx.fillRect(Math.floor(size * 0.12), Math.floor(size * 0.12), 2, 2);
-  ctx.fillRect(Math.floor(size * 0.60), Math.floor(size * 0.52), 2, 2);
-  ctx.fillStyle = "rgba(255,255,255,0.10)";
-  ctx.fillRect(Math.floor(size * 0.16), Math.floor(size * 0.14), 1, 1);
-  ctx.fillRect(Math.floor(size * 0.62), Math.floor(size * 0.54), 1, 1);
+  // Chunky outside border keeps the tile readable against floor/water.
+  ctx.strokeStyle = shadow;
+  ctx.lineWidth = Math.max(2, px(3));
+  ctx.strokeRect(px(2), px(2), size - px(4), size - px(4));
 }
 
 export function createBreakableRockTileCanvas(size: number, opts?: BreakableRockTileOptions): HTMLCanvasElement | null {

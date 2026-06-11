@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
-import { createClockIconDataUrl, createKeyIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
+import { createBreakableRockTileDataUrl, createClockIconDataUrl, createKeyIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
 import { buildGoalCaveKeySet } from "@/game/caves";
 import { referenceSpriteUrls } from "@/data/assetCatalog";
@@ -785,6 +785,10 @@ export function GameSprite2D({
     return createClockIconDataUrl(32, { glow: "rgba(239,68,68,0.18)" });
   }, []);
 
+  const breakableRockFallbackUrl = useMemo(() => {
+    return createBreakableRockTileDataUrl(64);
+  }, []);
+
   const startCaveFallbackUrl = useMemo(() => getStartCaveSpriteFallback(), []);
   const startCaveSpriteUrl = levelAtlas?.tileSprites?.[3] ?? startCaveFallbackUrl;
 
@@ -863,6 +867,7 @@ export function GameSprite2D({
                 const backgroundImage =
                   effectiveTileType === 5 ? undefined :
                   effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
+                  effectiveTileType === 6 && breakableRockFallbackUrl ? `url(${breakableRockFallbackUrl})` :
                   atlasSprite ? `url(${atlasSprite})` :
                   (canUseRefSprite && refSprite) ? `url(${refSprite})` :
                   effectiveTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :

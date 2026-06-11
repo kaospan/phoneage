@@ -32,7 +32,7 @@ interface Game2DProps {
         case 10: return "⬅️"; // arrow left
         case 4: return "💧"; // water
         case 5: return ""; // void
-        case 6: return "💎"; // breakable rock
+        case 6: return "╳"; // breakable rock
         case 11: return "⬍"; // up-down arrow
         case 12: return "⬌"; // left-right arrow
         case 13: return "✚"; // omnidirectional arrow
@@ -61,7 +61,7 @@ interface Game2DProps {
         case 13: return "bg-amber-800"; // arrows
         case 4: return "bg-blue-400"; // water
         case 5: return "bg-sky-400"; // void
-        case 6: return "bg-cyan-400"; // breakable rock
+        case 6: return "bg-amber-700 text-amber-100"; // breakable rock
         default: return "bg-stone-300";
       }
     };
