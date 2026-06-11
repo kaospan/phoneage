@@ -29,6 +29,7 @@ interface GameSprite2DProps {
 type LevelSpriteAtlas = {
   tileSprites: Record<number, string>;
   heroSprite?: string;
+  boardBackground?: string;
   status: string;
   confidence?: number;
 };
@@ -322,6 +323,7 @@ export function GameSprite2D({
       setLevelAtlas((prev) => ({
         tileSprites: prev?.tileSprites ?? {},
         heroSprite: prev?.heroSprite,
+        boardBackground: prev?.boardBackground,
         status: "Building sprites...",
         confidence: prev?.confidence,
       }));
@@ -382,6 +384,7 @@ export function GameSprite2D({
           setLevelAtlas((prev) => ({
             tileSprites: prev?.tileSprites ?? {},
             heroSprite: prev?.heroSprite,
+            boardBackground: prev?.boardBackground,
             status: "Sprite mode: grid detect failed (using reference sprites)",
             confidence: prev?.confidence,
           }));
@@ -413,8 +416,6 @@ export function GameSprite2D({
               const raw = atlasGrid[r]?.[c];
               if (raw === undefined) continue;
               const tileType = atlasGoalCaveKeys.has(`${c},${r}`) ? 3 : raw;
-              // Void is handled separately in sprite mode (transparent).
-              if (tileType === 5) continue;
               // Start cave (18) is synthetic; never sample it from the screenshot or we'll capture the hero.
               if (tileType === 18) continue;
               if (!sampleByType.has(tileType)) sampleByType.set(tileType, { row: r, col: c });
@@ -589,6 +590,7 @@ export function GameSprite2D({
               setLevelAtlas((prev) => ({
                 tileSprites: prev?.tileSprites ?? {},
                 heroSprite: prev?.heroSprite,
+                boardBackground: prev?.boardBackground,
                 status: `Sprite mode: bad atlas crop (floor too dark) - using reference sprites`,
                 confidence: det.confidence,
               }));
@@ -697,6 +699,7 @@ export function GameSprite2D({
         setLevelAtlas({
           tileSprites,
           heroSprite,
+          boardBackground: normalizedUrl,
           status: usedDosGridFallback
             ? "Sprites ready (DOS grid fallback)"
             : allowAtlas
@@ -709,6 +712,7 @@ export function GameSprite2D({
         setLevelAtlas((prev) => ({
           tileSprites: prev?.tileSprites ?? {},
           heroSprite: prev?.heroSprite,
+          boardBackground: prev?.boardBackground,
           status: "Sprite mode: failed to build sprites (using reference sprites)",
           confidence: prev?.confidence,
         }));
@@ -792,6 +796,8 @@ export function GameSprite2D({
   const startCaveFallbackUrl = useMemo(() => getStartCaveSpriteFallback(), []);
   const startCaveSpriteUrl = levelAtlas?.tileSprites?.[3] ?? startCaveFallbackUrl;
   const goalCaveFallbackUrl = useMemo(() => referenceSpriteUrls.cave, []);
+  const boardBackgroundUrl = levelAtlas?.boardBackground ?? levelImageUrl ?? null;
+  const useScreenshotBase = Boolean(boardBackgroundUrl);
 
   return (
     <div
@@ -802,7 +808,7 @@ export function GameSprite2D({
       ].join(" ")}
       style={{
         // Outside the board perimeter we show the original level screenshot for nostalgia.
-        // Inside the board, void cells are transparent but sit on a black board background.
+        // Inside the board, the normalized screenshot is also used as the visual base.
         backgroundColor: "black",
         backgroundImage: levelImageUrl ? `url(${levelImageUrl})` : undefined,
         backgroundRepeat: "no-repeat",
@@ -825,8 +831,7 @@ export function GameSprite2D({
       >
         <div
           className={[
-            // The board itself is always black so void reads as empty even if the screenshot has detail.
-            "grid gap-0 bg-black",
+            "grid gap-0",
             fullBleed ? "rounded-none" : "rounded-lg",
           ].join(" ")}
           style={{
@@ -834,6 +839,11 @@ export function GameSprite2D({
             gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
             width: "100%",
             height: "100%",
+            backgroundColor: "black",
+            backgroundImage: boardBackgroundUrl ? `url(${boardBackgroundUrl})` : undefined,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+            backgroundSize: "100% 100%",
             imageRendering: "pixelated",
             // Full grid frame (rows×cols): inner black border + subtle outer highlight
             // so the whole board reads as a bounded rectangle even on black outside.
@@ -856,17 +866,30 @@ export function GameSprite2D({
               const isDirectionalArrowTile = displayTileType >= 7 && displayTileType <= 13;
               // Keep arrow hidden while the player occupies that tile (DOS behavior feel).
               const effectiveTileType = isPlayer && isDirectionalArrowTile ? 0 : displayTileType;
-              const arrowVector = isDirectionalArrowTile && !isPlayer ? renderArrowVector(displayTileType) : null;
+              const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
+              const arrowVector = effectiveIsArrow && !isPlayer ? renderArrowVector(effectiveTileType) : null;
+              const originalTileType = atlasGoalCaveKeys.has(`${x},${y}`) ? 3 : (sourceGrid[y]?.[x] ?? tileType);
+              const originalIsArrow = originalTileType >= 7 && originalTileType <= 13;
+              const playerStartNeedsCleanup =
+                Boolean(
+                  playerStart &&
+                  playerStart.x === x &&
+                  playerStart.y === y &&
+                  localPlayer &&
+                  (localPlayer.pos.x !== x || localPlayer.pos.y !== y)
+                );
+              const tileChangedFromScreenshot = effectiveTileType !== originalTileType;
+              const shouldPaintStaticTile =
+                !useScreenshotBase ||
+                effectiveIsArrow ||
+                originalIsArrow ||
+                tileChangedFromScreenshot ||
+                playerStartNeedsCleanup;
 
-              const atlasSprite = isDirectionalArrowTile ? undefined : levelAtlas?.tileSprites?.[effectiveTileType];
+              const atlasSprite = effectiveIsArrow ? undefined : levelAtlas?.tileSprites?.[effectiveTileType];
               const refSprite = latestByType.get(effectiveTileType)?.imageData;
-              const canUseRefSprite = !isDirectionalArrowTile;
-              // Sprite mode policy (strict):
-              // - If the cell is void (5), never use sampled/reference art.
-              // - Keep the tile transparent so void stays blank and photo background colors
-              //   cannot "bleed" into gameplay semantics.
-                const backgroundImage =
-                  effectiveTileType === 5 ? undefined :
+              const canUseRefSprite = !effectiveIsArrow;
+              const staticTileBackgroundImage =
                   effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
                   effectiveTileType === 3 && goalCaveFallbackUrl ? `url(${goalCaveFallbackUrl})` :
                   effectiveTileType === 6 && breakableRockFallbackUrl ? `url(${breakableRockFallbackUrl})` :
@@ -877,8 +900,10 @@ export function GameSprite2D({
                   effectiveTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
                   effectiveTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
                   undefined;
+              const backgroundImage = shouldPaintStaticTile ? staticTileBackgroundImage : undefined;
 
               const fallback =
+                !shouldPaintStaticTile ? "transparent" :
                 effectiveTileType === 5 ? "transparent" :
                 effectiveTileType === 0 ? "rgba(255,255,255,0.08)" :
                 effectiveTileType === 4 ? "rgba(30,144,255,0.55)" :
@@ -891,7 +916,7 @@ export function GameSprite2D({
                 effectiveTileType === 17 ? "rgba(20,110,35,0.80)" :
                 effectiveTileType === 18 ? "rgba(0,0,0,0.88)" :
                 effectiveTileType === 20 ? "rgba(251,191,36,0.78)" :
-                (effectiveTileType >= 7 && effectiveTileType <= 13) ? "rgba(160,120,80,0.88)" :
+                effectiveIsArrow ? "rgba(160,120,80,0.88)" :
                 "rgba(255,255,255,0.06)";
 
               return (
@@ -919,7 +944,7 @@ export function GameSprite2D({
                   }}
                   title={`(${y},${x}) = ${tileType}`}
                 >
-                  {edge?.any && (
+                  {edge?.any && !useScreenshotBase && (
                     <div
                       className="pointer-events-none absolute inset-0"
                       style={{
@@ -959,7 +984,7 @@ export function GameSprite2D({
                       />
                     ) : renderHeroFallback()
                   )}
-                  {arrowVector && !backgroundImage && (
+                  {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       {arrowVector}
                     </div>
