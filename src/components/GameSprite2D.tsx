@@ -845,10 +845,9 @@ export function GameSprite2D({
             backgroundPosition: "center",
             backgroundSize: "100% 100%",
             imageRendering: "pixelated",
-            // Full grid frame (rows×cols): inner black border + subtle outer highlight
-            // so the whole board reads as a bounded rectangle even on black outside.
-            boxShadow:
-              "inset 0 0 0 3px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.08)",
+            boxShadow: useScreenshotBase
+              ? undefined
+              : "inset 0 0 0 3px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.08)",
           }}
         >
           {grid.map((row, y) =>
@@ -994,7 +993,7 @@ export function GameSprite2D({
             })
           )}
         </div>
-        {levelAtlas?.status && (
+        {levelAtlas?.status && !useScreenshotBase && (
           <div className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-[11px] text-white/70">
             {levelAtlas.status}
           </div>
