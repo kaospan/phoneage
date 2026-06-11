@@ -632,9 +632,9 @@ const ArrowTile = ({
   const lastTapTimeRef = useRef<number>(0);
 
   const rotations: { [key: number]: number } = {
-    7: 0,           // down - points in +Z direction
+    7: Math.PI,     // up - points in -Z direction
     8: -Math.PI / 2, // right - points in +X direction
-    9: Math.PI,     // up - points in -Z direction
+    9: 0,           // down - points in +Z direction
     10: Math.PI / 2 // left - points in -X direction
   };
 

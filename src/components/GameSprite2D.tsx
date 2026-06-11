@@ -89,9 +89,9 @@ const renderArrowVector = (tileType: number) => {
   const omniPath = "M16 2 L26 12 L21 12 L21 13 L24 13 L24 8 L31 16 L24 24 L24 19 L21 19 L21 20 L26 20 L16 30 L6 20 L11 20 L11 19 L8 19 L8 24 L1 16 L8 8 L8 13 L11 13 L11 12 L6 12 Z";
 
   const shape =
-    tileType === 7 ? <OneArrow dir="down" /> :
+    tileType === 7 ? <OneArrow dir="up" /> :
     tileType === 8 ? <OneArrow dir="right" /> :
-    tileType === 9 ? <OneArrow dir="up" /> :
+    tileType === 9 ? <OneArrow dir="down" /> :
     tileType === 10 ? <OneArrow dir="left" /> :
     tileType === 11 ? <GlyphPath d={doubleVerticalPath} /> :
     tileType === 12 ? <GlyphPath d={doubleHorizontalPath} /> :

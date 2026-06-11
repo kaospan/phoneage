@@ -26,9 +26,9 @@ interface Game2DProps {
         case 15: return "🔑"; // green key
         case 16: return "🔒"; // red lock
         case 17: return "🔒"; // green lock
-        case 7: return "⬇️"; // arrow down
+        case 7: return "⬆️"; // arrow up
         case 8: return "➡️"; // arrow right
-        case 9: return "⬆️"; // arrow up
+        case 9: return "⬇️"; // arrow down
         case 10: return "⬅️"; // arrow left
         case 4: return "💧"; // water
         case 5: return ""; // void
