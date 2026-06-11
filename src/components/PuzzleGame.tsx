@@ -1945,13 +1945,6 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        {isTimeUp && levelTimeLimitSeconds && (
-          <div className="absolute inset-0 z-[70] pointer-events-none flex items-start justify-center">
-            <div className="mt-24 rounded-2xl border border-red-200/60 bg-red-700/90 px-6 py-3 text-center text-white shadow-2xl">
-              <div className="text-lg font-black tracking-[0.18em]">TIME'S UP!</div>
-            </div>
-          </div>
-        )}
         <TouchControls
           onMove={queueMove}
           disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart}
@@ -2741,10 +2734,47 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        {hudMessage && !isComplete && (
+        {hudMessage && !isComplete && !isTimeUp && (
           <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 -translate-x-1/2 px-4">
             <div className="rounded-full border border-white/10 bg-black/55 px-4 py-2 text-sm font-medium text-stone-100 shadow-xl backdrop-blur-md">
               {hudMessage}
+            </div>
+          </div>
+        )}
+        {isTimeUp && levelTimeLimitSeconds && (
+          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
+            <div className="pointer-events-auto w-full max-w-xl rounded-[28px] border border-red-200/20 bg-stone-950/92 p-6 text-stone-50 shadow-2xl">
+              <div className="text-center">
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-red-300">
+                  Time Expired
+                </div>
+                <div className="mt-2 text-3xl font-black uppercase tracking-[0.14em] text-red-50 sm:text-4xl">
+                  Time&apos;s Up!
+                </div>
+                <div className="mt-3 text-sm font-semibold text-stone-300">
+                  Level {currentLevel.id} stopped at {moves} moves.
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Run Moves</div>
+                  <div className="mt-2 text-3xl font-black">{moves}</div>
+                </div>
+                <div className="rounded-2xl border border-red-300/20 bg-red-500/10 p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-red-200/80">Clock</div>
+                  <div className="mt-2 text-3xl font-black text-red-100">0:00</div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  onClick={resetLevel}
+                  className="bg-red-300 text-stone-950 hover:bg-red-200"
+                >
+                  Replay Level
+                </Button>
+              </div>
             </div>
           </div>
         )}
