@@ -817,13 +817,7 @@ export function GameSprite2D({
         "items-center justify-center",
       ].join(" ")}
       style={{
-        // Outside the board perimeter we show the original level screenshot for nostalgia.
-        // Inside the board, the normalized screenshot is also used as the visual base.
         backgroundColor: "black",
-        backgroundImage: levelImageUrl ? `url(${levelImageUrl})` : undefined,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "cover",
       }}
       onClick={() => onCancelSelection?.()}
     >
@@ -864,7 +858,16 @@ export function GameSprite2D({
             row.map((cell, x) => {
               const isCave = goalCaveKeys.has(`${x},${y}`);
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
-              const isPlayerWithoutSprite = isPlayer && useScreenshotBase && !levelAtlas?.heroSprite;
+              const isPlayerAtScreenshotStart =
+                Boolean(
+                  isPlayer &&
+                  useScreenshotBase &&
+                  playerStart &&
+                  playerStart.x === x &&
+                  playerStart.y === y
+                );
+              const suppressPlayerOverlay =
+                isPlayer && useScreenshotBase && (!levelAtlas?.heroSprite || isPlayerAtScreenshotStart);
               const tileType = isCave ? 3 : cell;
               // If the player is standing on the start-marker cave (18), render the base tile as floor
               // so the cave appears only after the hero moves off the spawn tile (nostalgia behavior).
@@ -877,7 +880,6 @@ export function GameSprite2D({
               // Keep arrow hidden while the player occupies that tile (DOS behavior feel).
               const effectiveTileType = isPlayer && isDirectionalArrowTile ? 0 : displayTileType;
               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
-              const arrowVector = effectiveIsArrow && !isPlayer ? renderArrowVector(effectiveTileType) : null;
               const originalTileType = atlasGoalCaveKeys.has(`${x},${y}`) ? 3 : (sourceGrid[y]?.[x] ?? tileType);
               const originalIsArrow = originalTileType >= 7 && originalTileType <= 13;
               const playerStartNeedsCleanup =
@@ -889,11 +891,15 @@ export function GameSprite2D({
                   (localPlayer.pos.x !== x || localPlayer.pos.y !== y)
                 );
               const tileChangedFromScreenshot = effectiveTileType !== originalTileType;
+              const arrowMatchesScreenshot =
+                useScreenshotBase && effectiveIsArrow && originalIsArrow && !tileChangedFromScreenshot;
+              const arrowVector =
+                effectiveIsArrow && !isPlayer && !arrowMatchesScreenshot ? renderArrowVector(effectiveTileType) : null;
               const shouldPaintStaticTile =
-                !isPlayerWithoutSprite && (
+                !suppressPlayerOverlay && (
                   !useScreenshotBase ||
-                  effectiveIsArrow ||
-                  originalIsArrow ||
+                  (effectiveIsArrow && !arrowMatchesScreenshot) ||
+                  (originalIsArrow && tileChangedFromScreenshot) ||
                   tileChangedFromScreenshot ||
                   playerStartNeedsCleanup
                 );
@@ -985,7 +991,7 @@ export function GameSprite2D({
                       {y}
                     </div>
                   )}
-                  {isPlayer && levelAtlas?.heroSprite && (
+                  {isPlayer && levelAtlas?.heroSprite && !isPlayerAtScreenshotStart && (
                       <img
                         src={levelAtlas.heroSprite}
                         alt="Hero"
