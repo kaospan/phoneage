@@ -231,32 +231,32 @@ const createArrowGlyphTexture = (kind: ArrowGlyphKind, accentColor: string) => {
       ctx.lineTo(-22, 50);
     });
   } else {
-    drawPathGlyph(0.84, () => {
-      ctx.moveTo(0, -88);
-      ctx.lineTo(52, -36);
-      ctx.lineTo(26, -36);
-      ctx.lineTo(26, -18);
-      ctx.lineTo(36, -18);
-      ctx.lineTo(36, -52);
-      ctx.lineTo(88, 0);
-      ctx.lineTo(36, 52);
-      ctx.lineTo(36, 18);
-      ctx.lineTo(26, 18);
-      ctx.lineTo(26, 36);
-      ctx.lineTo(52, 36);
-      ctx.lineTo(0, 88);
-      ctx.lineTo(-52, 36);
-      ctx.lineTo(-26, 36);
-      ctx.lineTo(-26, 18);
-      ctx.lineTo(-36, 18);
-      ctx.lineTo(-36, 52);
-      ctx.lineTo(-88, 0);
-      ctx.lineTo(-36, -52);
-      ctx.lineTo(-36, -18);
-      ctx.lineTo(-26, -18);
-      ctx.lineTo(-26, -36);
-      ctx.lineTo(-52, -36);
-    }, false);
+    drawPathGlyph(0.86, () => {
+      ctx.moveTo(-18, -18);
+      ctx.lineTo(-18, -64);
+      ctx.lineTo(-48, -64);
+      ctx.lineTo(0, -112);
+      ctx.lineTo(48, -64);
+      ctx.lineTo(18, -64);
+      ctx.lineTo(18, -18);
+      ctx.lineTo(64, -18);
+      ctx.lineTo(64, -48);
+      ctx.lineTo(112, 0);
+      ctx.lineTo(64, 48);
+      ctx.lineTo(64, 18);
+      ctx.lineTo(18, 18);
+      ctx.lineTo(18, 64);
+      ctx.lineTo(48, 64);
+      ctx.lineTo(0, 112);
+      ctx.lineTo(-48, 64);
+      ctx.lineTo(-18, 64);
+      ctx.lineTo(-18, 18);
+      ctx.lineTo(-64, 18);
+      ctx.lineTo(-64, 48);
+      ctx.lineTo(-112, 0);
+      ctx.lineTo(-64, -48);
+      ctx.lineTo(-64, -18);
+    });
   }
 
   const texture = new THREE.CanvasTexture(canvas);

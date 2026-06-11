@@ -35,7 +35,7 @@ interface Game2DProps {
         case 6: return "💎"; // breakable rock
         case 11: return "⬍"; // up-down arrow
         case 12: return "⬌"; // left-right arrow
-        case 13: return "✥"; // omnidirectional arrow
+        case 13: return "✚"; // omnidirectional arrow
         default: return "";
       }
     };
