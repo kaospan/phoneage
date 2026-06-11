@@ -7,6 +7,10 @@ import {
   Expand,
   LayoutDashboard,
   Map as MapIcon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Play,
   RotateCcw,
   Sparkles,
@@ -352,6 +356,8 @@ export const PuzzleGame = () => {
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [isTimerArmed, setIsTimerArmed] = useState(true);
   const [hasStartedGame, setHasStartedGame] = useState(false);
+  const [leftShellPanelOpen, setLeftShellPanelOpen] = useState(false);
+  const [rightShellPanelOpen, setRightShellPanelOpen] = useState(false);
   const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
@@ -1869,6 +1875,16 @@ export const PuzzleGame = () => {
 
     const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite";
     const desktopShellActive = !useSplitHud && !shouldRotateGate;
+    const desktopTopInsetClass =
+      leftShellPanelOpen && rightShellPanelOpen ? "xl:left-[22rem] xl:right-[22rem]" :
+      leftShellPanelOpen ? "xl:left-[22rem] xl:right-4" :
+      rightShellPanelOpen ? "xl:left-4 xl:right-[22rem]" :
+      "xl:left-4 xl:right-4";
+    const desktopBoardInsetClass =
+      leftShellPanelOpen && rightShellPanelOpen ? "xl:px-[22rem]" :
+      leftShellPanelOpen ? "xl:pl-[22rem] xl:pr-3" :
+      rightShellPanelOpen ? "xl:pl-3 xl:pr-[22rem]" :
+      "xl:px-3";
     const hasNextLevel = currentLevelIndex < allLevels.length - 1;
     const nextLevelLocked = !isAdminMode && hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
     const nextLevelTitle = !hasNextLevel
@@ -1956,8 +1972,44 @@ export const PuzzleGame = () => {
 
         {desktopShellActive && (
           <>
+            {!leftShellPanelOpen && (
+              <Button
+                onClick={() => setLeftShellPanelOpen(true)}
+                variant="ghost"
+                size="sm"
+                className="absolute left-4 top-[calc(env(safe-area-inset-top)+5.25rem)] z-50 hidden h-12 w-12 rounded-2xl border border-amber-200/25 bg-[#120d09]/82 p-0 text-amber-100 shadow-[0_12px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl hover:bg-[#23170f] xl:inline-flex"
+                title="Show adventure panel"
+                aria-label="Show adventure panel"
+              >
+                <PanelLeftOpen className="h-5 w-5" />
+              </Button>
+            )}
+            {!rightShellPanelOpen && (
+              <Button
+                onClick={() => setRightShellPanelOpen(true)}
+                variant="ghost"
+                size="sm"
+                className="absolute right-4 top-[calc(env(safe-area-inset-top)+5.25rem)] z-50 hidden h-12 w-12 rounded-2xl border border-sky-200/25 bg-[#09161a]/82 p-0 text-sky-100 shadow-[0_12px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl hover:bg-[#10242a] xl:inline-flex"
+                title="Show explorer panel"
+                aria-label="Show explorer panel"
+              >
+                <PanelRightOpen className="h-5 w-5" />
+              </Button>
+            )}
+
+            {leftShellPanelOpen && (
             <aside className="pointer-events-none absolute inset-y-4 left-4 z-40 hidden w-80 xl:flex xl:flex-col xl:gap-4">
               <div className="pointer-events-auto overflow-hidden rounded-[32px] border border-[#8d6e4f]/55 bg-[#120d09]/78 shadow-[0_24px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                <Button
+                  onClick={() => setLeftShellPanelOpen(false)}
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-3 top-3 z-20 h-10 w-10 rounded-2xl border border-white/10 bg-black/35 p-0 text-stone-100 hover:bg-white/10"
+                  title="Hide adventure panel"
+                  aria-label="Hide adventure panel"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
                 <div className="relative h-44 overflow-hidden border-b border-white/10">
                   <div className="absolute inset-0 bg-[#0b0907]" />
                   <img
@@ -2078,9 +2130,21 @@ export const PuzzleGame = () => {
                 </div>
               </div>
             </aside>
+            )}
 
+            {rightShellPanelOpen && (
             <aside className="pointer-events-none absolute inset-y-4 right-4 z-40 hidden w-80 xl:flex xl:flex-col xl:gap-4">
               <div className="pointer-events-auto rounded-[32px] border border-[#5a7f88]/40 bg-[#09161a]/76 p-4 shadow-[0_24px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                <Button
+                  onClick={() => setRightShellPanelOpen(false)}
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-3 top-3 z-20 h-10 w-10 rounded-2xl border border-white/10 bg-black/35 p-0 text-stone-100 hover:bg-white/10"
+                  title="Hide explorer panel"
+                  aria-label="Hide explorer panel"
+                >
+                  <PanelRightClose className="h-4 w-4" />
+                </Button>
                 <div className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.02)_100%)] p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -2174,6 +2238,7 @@ export const PuzzleGame = () => {
                 </div>
               </div>
             </aside>
+            )}
           </>
         )}
 
@@ -2401,7 +2466,7 @@ export const PuzzleGame = () => {
           </div>
         ) : (
           <div
-            className="absolute left-4 right-4 z-50 xl:left-[22rem] xl:right-[22rem]"
+            className={`absolute left-4 right-4 z-50 ${desktopTopInsetClass}`}
             style={{ top: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
           >
             <div className="rounded-[28px] border border-[#7b6043]/60 bg-[#1c140e]/78 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl">
@@ -2580,7 +2645,7 @@ export const PuzzleGame = () => {
           data-touch-controls-target
           className={[
             "relative z-20 w-full min-h-0 flex-1",
-            desktopShellActive ? "px-3 pb-5 pt-24 xl:px-[22rem] xl:pb-8" : "",
+            desktopShellActive ? `px-3 pb-5 pt-24 xl:pb-8 ${desktopBoardInsetClass}` : "",
           ].join(" ")}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
