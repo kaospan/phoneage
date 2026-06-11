@@ -1589,7 +1589,7 @@ const InstancedMeshSet = ({
   );
 };
 
-// Animated moonlit sky background - floats across entire scene
+// Animated sky background - floats across entire scene
 const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; gridHeight: number }) => {
   const cloudGroupRef = useRef<THREE.Group>(null);
   const cloudRefs = useRef<THREE.Group[]>([]);
@@ -1681,26 +1681,6 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
           emissive="#000000"
           emissiveIntensity={0}
           roughness={0.9}
-        />
-      </mesh>
-
-      {/* Moonlight - positioned off to the side */}
-      <pointLight
-        position={[10, 3, -10]}
-        intensity={2}
-        color="#b8c5d6"
-        distance={50}
-        decay={1.5}
-      />
-
-      {/* Moon */}
-      <mesh position={[10, 1, -10]}>
-        <sphereGeometry args={[0.8, 16, 16]} />
-        <meshStandardMaterial
-          color="#f5f5f5"
-          emissive="#fff8dc"
-          emissiveIntensity={1.2}
-          roughness={0.7}
         />
       </mesh>
 
