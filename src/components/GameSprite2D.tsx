@@ -1004,11 +1004,6 @@ export function GameSprite2D({
             })
           )}
         </div>
-        {levelAtlas?.status && !useScreenshotBase && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-[11px] text-white/70">
-            {levelAtlas.status}
-          </div>
-        )}
       </div>
     </div>
   );
