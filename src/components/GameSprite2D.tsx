@@ -113,9 +113,28 @@ const renderArrowVector = (tileType: number) => {
   );
 };
 
+const renderHeroFallback = () => (
+  <svg
+    viewBox="0 0 64 64"
+    className="absolute inset-[8%] h-[84%] w-[84%]"
+    aria-label="Hero"
+    style={{
+      filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 5px rgba(0,0,0,0.72))",
+      imageRendering: "pixelated",
+    }}
+  >
+    <path d="M20 40 L20 32 L25 27 L34 27 L43 32 L47 42 L42 49 L28 49 Z" fill="#10b981" stroke="#063b2a" strokeWidth="4" strokeLinejoin="round" />
+    <path d="M39 27 L45 19 L54 19 L58 24 L56 31 L47 31 Z" fill="#12d68a" stroke="#063b2a" strokeWidth="4" strokeLinejoin="round" />
+    <path d="M21 36 L10 30 L7 24 L12 27 L24 31 Z" fill="#0a8f61" stroke="#063b2a" strokeWidth="4" strokeLinejoin="round" />
+    <path d="M30 47 L27 58 M42 46 L47 57" stroke="#063b2a" strokeWidth="5" strokeLinecap="round" />
+    <circle cx="52" cy="23" r="2.2" fill="#f8fafc" />
+    <path d="M28 33 L35 33 M30 39 L40 39" stroke="#85f7bf" strokeWidth="3" strokeLinecap="round" opacity="0.75" />
+  </svg>
+);
+
 const measureDinoCrop = (canvas: HTMLCanvasElement) => {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return { greenPixels: 0, width: 0, height: 0 };
+  if (!ctx) return { greenPixels: 0, width: 0, height: 0, minX: 0, minY: 0, maxX: -1, maxY: -1 };
 
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   let greenPixels = 0;
@@ -143,6 +162,10 @@ const measureDinoCrop = (canvas: HTMLCanvasElement) => {
     greenPixels,
     width: maxX >= minX ? maxX - minX + 1 : 0,
     height: maxY >= minY ? maxY - minY + 1 : 0,
+    minX,
+    minY,
+    maxX,
+    maxY,
   };
 };
 
@@ -150,8 +173,18 @@ const scoreDinoCrop = (canvas: HTMLCanvasElement) => measureDinoCrop(canvas).gre
 
 const hasUsableDinoShape = (canvas: HTMLCanvasElement, minPixels: number) => {
   const measurement = measureDinoCrop(canvas);
+  const total = Math.max(1, canvas.width * canvas.height);
+  const greenFraction = measurement.greenPixels / total;
+  const edgeTouches = [
+    measurement.minX <= 1,
+    measurement.minY <= 1,
+    measurement.maxX >= canvas.width - 2,
+    measurement.maxY >= canvas.height - 2,
+  ].filter(Boolean).length;
   return (
     measurement.greenPixels >= minPixels &&
+    greenFraction <= 0.18 &&
+    edgeTouches < 2 &&
     measurement.width >= Math.round(canvas.width * 0.14) &&
     measurement.height >= Math.round(canvas.height * 0.18)
   );
@@ -337,9 +370,12 @@ export function GameSprite2D({
         const buildDosGridFallback = () => {
           if (rows !== 12 || cols !== 20) return null;
           if (dsW < 900 || dsH < 600) return null;
+          const targetAspect = cols / rows;
+          const imageAspect = dsW / dsH;
+          if (Math.abs(imageAspect - targetAspect) / targetAspect > 0.035) return null;
 
           const cell = dsW / cols;
-          if (dsH < cell * (rows - 1)) return null;
+          if (dsH < cell * rows) return null;
 
           return {
             rows,
@@ -386,6 +422,19 @@ export function GameSprite2D({
         const offsetY = Math.max(0, Math.round(det.offsetY * scaleY));
         const cellW = Math.max(1, Math.round(det.cellWidth * scaleX));
         const cellH = Math.max(1, Math.round(det.cellHeight * scaleY));
+        const frameW = Math.max(1, Math.round(cellW * cols));
+        const frameH = Math.max(1, Math.round(cellH * rows));
+        const frameFitsImage = offsetX + frameW <= img.width + 2 && offsetY + frameH <= img.height + 2;
+        if (!frameFitsImage) {
+          setLevelAtlas((prev) => ({
+            tileSprites: prev?.tileSprites ?? {},
+            heroSprite: prev?.heroSprite,
+            boardBackground: undefined,
+            status: "Sprite mode: rejected bad screenshot crop (using reference sprites)",
+            confidence: det.confidence,
+          }));
+          return;
+        }
 
         // Draw full-res source once.
         const srcCanvas = document.createElement("canvas");
@@ -436,29 +485,6 @@ export function GameSprite2D({
             sw,
             sh,
           );
-        };
-
-        const createBoardBackground = () => {
-          const frameW = Math.max(1, Math.min(srcCanvas.width - offsetX, Math.round(cellW * cols)));
-          const frameH = Math.max(1, Math.min(srcCanvas.height - offsetY, Math.round(cellH * rows)));
-          const boardCanvas = document.createElement("canvas");
-          boardCanvas.width = Math.max(1, cols * outW);
-          boardCanvas.height = Math.max(1, rows * outH);
-          const boardCtx = boardCanvas.getContext("2d");
-          if (!boardCtx) return undefined;
-          boardCtx.imageSmoothingEnabled = false;
-          boardCtx.drawImage(
-            srcCanvas,
-            offsetX,
-            offsetY,
-            frameW,
-            frameH,
-            0,
-            0,
-            boardCanvas.width,
-            boardCanvas.height,
-          );
-          return boardCanvas.toDataURL("image/png");
         };
 
         const minDinoPixels = Math.round(outW * outH * 0.012);
@@ -709,7 +735,7 @@ export function GameSprite2D({
         setLevelAtlas({
           tileSprites,
           heroSprite,
-          boardBackground: createBoardBackground(),
+          boardBackground: undefined,
           status: usedDosGridFallback
             ? "Sprites ready (DOS grid fallback)"
             : allowAtlas
@@ -891,22 +917,20 @@ export function GameSprite2D({
                   (localPlayer.pos.x !== x || localPlayer.pos.y !== y)
                 );
               const tileChangedFromScreenshot = effectiveTileType !== originalTileType;
-              const arrowMatchesScreenshot =
-                useScreenshotBase && effectiveIsArrow && originalIsArrow && !tileChangedFromScreenshot;
               const arrowVector =
-                effectiveIsArrow && !isPlayer && !arrowMatchesScreenshot ? renderArrowVector(effectiveTileType) : null;
+                effectiveIsArrow && !isPlayer ? renderArrowVector(effectiveTileType) : null;
               const shouldPaintStaticTile =
                 !suppressPlayerOverlay && (
                   !useScreenshotBase ||
-                  (effectiveIsArrow && !arrowMatchesScreenshot) ||
+                  effectiveIsArrow ||
                   (originalIsArrow && tileChangedFromScreenshot) ||
                   tileChangedFromScreenshot ||
                   playerStartNeedsCleanup
                 );
 
-              const atlasSprite = effectiveIsArrow ? undefined : levelAtlas?.tileSprites?.[effectiveTileType];
+              const atlasSprite = (effectiveIsArrow || effectiveTileType === 5) ? undefined : levelAtlas?.tileSprites?.[effectiveTileType];
               const refSprite = latestByType.get(effectiveTileType)?.imageData;
-              const canUseRefSprite = !effectiveIsArrow;
+              const canUseRefSprite = !effectiveIsArrow && effectiveTileType !== 5;
               const staticTileBackgroundImage =
                   effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
                   effectiveTileType === 3 && goalCaveFallbackUrl ? `url(${goalCaveFallbackUrl})` :
@@ -991,7 +1015,8 @@ export function GameSprite2D({
                       {y}
                     </div>
                   )}
-                  {isPlayer && levelAtlas?.heroSprite && !isPlayerAtScreenshotStart && (
+                  {isPlayer && !isPlayerAtScreenshotStart && (
+                    levelAtlas?.heroSprite ? (
                       <img
                         src={levelAtlas.heroSprite}
                         alt="Hero"
@@ -999,6 +1024,7 @@ export function GameSprite2D({
                         style={{ imageRendering: "pixelated" }}
                         draggable={false}
                       />
+                    ) : renderHeroFallback()
                   )}
                   {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
