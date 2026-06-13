@@ -102,8 +102,8 @@ interface SimulationState {
 
 // Camera zoom values (multipliers). Lower = closer / larger board. Higher = farther / smaller board.
 // The HUD shows percent as `Math.round((1 / zoomFactor) * 100)` to match existing semantics.
-// Add extra zoom-in steps at the end so mobile/fullscreen can fill the viewport without clipping.
-const CAMERA_ZOOM_LEVELS = [1.16, 1.08, 1.0, 0.97, 0.93, 0.9, 0.86, 0.82, 0.78, 0.74] as const;
+// Add extra zoom-in steps at the end so laptop/fullscreen layouts can fill the viewport without clipping.
+const CAMERA_ZOOM_LEVELS = [1.16, 1.08, 1.0, 0.97, 0.93, 0.9, 0.86, 0.82, 0.78, 0.74, 0.7, 0.66] as const;
 const DEFAULT_CAMERA_ZOOM_INDEX = 4; // 0.93 => ~108% (desktop/tablet baseline)
 // Mobile baseline: default to ~122% (0.82) so tiles are readable on phones.
 const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = (() => {
@@ -185,8 +185,9 @@ const pickBestZoomIndexForContent = ({
   const k = 2 * Math.tan(fovRad / 2) * baseCameraHeight;
 
   // Small margin so tiles don't sit flush against the edges.
-  const needW = content.width * 1.08;
-  const needH = content.height * 1.08;
+  const margin = viewMode === "2d" ? 1.12 : 1.08;
+  const needW = content.width * margin;
+  const needH = content.height * margin;
 
   // Choose the most zoomed-in option that still fits the content.
   for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i -= 1) {
@@ -605,10 +606,10 @@ export const PuzzleGame = () => {
     return () => window.removeEventListener("resize", onResize as EventListener);
   }, []);
 
-  // Auto-fit zoom on mobile landscape + fullscreen layout so the board uses the available viewport.
+  // Auto-fit zoom on gameplay layouts so the board uses the available viewport.
   useLayoutEffect(() => {
+    if (!hasStartedGame) return;
     if (isBuilding) return;
-    if (!(isMobile || isFullscreenMode)) return;
     if (viewMode === "fps" || viewMode === "sprite") return;
     if (userZoomTouched) return;
     if (selectedArrow) return;
@@ -641,6 +642,7 @@ export const PuzzleGame = () => {
     cameraZoomIndex,
     currentLevel?.grid,
     fitRevision,
+    hasStartedGame,
     isBuilding,
     isFullscreenMode,
     isMobile,
@@ -2614,7 +2616,7 @@ export const PuzzleGame = () => {
           data-touch-controls-target
           className={[
             "relative z-20 w-full min-h-0 flex-1",
-            desktopShellActive ? `px-3 pb-5 pt-24 xl:pb-8 ${desktopBoardInsetClass}` : "",
+            desktopShellActive ? `px-2 pb-2 pt-20 xl:pb-3 ${desktopBoardInsetClass}` : "",
           ].join(" ")}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
