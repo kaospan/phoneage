@@ -288,11 +288,19 @@ export function GameSprite2D({
   const cols = grid[0]?.length ?? 0;
   const sourceGrid = atlasSourceGrid ?? grid;
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const renderBaselineRef = useRef<{ key: string; grid: number[][] } | null>(null);
   const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
   const atlasGrid = useMemo(() => sourceGrid.map((r) => [...r]), [sourceGrid]);
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
   const atlasGoalCaveKeys = useMemo(() => buildGoalCaveKeySet(sourceGrid, cavePos), [sourceGrid, cavePos]);
+  const renderBaselineKey = `${levelImageUrl ?? "no-image"}|${rows}x${cols}|${cavePos.x},${cavePos.y}|${playerStart?.x ?? -1},${playerStart?.y ?? -1}`;
+  if (renderBaselineRef.current?.key !== renderBaselineKey) {
+    renderBaselineRef.current = {
+      key: renderBaselineKey,
+      grid: grid.map((row) => [...row]),
+    };
+  }
 
   // Mark board edges (modern + readable): a cell is on the edge if it is non-void and
   // at least one 4-neighbor is void or out-of-bounds.
@@ -917,6 +925,9 @@ export function GameSprite2D({
               const effectiveTileType = isPlayer && isDirectionalArrowTile ? 0 : displayTileType;
               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
               const originalTileType = atlasGoalCaveKeys.has(`${x},${y}`) ? 3 : (sourceGrid[y]?.[x] ?? tileType);
+              const baselineTileType = goalCaveKeys.has(`${x},${y}`)
+                ? 3
+                : (renderBaselineRef.current?.grid[y]?.[x] ?? originalTileType);
               const originalIsArrow = originalTileType >= 7 && originalTileType <= 13;
               const playerStartNeedsCleanup =
                 Boolean(
@@ -926,7 +937,7 @@ export function GameSprite2D({
                   localPlayer &&
                   (localPlayer.pos.x !== x || localPlayer.pos.y !== y)
                 );
-              const tileChangedFromScreenshot = effectiveTileType !== originalTileType;
+              const tileChangedFromScreenshot = effectiveTileType !== baselineTileType;
               const shouldPaintStaticTile =
                 !suppressPlayerOverlay && (
                   useScreenshotBase
