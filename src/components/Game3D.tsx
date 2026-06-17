@@ -53,6 +53,7 @@ const FPS_CHASE_ANGLE_DEG = 45;
 const FPS_CHASE_HEIGHT =
   FPS_LOOK_HEIGHT +
   Math.tan((FPS_CHASE_ANGLE_DEG * Math.PI) / 180) * (FPS_CHASE_DISTANCE + FPS_LOOK_DISTANCE);
+const FPS_ZOOM_BASELINE_FACTOR = 0.66;
 
 const smoothstep = (edge0: number, edge1: number, value: number) => {
   const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
@@ -1766,19 +1767,24 @@ const CameraController = ({
     const playerX = playerPos.x + offsetX;
     const playerZ = playerPos.y + offsetZ;
     const forward = worldForwardByFacing[playerFacing];
+    const fpsZoomScale = zoomFactor / FPS_ZOOM_BASELINE_FACTOR;
+    const chaseDistance = FPS_CHASE_DISTANCE * fpsZoomScale;
+    const lookDistance = FPS_LOOK_DISTANCE * fpsZoomScale;
+    const lookHeight = FPS_LOOK_HEIGHT * fpsZoomScale;
+    const chaseHeight = FPS_CHASE_HEIGHT * fpsZoomScale;
 
     fpsCameraTargetRef.current.set(
-      playerX - forward.x * FPS_CHASE_DISTANCE,
-      FPS_CHASE_HEIGHT,
-      playerZ - forward.z * FPS_CHASE_DISTANCE
+      playerX - forward.x * chaseDistance,
+      chaseHeight,
+      playerZ - forward.z * chaseDistance
     );
     fpsLookTargetRef.current.set(
-      playerX + forward.x * FPS_LOOK_DISTANCE,
-      FPS_LOOK_HEIGHT,
-      playerZ + forward.z * FPS_LOOK_DISTANCE
+      playerX + forward.x * lookDistance,
+      lookHeight,
+      playerZ + forward.z * lookDistance
     );
     fpsLookCurrentRef.current.copy(fpsLookTargetRef.current);
-  }, [playerFacing, playerPos, offsetX, offsetZ, viewMode]);
+  }, [playerFacing, playerPos, offsetX, offsetZ, viewMode, zoomFactor]);
 
     useFrame((_, delta) => {
     // Camera settings based on view mode
@@ -1804,15 +1810,20 @@ const CameraController = ({
 
     if (isFps) {
       const forward = worldForwardByFacing[playerFacing];
+      const fpsZoomScale = zoomFactor / FPS_ZOOM_BASELINE_FACTOR;
+      const chaseDistance = FPS_CHASE_DISTANCE * fpsZoomScale;
+      const lookDistance = FPS_LOOK_DISTANCE * fpsZoomScale;
+      const lookHeight = FPS_LOOK_HEIGHT * fpsZoomScale;
+      const chaseHeight = FPS_CHASE_HEIGHT * fpsZoomScale;
       const targetPosition = new THREE.Vector3(
-        playerX - forward.x * FPS_CHASE_DISTANCE,
-        FPS_CHASE_HEIGHT,
-        playerZ - forward.z * FPS_CHASE_DISTANCE
+        playerX - forward.x * chaseDistance,
+        chaseHeight,
+        playerZ - forward.z * chaseDistance
       );
       const lookTarget = new THREE.Vector3(
-        playerX + forward.x * FPS_LOOK_DISTANCE,
-        FPS_LOOK_HEIGHT,
-        playerZ + forward.z * FPS_LOOK_DISTANCE
+        playerX + forward.x * lookDistance,
+        lookHeight,
+        playerZ + forward.z * lookDistance
       );
 
       const positionAlpha = 1 - Math.exp(-delta * 6);
@@ -1928,9 +1939,10 @@ export const Game3D = ({
   // Camera settings based on view mode
   const is2D = viewMode === '2d';
   const isFps = viewMode === 'fps';
+  const fpsZoomScale = zoomFactor / FPS_ZOOM_BASELINE_FACTOR;
   // Make 3D view more top-down and clearer
-  const initialCameraY = isFps ? FPS_CHASE_HEIGHT : (is2D ? 24 : 18) * zoomFactor;
-  const initialCameraZ = isFps ? FPS_CHASE_DISTANCE : (is2D ? 0.5 : 6) * zoomFactor;
+  const initialCameraY = isFps ? FPS_CHASE_HEIGHT * fpsZoomScale : (is2D ? 24 : 18) * zoomFactor;
+  const initialCameraZ = isFps ? FPS_CHASE_DISTANCE * fpsZoomScale : (is2D ? 0.5 : 6) * zoomFactor;
   const fov = isFps ? 72 : is2D ? 42 : 50;
 
   const noiseTexture = useMemo(() => {

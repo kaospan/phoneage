@@ -101,104 +101,22 @@ interface SimulationState {
 }
 
 // Camera zoom values (multipliers). Lower = closer / larger board. Higher = farther / smaller board.
-// The HUD shows percent as `Math.round((1 / zoomFactor) * 100)` to match existing semantics.
-// Add extra zoom-in steps at the end so laptop/fullscreen layouts can fill the viewport without clipping.
-const CAMERA_ZOOM_LEVELS = [1.16, 1.08, 1.0, 0.97, 0.93, 0.9, 0.86, 0.82, 0.78, 0.74, 0.7, 0.66] as const;
-const DEFAULT_CAMERA_ZOOM_INDEX = 4; // 0.93 => ~108% (desktop/tablet baseline)
-// Mobile baseline: default to ~122% (0.82) so tiles are readable on phones.
-const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = (() => {
-  const target = 0.82; // ~122%
-  let idx = CAMERA_ZOOM_LEVELS.findIndex((z) => Math.abs(z - target) < 1e-6);
-  if (idx >= 0) return idx;
-
-  // Fallback: closest match if the list changes.
-  idx = 0;
-  let best = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < CAMERA_ZOOM_LEVELS.length; i += 1) {
-    const d = Math.abs(CAMERA_ZOOM_LEVELS[i] - target);
-    if (d < best) {
-      best = d;
-      idx = i;
-    }
-  }
-  return idx;
-})();
-// On mobile, auto-fit should not zoom in beyond the baseline 122% unless the user does it manually (+ button).
-const MOBILE_AUTO_FIT_MAX_ZOOM_IN_INDEX = (() => {
-  return MOBILE_DEFAULT_CAMERA_ZOOM_INDEX;
-})();
-  const VIEW_MODES = ["3d", "fps", "2d", "sprite"] as const;
-  type ViewMode = (typeof VIEW_MODES)[number];
+// The old 152% close view used zoomFactor 0.66; that is now the semantic 100% baseline.
+const CAMERA_BASELINE_ZOOM_FACTOR = 0.66;
+const CAMERA_ZOOM_PERCENT_LEVELS = Array.from({ length: 19 }, (_, index) => 60 + index * 5);
+const CAMERA_ZOOM_LEVELS = CAMERA_ZOOM_PERCENT_LEVELS.map((percent) => CAMERA_BASELINE_ZOOM_FACTOR / (percent / 100));
+const DEFAULT_CAMERA_ZOOM_INDEX = CAMERA_ZOOM_PERCENT_LEVELS.indexOf(100);
+const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = DEFAULT_CAMERA_ZOOM_INDEX;
+const VIEW_MODES = ["3d", "fps", "2d", "sprite"] as const;
+type ViewMode = (typeof VIEW_MODES)[number];
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   "3d": "3D",
   fps: "FPS",
   "2d": "2D",
   sprite: "SPR",
-  };
+};
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
-
-type GridContentSize = { width: number; height: number };
-
-const computeNonVoidContentSize = (grid: number[][] | undefined): GridContentSize => {
-  const rows = grid?.length ?? 0;
-  const cols = grid?.[0]?.length ?? 0;
-  if (!grid || rows <= 0 || cols <= 0) return { width: 1, height: 1 };
-
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < (grid[y]?.length ?? 0); x += 1) {
-      if (grid[y][x] === 5) continue;
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
-    }
-  }
-
-  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return { width: cols, height: rows };
-  return {
-    width: Math.max(1, maxX - minX + 1),
-    height: Math.max(1, maxY - minY + 1),
-  };
-};
-
-const pickBestZoomIndexForContent = ({
-  content,
-  aspect,
-  viewMode,
-}: {
-  content: GridContentSize;
-  aspect: number;
-  viewMode: "3d" | "2d";
-}) => {
-  // Mirrors the camera's own "view size" approximation (see Game3D.tsx):
-  // viewHeight = 2 * tan(fov/2) * cameraHeight
-  // cameraHeight = baseCameraHeight * zoomFactor
-  const fov = viewMode === "2d" ? 42 : 50;
-  const baseCameraHeight = viewMode === "2d" ? 24 : 18;
-  const fovRad = fov * (Math.PI / 180);
-  const k = 2 * Math.tan(fovRad / 2) * baseCameraHeight;
-
-  // Small margin so tiles don't sit flush against the edges.
-  const margin = viewMode === "2d" ? 1.12 : 1.08;
-  const needW = content.width * margin;
-  const needH = content.height * margin;
-
-  // Choose the most zoomed-in option that still fits the content.
-  for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i -= 1) {
-    const z = CAMERA_ZOOM_LEVELS[i];
-    const viewH = k * z;
-    const viewW = viewH * Math.max(0.1, aspect);
-    if (viewW >= needW && viewH >= needH) return i;
-  }
-
-  return 0;
-};
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
@@ -272,9 +190,10 @@ export const PuzzleGame = () => {
 
   const isMobile = useIsMobile();
   const [isPortrait, setIsPortrait] = useState(false);
+  const [hasMeasuredOrientation, setHasMeasuredOrientation] = useState(false);
   const shouldRotateGate = false;
   const showRotateHint = isMobile && isPortrait;
-  const isMobileLandscape = isMobile && !isPortrait;
+  const isMobileLandscape = isMobile && hasMeasuredOrientation && !isPortrait;
 
   const [isFullscreenMode, setIsFullscreenMode] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -285,6 +204,7 @@ export const PuzzleGame = () => {
     }
   });
   const prevZoomIndexRef = useRef<number | null>(null);
+  const autoMobileFullscreenAppliedRef = useRef(false);
   const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
   const [userZoomTouched, setUserZoomTouched] = useState(false);
   const [fitRevision, setFitRevision] = useState(0);
@@ -587,6 +507,7 @@ export const PuzzleGame = () => {
     const update = () => {
       const portrait = mql ? mql.matches : window.innerHeight > window.innerWidth;
       setIsPortrait(portrait);
+      setHasMeasuredOrientation(true);
     };
     update();
     mql?.addEventListener?.('change', update);
@@ -600,18 +521,35 @@ export const PuzzleGame = () => {
   }, []);
 
   useEffect(() => {
+    if (!isMobile || !hasMeasuredOrientation) {
+      autoMobileFullscreenAppliedRef.current = false;
+      return;
+    }
+
+    if (!isMobileLandscape) {
+      autoMobileFullscreenAppliedRef.current = false;
+      return;
+    }
+
+    if (autoMobileFullscreenAppliedRef.current) return;
+    autoMobileFullscreenAppliedRef.current = true;
+    setIsFullscreenMode(true);
+    setUserZoomTouched(false);
+    setCameraOffset({ x: 0, z: 0 });
+    setSelectedArrow(null);
+  }, [hasMeasuredOrientation, isMobile, isMobileLandscape]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const onResize = () => setFitRevision((v) => v + 1);
     window.addEventListener("resize", onResize, { passive: true });
     return () => window.removeEventListener("resize", onResize as EventListener);
   }, []);
 
-  // Auto-fit zoom on gameplay layouts so the board uses the available viewport.
+  // Keep camera pan stable when the gameplay surface changes size; zoom is user-controlled.
   useLayoutEffect(() => {
     if (!hasStartedGame) return;
     if (isBuilding) return;
-    if (viewMode === "fps" || viewMode === "sprite") return;
-    if (userZoomTouched) return;
     if (selectedArrow) return;
 
     const el = gestureSurfaceRef.current;
@@ -620,39 +558,22 @@ export const PuzzleGame = () => {
     const raf = requestAnimationFrame(() => {
       const rect = el.getBoundingClientRect();
       if (rect.width < 40 || rect.height < 40) return;
-      const aspect = rect.width / Math.max(1, rect.height);
-      const content = computeNonVoidContentSize(currentLevel?.grid);
-      let nextIndex = pickBestZoomIndexForContent({
-        content,
-        aspect,
-        viewMode: viewMode === "2d" ? "2d" : "3d",
-      });
-
-      // Mobile: cap auto-fit at the baseline (~122%) so it doesn't jump to the "extra zoom-in" steps by itself.
-      // Users can still tap (+) to zoom further in if they want.
-      if (isMobile) {
-        nextIndex = Math.min(nextIndex, MOBILE_AUTO_FIT_MAX_ZOOM_IN_INDEX);
-      }
-      if (nextIndex !== cameraZoomIndex) setCameraZoomIndex(nextIndex);
       setCameraOffset({ x: 0, z: 0 });
     });
 
     return () => cancelAnimationFrame(raf);
   }, [
-    cameraZoomIndex,
-    currentLevel?.grid,
     fitRevision,
     hasStartedGame,
     isBuilding,
     isFullscreenMode,
-    isMobile,
     selectedArrow,
-    userZoomTouched,
     viewMode,
   ]);
 
   useEffect(() => {
-    // New level: allow auto-fit again (but don't override manual zoom within the same level).
+    // New level: start from the shared 100% baseline.
+    setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
     setUserZoomTouched(false);
   }, [currentLevelIndex]);
 
@@ -1654,9 +1575,10 @@ export const PuzzleGame = () => {
     const prevLevel = () => {
       if (currentLevelIndex > 0) goToLevelIndex(currentLevelIndex - 1);
     };
-    const canZoomIn = viewMode !== 'fps' && cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
-    const canZoomOut = viewMode !== 'fps' && cameraZoomIndex > 0;
-  const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex];
+    const canZoomIn = cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
+    const canZoomOut = cameraZoomIndex > 0;
+  const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex] ?? CAMERA_BASELINE_ZOOM_FACTOR;
+  const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
 
     // Drag handlers for panning the view
@@ -2346,7 +2268,7 @@ export const PuzzleGame = () => {
               </Button>
 
               <div className="min-w-10 text-center font-semibold text-muted-foreground text-xs whitespace-nowrap">
-                {Math.round((1 / cameraZoomFactor) * 100)}%
+                {cameraZoomPercent}%
               </div>
 
                 <Button
@@ -2366,6 +2288,7 @@ export const PuzzleGame = () => {
                 <Button
                   onClick={() => {
                     setViewMode(nextViewMode);
+                    setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
                     setUserZoomTouched(false);
                     setCameraOffset({ x: 0, z: 0 });
                   }}
@@ -2515,7 +2438,7 @@ export const PuzzleGame = () => {
                   </Button>
 
                   <div className="min-w-14 text-center text-sm font-black text-stone-300">
-                    {Math.round((1 / cameraZoomFactor) * 100)}%
+                    {cameraZoomPercent}%
                   </div>
 
                   <Button
@@ -2535,6 +2458,7 @@ export const PuzzleGame = () => {
                   <Button
                     onClick={() => {
                       setViewMode(nextViewMode);
+                      setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
                       setUserZoomTouched(false);
                       setCameraOffset({ x: 0, z: 0 });
                     }}

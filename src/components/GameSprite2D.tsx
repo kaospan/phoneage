@@ -37,6 +37,7 @@ type LevelSpriteAtlas = {
 // Sprite mode atlas building is useful even at moderate confidence; only bail out
 // when detection is clearly wrong (e.g. sampling black borders/HUD).
 const ATLAS_MIN_CONFIDENCE = 0.08;
+const SPRITE_ZOOM_BASELINE_FACTOR = 0.66;
 
 const pickLatestByType = (refs: CellReference[]) => {
   const latest = new Map<number, CellReference>();
@@ -781,8 +782,8 @@ export function GameSprite2D({
   }, [levelImageUrl, rows, cols, atlasGoalCaveKeys, atlasGrid, playerStart, sourceGrid]);
 
   const scale = useMemo(() => {
-    // Keep semantics aligned with the existing % indicator: higher % = larger board.
-    return Math.max(0.75, Math.min(1.35, 1 / Math.max(0.01, zoomFactor)));
+    // Match gameplay zoom semantics: 0.66 was the old 152% view and is now 100%.
+    return Math.max(0.55, Math.min(1.5, SPRITE_ZOOM_BASELINE_FACTOR / Math.max(0.01, zoomFactor)));
   }, [zoomFactor]);
 
   useEffect(() => {
@@ -813,8 +814,7 @@ export function GameSprite2D({
     const maxWidth = Math.max(1, availableSize.width - frameInset);
     const maxHeight = Math.max(1, availableSize.height - frameInset);
     const fitWidth = Math.min(maxWidth, maxHeight * aspect);
-    const containedScale = Math.min(scale, 1);
-    const width = Math.max(cols, Math.floor(fitWidth * containedScale));
+    const width = Math.max(cols, Math.floor(fitWidth * scale));
     return {
       width,
       height: Math.max(rows, Math.floor(width / aspect)),
@@ -876,8 +876,8 @@ export function GameSprite2D({
         style={{
           width: boardSize.width > 0 ? `${boardSize.width}px` : undefined,
           height: boardSize.height > 0 ? `${boardSize.height}px` : undefined,
-          maxWidth: "100%",
-          maxHeight: "100%",
+          maxWidth: scale <= 1 ? "100%" : undefined,
+          maxHeight: scale <= 1 ? "100%" : undefined,
         }}
       >
         <div
