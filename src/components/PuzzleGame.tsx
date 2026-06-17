@@ -2831,23 +2831,23 @@ export const PuzzleGame = () => {
                   </div>
                 </div>
 
-                <div className="mt-3 grid gap-2 sm:mt-4 sm:grid-cols-4 sm:gap-3">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
+                <div className="mx-auto mt-3 grid w-full max-w-xl gap-2 sm:mt-4 sm:grid-cols-2 sm:gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center sm:p-4">
                     <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Run Moves</div>
                     <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionSummary.moves}</div>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center sm:p-4">
                     <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Personal Best</div>
                     <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionSummary.bestMoves ?? "--"}</div>
                   </div>
                   {completionClockText && (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center sm:p-4">
                       <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Clock Left</div>
                       <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionClockText}</div>
                     </div>
                   )}
                   {completionBestClockText && (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center sm:p-4">
                       <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Best Clock</div>
                       <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionBestClockText}</div>
                     </div>
