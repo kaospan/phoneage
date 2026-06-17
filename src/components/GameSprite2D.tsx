@@ -445,6 +445,16 @@ export function GameSprite2D({
         srcCtx.imageSmoothingEnabled = false;
         srcCtx.drawImage(img, 0, 0);
 
+        const boardCanvas = document.createElement("canvas");
+        boardCanvas.width = frameW;
+        boardCanvas.height = frameH;
+        const boardCtx = boardCanvas.getContext("2d");
+        if (boardCtx) {
+          boardCtx.imageSmoothingEnabled = false;
+          boardCtx.drawImage(srcCanvas, offsetX, offsetY, frameW, frameH, 0, 0, frameW, frameH);
+        }
+        const boardBackground = boardCtx ? boardCanvas.toDataURL("image/png") : undefined;
+
         const sampleByType = new Map<number, { row: number; col: number }>();
         if (allowAtlas) {
           for (let r = 0; r < rows; r += 1) {
@@ -735,7 +745,7 @@ export function GameSprite2D({
         setLevelAtlas({
           tileSprites,
           heroSprite,
-          boardBackground: undefined,
+          boardBackground,
           status: usedDosGridFallback
             ? "Sprites ready (DOS grid fallback)"
             : allowAtlas
@@ -917,20 +927,16 @@ export function GameSprite2D({
                   (localPlayer.pos.x !== x || localPlayer.pos.y !== y)
                 );
               const tileChangedFromScreenshot = effectiveTileType !== originalTileType;
-              const arrowVector =
-                effectiveIsArrow && !isPlayer ? renderArrowVector(effectiveTileType) : null;
               const shouldPaintStaticTile =
                 !suppressPlayerOverlay && (
-                  !useScreenshotBase ||
-                  effectiveIsArrow ||
-                  (originalIsArrow && tileChangedFromScreenshot) ||
-                  tileChangedFromScreenshot ||
-                  playerStartNeedsCleanup
+                  useScreenshotBase
+                    ? tileChangedFromScreenshot || playerStartNeedsCleanup
+                    : true
                 );
 
-              const atlasSprite = (effectiveIsArrow || effectiveTileType === 5) ? undefined : levelAtlas?.tileSprites?.[effectiveTileType];
+              const atlasSprite = levelAtlas?.tileSprites?.[effectiveTileType];
               const refSprite = latestByType.get(effectiveTileType)?.imageData;
-              const canUseRefSprite = !effectiveIsArrow && effectiveTileType !== 5;
+              const canUseRefSprite = effectiveTileType !== 5;
               const staticTileBackgroundImage =
                   effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
                   effectiveTileType === 3 && goalCaveFallbackUrl ? `url(${goalCaveFallbackUrl})` :
@@ -943,10 +949,14 @@ export function GameSprite2D({
                   effectiveTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
                   undefined;
               const backgroundImage = shouldPaintStaticTile ? staticTileBackgroundImage : undefined;
+              const arrowVector =
+                effectiveIsArrow && !isPlayer && shouldPaintStaticTile && !backgroundImage
+                  ? renderArrowVector(effectiveTileType)
+                  : null;
 
               const fallback =
                 !shouldPaintStaticTile ? "transparent" :
-                effectiveTileType === 5 ? "transparent" :
+                effectiveTileType === 5 ? "black" :
                 effectiveTileType === 0 ? "rgba(255,255,255,0.08)" :
                 effectiveTileType === 4 ? "rgba(30,144,255,0.55)" :
                 effectiveTileType === 1 ? "rgba(255,80,80,0.65)" :
@@ -977,7 +987,7 @@ export function GameSprite2D({
                     backgroundPosition: "center",
                     imageRendering: "pixelated",
                     boxShadow:
-                      !backgroundImage && displayTileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
+                      !useScreenshotBase && !backgroundImage && displayTileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
                       undefined,
                   }}
                   onClick={(e) => {
