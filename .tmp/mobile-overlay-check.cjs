@@ -14,7 +14,7 @@ const { chromium } = require("playwright");
     const root = document.createElement("div");
     root.innerHTML = `
       <div class="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-3 py-2 backdrop-blur-sm sm:px-4">
-        <div class="pointer-events-auto flex max-h-[calc(100svh-1rem)] w-full max-w-xl flex-col overflow-hidden rounded-[24px] border border-white/15 bg-stone-950/92 p-3 text-stone-50 shadow-2xl sm:rounded-[28px] sm:p-5 md:p-6">
+        <div class="pointer-events-auto flex max-h-[calc(100svh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-white/15 bg-stone-950/92 p-3 text-stone-50 shadow-2xl sm:rounded-[28px] sm:p-5 md:p-6">
           <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
             <div class="text-center">
               <div class="text-xs font-black uppercase tracking-[0.22em] text-amber-300">Stage Cleared</div>
@@ -25,7 +25,7 @@ const { chromium } = require("playwright");
                 <span class="rounded-full border border-sky-300/40 bg-sky-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-sky-100">Best Clock</span>
               </div>
             </div>
-            <div class="mt-3 grid gap-2 sm:mt-4 sm:grid-cols-2 sm:gap-3">
+            <div class="mt-3 grid gap-2 sm:mt-4 sm:grid-cols-4 sm:gap-3">
               <div class="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
                 <div class="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Run Moves</div>
                 <div class="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">11</div>
