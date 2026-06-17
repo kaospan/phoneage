@@ -22,7 +22,7 @@ import {
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
-import { UI_SETTINGS_UPDATED_EVENT, getShowCoordsOverlay, setShowCoordsOverlay } from "@/lib/uiSettings";
+import { UI_SETTINGS_UPDATED_EVENT, getShowCoordsOverlay } from "@/lib/uiSettings";
 import { ADMIN_MODE_UPDATED_EVENT, getAdminMode } from "@/lib/adminMode";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
@@ -1435,7 +1435,6 @@ export const PuzzleGame = () => {
     const isTimerUrgent = timeLeftSeconds != null && timeLeftSeconds <= 10;
     const currentBestMoves = currentLevelRecord?.bestMoves ?? null;
     const currentBestClockText = formatCampaignClock(currentLevelRecord?.bestTimeLeftSeconds ?? null);
-    const campaignProgressText = `${completedLevelCount}/${allLevels.length}`;
     const completionClockText = formatCampaignClock(completionSummary?.timeLeftSeconds ?? null);
     const completionBestClockText = formatCampaignClock(completionSummary?.bestTimeLeftSeconds ?? null);
 
@@ -2056,17 +2055,10 @@ export const PuzzleGame = () => {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Campaign</div>
-                      <div className="mt-2 text-2xl font-black text-stone-50">{campaignProgressText}</div>
-                      <div className="mt-1 text-xs text-stone-300">Stages cleared so far</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Network</div>
-                      <div className="mt-2 text-2xl font-black text-stone-50">{networkBadgeText}</div>
-                      <div className="mt-1 text-xs text-stone-300">{networkStatus === 'online' ? 'Live ghost inputs active' : 'Single-player mode'}</div>
-                    </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Network</div>
+                    <div className="mt-2 text-2xl font-black text-stone-50">{networkBadgeText}</div>
+                    <div className="mt-1 text-xs text-stone-300">{networkStatus === 'online' ? 'Live ghost inputs active' : 'Single-player mode'}</div>
                   </div>
                 </div>
               </div>
@@ -2252,12 +2244,6 @@ export const PuzzleGame = () => {
                    {`L${currentLevel.id}`}
                  </span>
                  <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
-                 <span
-                   className="inline-flex items-center rounded-md border border-border/60 bg-background/70 px-2 py-1 text-[11px] font-black tracking-wide text-muted-foreground"
-                   title="Campaign clears"
-                 >
-                   {campaignProgressText}
-                 </span>
                  {currentBestMoves != null && (
                    <span
                      className="inline-flex items-center rounded-md border border-amber-300/50 bg-amber-500/10 px-2 py-1 text-[11px] font-black tracking-wide text-amber-100"
@@ -2344,23 +2330,6 @@ export const PuzzleGame = () => {
               {campaignDialog}
 
               {!isFullscreenMode && <HowToPlayDialog disabled={shouldRotateGate} />}
-
-              {!isFullscreenMode && (
-                <Button
-                  onClick={() => {
-                    const next = !showCoordsOverlay;
-                    setShowCoordsOverlay(next);
-                    setShowCoordsOverlayState(next);
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 px-2 text-xs font-black tracking-wide hover:bg-primary/20"
-                  title="Toggle coordinate labels (shown in SPR view)"
-                  aria-pressed={showCoordsOverlay}
-                >
-                  XY
-                </Button>
-              )}
 
                 <Button
                   onClick={() => {
@@ -2473,10 +2442,6 @@ export const PuzzleGame = () => {
                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Clock</div>
                       <div className="mt-1 text-lg font-black text-stone-50">{timeLeftText ?? '∞'}</div>
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Campaign</div>
-                      <div className="mt-1 text-lg font-black text-stone-50">{campaignProgressText}</div>
-                    </div>
                     <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-stone-200">
                       <span className="inline-flex items-center gap-1 rounded-full border border-red-300/60 bg-red-600/85 px-2 py-1 text-xs font-black text-white">
                         <span aria-hidden>🗝</span>
@@ -2534,21 +2499,6 @@ export const PuzzleGame = () => {
                   </Button>
 
                   <HowToPlayDialog disabled={shouldRotateGate} />
-
-                  <Button
-                    onClick={() => {
-                      const next = !showCoordsOverlay;
-                      setShowCoordsOverlay(next);
-                      setShowCoordsOverlayState(next);
-                    }}
-                    variant="ghost"
-                    size="sm"
-                    className="h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-xs font-black tracking-[0.16em] text-stone-50 hover:bg-white/10"
-                    title="Toggle coordinate labels (shown in SPR view)"
-                    aria-pressed={showCoordsOverlay}
-                  >
-                    XY
-                  </Button>
 
                   <Button
                     onClick={() => {
