@@ -98,7 +98,10 @@ function cloneGrid(grid: CellType[][]): CellType[][] {
 }
 
 function cloneInventory(inv: KeyInventory): KeyInventory {
-  return { red: !!inv.red, green: !!inv.green };
+  return {
+    red: Math.max(0, Math.floor(Number(inv.red) || 0)),
+    green: Math.max(0, Math.floor(Number(inv.green) || 0)),
+  };
 }
 
 function cloneBreakables(map: Map<string, boolean>): Map<string, boolean> {
@@ -108,7 +111,7 @@ function cloneBreakables(map: Map<string, boolean>): Map<string, boolean> {
 function stateKey(s: SolveState): string {
   const rows = s.grid.length;
   const cols = s.grid[0]?.length ?? 0;
-  const inv = (s.inventory.red ? 1 : 0) | (s.inventory.green ? 2 : 0);
+  const inv = `r${Math.max(0, Math.floor(Number(s.inventory.red) || 0))}g${Math.max(0, Math.floor(Number(s.inventory.green) || 0))}`;
   let br = "";
   if (s.breakableRockStates.size > 0) {
     // Include only stepped breakables that still exist as breakable cells.
@@ -162,7 +165,7 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
   };
 
   if (isArrowCell(playerCell)) {
-    if (targetLock && !inv[targetLock]) return null;
+    if (targetLock && Math.max(0, Math.floor(Number(inv[targetLock]) || 0)) <= 0) return null;
 
     // Step priority (floor, cave (goal), start-marker cave, arrow, collectibles)
     if (
@@ -180,7 +183,9 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
 
       if (targetKey || targetLock || targetHourglass) {
         if (targetKey) {
-          next.inventory[targetKey] = true;
+          next.inventory[targetKey] = Math.max(0, Math.floor(Number(next.inventory[targetKey]) || 0)) + 1;
+        } else if (targetLock) {
+          next.inventory[targetLock] = Math.max(0, Math.floor(Number(next.inventory[targetLock]) || 0)) - 1;
         }
         // Key/lock tile becomes floor (underlying terrain) for both grid+base.
         next.grid[ty][tx] = 0;
@@ -248,14 +253,16 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
     return null;
   }
 
-  if (targetLock && !inv[targetLock]) return null;
+  if (targetLock && Math.max(0, Math.floor(Number(inv[targetLock]) || 0)) <= 0) return null;
   if (targetCell === 1 || targetCell === 4 || targetCell === 5) return null; // fire/water/void
 
   ensureCloned();
   next.playerPos = { x: tx, y: ty };
   if (targetKey || targetLock || targetHourglass) {
     if (targetKey) {
-      next.inventory[targetKey] = true;
+      next.inventory[targetKey] = Math.max(0, Math.floor(Number(next.inventory[targetKey]) || 0)) + 1;
+    } else if (targetLock) {
+      next.inventory[targetLock] = Math.max(0, Math.floor(Number(next.inventory[targetLock]) || 0)) - 1;
     }
     next.grid[ty][tx] = 0;
     next.baseGrid[ty][tx] = 0;
@@ -520,7 +527,7 @@ export async function runSolveAllLevels(options: SolveOptions = {}): Promise<{
       grid: grid.map((r) => r.slice()) as CellType[][],
       baseGrid: buildBaseGrid(grid.map((r) => r.slice()) as CellType[][]),
       playerPos: { ...lvl.playerStart },
-      inventory: { red: false, green: false },
+      inventory: { red: 0, green: 0 },
       breakableRockStates: new Map(),
     };
 
@@ -611,7 +618,7 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
     grid: grid.map((r) => r.slice()) as CellType[][],
     baseGrid: buildBaseGrid(grid.map((r) => r.slice()) as CellType[][]),
     playerPos: { ...lvl.playerStart },
-    inventory: { red: false, green: false },
+    inventory: { red: 0, green: 0 },
     breakableRockStates: new Map(),
   };
   return await solveLevel(levelId, start, goalCaves, {

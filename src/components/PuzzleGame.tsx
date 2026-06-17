@@ -135,7 +135,7 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   "2d": "2D",
   sprite: "SPR",
   };
-const EMPTY_KEYS: KeyInventory = { red: false, green: false };
+const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
 
 type GridContentSize = { width: number; height: number };
@@ -1422,8 +1422,8 @@ export const PuzzleGame = () => {
       [renderPlayers]
     );
     const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
-    const redKeyCount = localPlayer?.keys.red ? 1 : 0;
-    const greenKeyCount = localPlayer?.keys.green ? 1 : 0;
+    const redKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.red) || 0));
+    const greenKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.green) || 0));
     const timeLeftText = timeLeftSeconds == null
       ? null
       : (() => {

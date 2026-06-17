@@ -9,8 +9,8 @@ export type CellType =
   | 18 | 19 | 20;
 
 export interface KeyInventory {
-  red: boolean;
-  green: boolean;
+  red: number;
+  green: number;
 }
 
 export interface Position { x: number; y: number; }

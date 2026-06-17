@@ -8,6 +8,8 @@ const isLockCell = (cell: CellType) => cell === 16 || cell === 17;
 const isHourglassCell = (cell: CellType) => cell === 20;
 const keyColorForCell = (cell: CellType) => (cell === 14 ? 'red' : cell === 15 ? 'green' : null);
 const lockColorForCell = (cell: CellType) => (cell === 16 ? 'red' : cell === 17 ? 'green' : null);
+const keyCount = (inventory: GameState['inventory'], color: 'red' | 'green') =>
+  Math.max(0, Math.floor(Number(inventory[color]) || 0));
 
 export interface PlayerMoveOutcome {
   glidePath?: { path: Position[]; arrowType: CellType };
@@ -36,7 +38,7 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
 
   // If on arrow
   if (isArrowCell(playerCell)) {
-    if (targetLock && !inventory[targetLock]) {
+    if (targetLock && keyCount(inventory, targetLock) <= 0) {
       return {};
     }
 
@@ -49,9 +51,10 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
       if (targetKey || targetLock || targetHourglass) {
         const newGrid = grid.map(r => [...r]);
         if (targetKey) {
-          inventory[targetKey] = true;
+          inventory[targetKey] = keyCount(inventory, targetKey) + 1;
           outcome.collectedKey = targetKey;
         } else if (targetLock) {
+          inventory[targetLock] = keyCount(inventory, targetLock) - 1;
           outcome.unlockedLock = targetLock;
         } else if (targetHourglass) {
           outcome.collectedHourglass = { x: targetX, y: targetY };
@@ -121,7 +124,7 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     return {}; // second time blocked
   }
 
-  if (targetLock && !inventory[targetLock]) return {};
+  if (targetLock && keyCount(inventory, targetLock) <= 0) return {};
   
   // Fire, water, void impassable
   if (targetCell === 1 || targetCell === 4 || targetCell === 5) return {};
@@ -134,9 +137,10 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
   if (targetKey || targetLock || targetHourglass) {
     const newGrid = outcome.newGrid ?? grid.map(r => [...r]);
     if (targetKey) {
-      inventory[targetKey] = true;
+      inventory[targetKey] = keyCount(inventory, targetKey) + 1;
       outcome.collectedKey = targetKey;
     } else if (targetLock) {
+      inventory[targetLock] = keyCount(inventory, targetLock) - 1;
       outcome.unlockedLock = targetLock;
     } else if (targetHourglass) {
       outcome.collectedHourglass = { x: targetX, y: targetY };
