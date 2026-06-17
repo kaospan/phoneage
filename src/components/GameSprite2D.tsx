@@ -852,6 +852,9 @@ export function GameSprite2D({
   const goalCaveFallbackUrl = useMemo(() => referenceSpriteUrls.cave, []);
   const boardBackgroundUrl = levelAtlas?.boardBackground ?? null;
   const useScreenshotBase = Boolean(boardBackgroundUrl);
+  const isBuildingScreenshotBase =
+    Boolean(levelImageUrl) && !boardBackgroundUrl && (!levelAtlas || levelAtlas.status === "Building sprites...");
+  const allowGeneratedFallback = !isBuildingScreenshotBase;
 
   return (
     <div
@@ -893,7 +896,7 @@ export function GameSprite2D({
             backgroundPosition: "center",
             backgroundSize: "100% 100%",
             imageRendering: "pixelated",
-            boxShadow: useScreenshotBase
+            boxShadow: useScreenshotBase || !allowGeneratedFallback
               ? undefined
               : "inset 0 0 0 3px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.08)",
           }}
@@ -942,7 +945,7 @@ export function GameSprite2D({
                 !suppressPlayerOverlay && (
                   useScreenshotBase
                     ? tileChangedFromScreenshot || playerStartNeedsCleanup
-                    : true
+                    : allowGeneratedFallback
                 );
 
               const atlasSprite = levelAtlas?.tileSprites?.[effectiveTileType];
@@ -998,7 +1001,7 @@ export function GameSprite2D({
                     backgroundPosition: "center",
                     imageRendering: "pixelated",
                     boxShadow:
-                      !useScreenshotBase && !backgroundImage && displayTileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
+                      allowGeneratedFallback && !useScreenshotBase && !backgroundImage && displayTileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
                       undefined,
                   }}
                   onClick={(e) => {
@@ -1007,7 +1010,7 @@ export function GameSprite2D({
                   }}
                   title={`(${y},${x}) = ${tileType}`}
                 >
-                  {edge?.any && !useScreenshotBase && (
+                  {edge?.any && allowGeneratedFallback && !useScreenshotBase && (
                     <div
                       className="pointer-events-none absolute inset-0"
                       style={{
@@ -1036,7 +1039,7 @@ export function GameSprite2D({
                       {y}
                     </div>
                   )}
-                  {isPlayer && !isPlayerAtScreenshotStart && (
+                  {isPlayer && allowGeneratedFallback && !isPlayerAtScreenshotStart && (
                     levelAtlas?.heroSprite ? (
                       <img
                         src={levelAtlas.heroSprite}
