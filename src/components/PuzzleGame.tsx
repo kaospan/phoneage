@@ -2763,32 +2763,32 @@ export const PuzzleGame = () => {
           </div>
         )}
         {isTimeUp && levelTimeLimitSeconds && (
-          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
-            <div className="pointer-events-auto w-full max-w-xl rounded-[28px] border border-red-200/20 bg-stone-950/92 p-6 text-stone-50 shadow-2xl">
+          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-3 py-2 backdrop-blur-sm sm:px-4">
+            <div className="pointer-events-auto max-h-[calc(100svh-1rem)] w-full max-w-xl overflow-y-auto overscroll-contain rounded-[24px] border border-red-200/20 bg-stone-950/92 p-3 text-stone-50 shadow-2xl sm:rounded-[28px] sm:p-5 md:p-6">
               <div className="text-center">
                 <div className="text-xs font-black uppercase tracking-[0.22em] text-red-300">
                   Time Expired
                 </div>
-                <div className="mt-2 text-3xl font-black uppercase tracking-[0.14em] text-red-50 sm:text-4xl">
+                <div className="mt-1 text-2xl font-black uppercase tracking-[0.14em] text-red-50 sm:mt-2 sm:text-3xl md:text-4xl">
                   Time&apos;s Up!
                 </div>
-                <div className="mt-3 text-sm font-semibold text-stone-300">
+                <div className="mt-2 text-sm font-semibold text-stone-300 sm:mt-3">
                   Level {currentLevel.id} stopped at {moves} moves.
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="mt-3 grid gap-2 sm:mt-4 sm:grid-cols-2 sm:gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
                   <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Run Moves</div>
-                  <div className="mt-2 text-3xl font-black">{moves}</div>
+                  <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{moves}</div>
                 </div>
-                <div className="rounded-2xl border border-red-300/20 bg-red-500/10 p-4">
+                <div className="rounded-2xl border border-red-300/20 bg-red-500/10 p-3 sm:p-4">
                   <div className="text-xs font-black uppercase tracking-[0.16em] text-red-200/80">Clock</div>
-                  <div className="mt-2 text-3xl font-black text-red-100">0:00</div>
+                  <div className="mt-1 text-2xl font-black text-red-100 sm:mt-2 sm:text-3xl">0:00</div>
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <div className="sticky bottom-0 -mx-3 mt-3 flex flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-stone-950/95 px-3 pb-1 pt-3 sm:-mx-5 sm:mt-5 sm:px-5 md:-mx-6 md:px-6">
                 <Button
                   onClick={resetLevel}
                   className="bg-red-300 text-stone-950 hover:bg-red-200"
@@ -2800,16 +2800,16 @@ export const PuzzleGame = () => {
           </div>
         )}
         {isComplete && completionSummary && (
-          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
-            <div className="pointer-events-auto w-full max-w-xl rounded-[28px] border border-white/15 bg-stone-950/92 p-6 text-stone-50 shadow-2xl">
+          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/55 px-3 py-2 backdrop-blur-sm sm:px-4">
+            <div className="pointer-events-auto max-h-[calc(100svh-1rem)] w-full max-w-xl overflow-y-auto overscroll-contain rounded-[24px] border border-white/15 bg-stone-950/92 p-3 text-stone-50 shadow-2xl sm:rounded-[28px] sm:p-5 md:p-6">
               <div className="text-center">
                 <div className="text-xs font-black uppercase tracking-[0.22em] text-amber-300">
                   Stage Cleared
                 </div>
-                <div className="mt-2 text-3xl font-black uppercase tracking-[0.14em] sm:text-4xl">
+                <div className="mt-1 text-2xl font-black uppercase tracking-[0.14em] sm:mt-2 sm:text-3xl md:text-4xl">
                   Level {completionSummary.levelId} Complete
                 </div>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:mt-3 sm:gap-2">
                   {completionSummary.isFirstClear && (
                     <span className="rounded-full border border-emerald-300/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100">
                       First Clear
@@ -2828,37 +2828,37 @@ export const PuzzleGame = () => {
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="mt-3 grid gap-2 sm:mt-4 sm:grid-cols-2 sm:gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
                   <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Run Moves</div>
-                  <div className="mt-2 text-3xl font-black">{completionSummary.moves}</div>
+                  <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionSummary.moves}</div>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
                   <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Personal Best</div>
-                  <div className="mt-2 text-3xl font-black">{completionSummary.bestMoves ?? "--"}</div>
+                  <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionSummary.bestMoves ?? "--"}</div>
                 </div>
                 {completionClockText && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
                     <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Clock Left</div>
-                    <div className="mt-2 text-3xl font-black">{completionClockText}</div>
+                    <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionClockText}</div>
                   </div>
                 )}
                 {completionBestClockText && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
                     <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Best Clock</div>
-                    <div className="mt-2 text-3xl font-black">{completionBestClockText}</div>
+                    <div className="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">{completionBestClockText}</div>
                   </div>
                 )}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+              <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center sm:mt-4 sm:px-4 sm:py-3">
                 <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Campaign Progress</div>
-                <div className="mt-2 text-lg font-black text-stone-50">
+                <div className="mt-1 text-base font-black text-stone-50 sm:mt-2 sm:text-lg">
                   {completionSummary.completedCount}/{completionSummary.totalLevels} stages cleared
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <div className="sticky bottom-0 -mx-3 mt-3 flex flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-stone-950/95 px-3 pb-1 pt-3 sm:-mx-5 sm:mt-5 sm:px-5 md:-mx-6 md:px-6">
                 <Button
                   onClick={resetLevel}
                   variant="outline"
