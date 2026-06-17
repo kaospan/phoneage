@@ -7,9 +7,13 @@
     <script>
       (function () {
         var l = window.location;
-        var path = l.pathname + l.search + l.hash;
+        var params = new URLSearchParams(l.search);
+        params.delete("redirect");
+        var search = params.toString();
+        var path = l.pathname + (search ? "?" + search : "") + l.hash;
         var segments = l.pathname.split("/");
-        var repo = segments.length > 1 ? segments[1] : "";
+        var isGitHubPages = /\.github\.io$/i.test(l.hostname);
+        var repo = isGitHubPages && segments.length > 1 ? segments[1] : "";
         var base = repo ? "/" + repo + "/" : "/";
         var target = base + "?redirect=" + encodeURIComponent(path);
         l.replace(target);
