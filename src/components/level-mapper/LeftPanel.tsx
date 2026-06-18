@@ -17,6 +17,8 @@ import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT }
 import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperMetricPill, MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
+import { getAdminMode, setAdminMode } from '@/lib/adminMode';
+import { toast } from 'sonner';
 
 const fitGridToShape = (source: number[][], nextRows: number, nextCols: number, fill = 5) => {
     const out = Array.from({ length: nextRows }, () => Array(nextCols).fill(fill));
@@ -49,7 +51,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         activeTile, setActiveTile, setGrid, grid, setPlayerStart,
         hourglassBrushSeconds, setHourglassBrushSeconds, setHourglassBonusByCell,
-        theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved, currentLevelProvenance,
+        theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
         setLoadedSnapshot, resetToLoadedSnapshot, replaceGridShape
@@ -69,6 +71,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [pendingUploadLevelId, setPendingUploadLevelId] = useState<string>('');
     const [pendingUploadAllowOverwrite, setPendingUploadAllowOverwrite] = useState(false);
     const [pendingUploadError, setPendingUploadError] = useState<string>('');
+    const [adminModeEnabled, setAdminModeEnabled] = useState(() => getAdminMode());
 
     // Persistent tab state
     const [activeTab, setActiveTab] = useState(() => {
@@ -83,12 +86,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
 
     const currentLevel = importLevelIndex !== null ? allLevels[importLevelIndex] ?? null : null;
     const currentLevelTitle = currentLevel ? `Level ${currentLevel.id}` : 'Level Mapper';
-    const currentLevelStatusLabel =
-        currentLevelProvenance === 'user-edited'
-            ? 'User'
-            : currentLevelProvenance === 'ai-detected'
-                ? 'AI'
-                : 'Default';
     const selectedTile = TILE_TYPES.find((tile) => tile.id === activeTile) ?? TILE_TYPES[0];
     const currentThemeKey = theme || 'default';
     const themePreview = themes[currentThemeKey]?.floor ?? themes.default.floor;
@@ -332,7 +329,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     }}
                 />
 
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-3 pr-10">
                     <div className="min-w-0">
                         <div className="text-[10px] font-black uppercase tracking-[0.22em] text-stone-400">
                             Control Deck
@@ -344,9 +341,38 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             Load screenshots, steer level metadata, and prep the board before you move into alignment or paint work.
                         </div>
                     </div>
-                    <div className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-stone-200">
-                        {currentLevelStatusLabel}
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const next = !adminModeEnabled;
+                            setAdminModeEnabled(next);
+                            setAdminMode(next);
+                            toast.success(`Admin mode ${next ? 'enabled' : 'disabled'}.`, {
+                                position: 'bottom-right',
+                                duration: 2200,
+                            });
+                        }}
+                        className={[
+                            'inline-flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] transition-colors',
+                            adminModeEnabled
+                                ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
+                                : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
+                        ].join(' ')}
+                        title="When enabled, the main game can freely skip/preview all levels."
+                        aria-pressed={adminModeEnabled}
+                    >
+                        <span>Admin</span>
+                        <span
+                            className={[
+                                'inline-flex min-w-[2.8rem] items-center justify-center rounded-full border px-2 py-0.5 text-[10px]',
+                                adminModeEnabled
+                                    ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
+                                    : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
+                            ].join(' ')}
+                        >
+                            {adminModeEnabled ? 'ON' : 'OFF'}
+                        </span>
+                    </button>
                 </div>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">

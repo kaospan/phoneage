@@ -5,26 +5,11 @@ import BulkAddContextMenu from '@/components/level-mapper/BulkAddContextMenu';
 import LeftPanel from '@/components/level-mapper/LeftPanel';
 import GridEditorPanel from '@/components/level-mapper/GridEditorPanel';
 import JsonPanel from '@/components/level-mapper/JsonPanel';
-import { MapperDockButton, MapperMetricPill } from '@/components/level-mapper/MapperChrome';
-import { TILE_TYPES } from '@/lib/levelgrid';
-import { getAdminMode, setAdminMode } from '@/lib/adminMode';
-import { ChevronLeft, ChevronRight, LayoutDashboard } from 'lucide-react';
+import { MapperDockButton } from '@/components/level-mapper/MapperChrome';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 const MAPPER_COMPACT_VIEWPORT_BREAKPOINT = 1280;
-
-const THEME_LABELS: Record<string, string> = {
-    default: 'Default (Brown)',
-    ocean: 'Ocean (Blue)',
-    forest: 'Forest (Green)',
-    sunset: 'Sunset (Orange/Pink)',
-    lava: 'Lava (Red)',
-    crystal: 'Crystal (Purple)',
-    neon: 'Neon (Cyberpunk)',
-    snow: 'Snow (White)',
-    gray: 'Gray (Neutral)',
-    slate: 'Slate (Cool Gray)',
-};
 
 console.log('📦 LevelMapper.tsx loading...');
 
@@ -39,16 +24,6 @@ const LayoutInner: React.FC = () => {
         setContextMenu,
         addMultipleColumns,
         addMultipleRows,
-        importLevelIndex,
-        allLevels,
-        activeTile,
-        imageURL,
-        theme,
-        rows,
-        cols,
-        overlayEnabled,
-        currentLevelProvenance,
-        timeLimitSeconds,
     } = useLevelMapper();
     console.log('✓ Context loaded:', { showUnsavedBanner, isSaved });
     const unsavedToastIdRef = useRef<string | number | null>(null);
@@ -81,7 +56,6 @@ const LayoutInner: React.FC = () => {
     const leftPanelMin = 228; const leftPanelMax = 640;
     const [rightPanelWidth, setRightPanelWidth] = useState(288);
     const rightPanelMin = 260; const rightPanelMax = 560;
-    const [adminModeEnabled, setAdminModeEnabled] = useState(() => getAdminMode());
     const isResizingLeftRef = useRef(false);
     const isResizingRightRef = useRef(false);
 
@@ -89,16 +63,6 @@ const LayoutInner: React.FC = () => {
     const [leftCollapsed, setLeftCollapsed] = useState(defaultCompactViewport);
     const [rightCollapsed, setRightCollapsed] = useState(true);
     const compactViewportRef = useRef(defaultCompactViewport);
-    const currentLevel = importLevelIndex !== null ? allLevels[importLevelIndex] ?? null : null;
-    const selectedTile = TILE_TYPES.find((tile) => tile.id === activeTile) ?? TILE_TYPES[0];
-    const themeLabel = THEME_LABELS[theme || 'default'] ?? 'Default (Brown)';
-    const currentLevelLabel = currentLevel ? `Level ${currentLevel.id}` : 'Mapper';
-    const provenanceLabel =
-        currentLevelProvenance === 'user-edited'
-            ? 'User'
-            : currentLevelProvenance === 'ai-detected'
-                ? 'AI'
-                : 'Default';
 
     useEffect(() => {
         const onResize = () => setViewportWidth(window.innerWidth);
@@ -160,98 +124,6 @@ const LayoutInner: React.FC = () => {
         <div className="relative h-full min-h-0 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
             <div className="pointer-events-none absolute inset-0 opacity-60" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)', backgroundSize: '26px 26px' }} />
             <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[1880px] flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-2">
-                <div className="rounded-2xl border border-white/10 bg-stone-950/88 px-3 py-2 shadow-[0_18px_54px_rgba(0,0,0,0.3)] backdrop-blur-xl">
-                    <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-stone-400">
-                                <LayoutDashboard className="h-3.5 w-3.5 text-amber-300" />
-                                Mapper
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                <h1 className="text-lg font-black tracking-[0.06em] text-stone-50 sm:text-xl">
-                                    {currentLevelLabel}
-                                </h1>
-                                <div className="rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-stone-300">
-                                    {provenanceLabel}
-                                </div>
-                                <div
-                                    className={[
-                                        'rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em]',
-                                        isSaved
-                                            ? 'border-emerald-300/25 bg-emerald-500/12 text-emerald-100'
-                                            : 'border-amber-300/25 bg-amber-500/12 text-amber-100',
-                                    ].join(' ')}
-                                >
-                                    {isSaved ? 'Saved' : 'Unsaved'}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid min-w-0 gap-1 sm:grid-cols-2 xl:grid-cols-5">
-                            <MapperMetricPill className="rounded-lg px-2 py-1" label="Grid" value={`${rows} × ${cols}`} />
-                            <MapperMetricPill
-                                className="rounded-lg px-2 py-1"
-                                label="Selected Tile"
-                                value={
-                                    <span className="inline-flex items-center gap-2">
-                                        <span className="inline-block h-3 w-3 rounded-full border border-white/20" style={{ backgroundColor: selectedTile.color }} />
-                                        <span className="truncate">{selectedTile.name}</span>
-                                    </span>
-                                }
-                                tone="warning"
-                            />
-                            <MapperMetricPill className="rounded-lg px-2 py-1" label="Theme" value={themeLabel} />
-                            <MapperMetricPill
-                                className="rounded-lg px-2 py-1"
-                                label="Overlay"
-                                value={overlayEnabled && imageURL ? 'Aligned' : imageURL ? 'Image Ready' : 'No Image'}
-                                tone={overlayEnabled && imageURL ? 'success' : imageURL ? 'info' : 'default'}
-                            />
-                            <MapperMetricPill
-                                className="rounded-lg px-2 py-1"
-                                label="Timer"
-                                value={timeLimitSeconds && timeLimitSeconds > 0 ? `${timeLimitSeconds}s` : 'Off'}
-                                tone={timeLimitSeconds && timeLimitSeconds > 0 ? 'info' : 'default'}
-                            />
-                        </div>
-
-                        <div className="flex items-center justify-end">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const next = !adminModeEnabled;
-                                    setAdminModeEnabled(next);
-                                    setAdminMode(next);
-                                    toast.success(`Admin mode ${next ? 'enabled' : 'disabled'}.`, {
-                                        position: 'bottom-right',
-                                        duration: 2200,
-                                    });
-                                }}
-                                className={[
-                                    'inline-flex items-center gap-2 rounded-xl border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] transition-colors',
-                                    adminModeEnabled
-                                        ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
-                                        : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
-                                ].join(' ')}
-                                title="When enabled, the main game can freely skip/preview all levels."
-                                aria-pressed={adminModeEnabled}
-                            >
-                                <span>Admin</span>
-                                <span
-                                    className={[
-                                        'inline-flex min-w-[2.8rem] items-center justify-center rounded-full border px-2 py-0.5 text-[10px]',
-                                        adminModeEnabled
-                                            ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
-                                            : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
-                                    ].join(' ')}
-                                >
-                                    {adminModeEnabled ? 'ON' : 'OFF'}
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
                 <div className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
                     {showCompactDockBar && (
                         <div className="flex shrink-0 items-center gap-2 px-1">
