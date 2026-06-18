@@ -579,7 +579,7 @@ export const GridEditorPanel: React.FC = () => {
                 className="shrink-0 max-h-[24vh] overflow-auto rounded-md border border-border/50 bg-background/10 p-1"
             >
                 <div className="flex flex-wrap items-center justify-between gap-1 border-b border-border/60 pb-1">
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-1">
                             <div className="text-xs font-semibold leading-none">
                                 Grid Editor ({rows}×{cols} = {rows * cols} cells)
@@ -597,19 +597,15 @@ export const GridEditorPanel: React.FC = () => {
                             <div className="rounded-md border border-border/50 bg-background/55 px-2 py-0.5 text-[10px] text-muted-foreground md:text-[11px]">
                                 Diff cells: {differences.length}
                             </div>
+                            {imageMetaItems?.map((item) => (
+                                <div
+                                    key={item}
+                                    className="rounded-md border border-border/50 bg-background/40 px-2 py-0.5 text-[10px] leading-snug text-muted-foreground"
+                                >
+                                    {item}
+                                </div>
+                            ))}
                         </div>
-                        {imageMetaItems && (
-                            <div className="flex flex-wrap items-center gap-1">
-                                {imageMetaItems.map((item) => (
-                                    <div
-                                        key={item}
-                                        className="rounded-md border border-border/50 bg-background/40 px-2 py-0.5 text-[10px] leading-snug text-muted-foreground"
-                                    >
-                                        {item}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                         <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={undo} disabled={!canUndo} title="Undo" aria-label="Undo">
