@@ -10,7 +10,7 @@ export const MapperPanelFrame: React.FC<{
 }> = ({ children, className, style }) => (
     <div
         className={cn(
-            'relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[24px] border border-white/10 bg-stone-950/88 text-stone-100 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl',
+            'relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-stone-950/88 text-stone-100 shadow-[0_18px_54px_rgba(0,0,0,0.3)] backdrop-blur-xl',
             className,
         )}
         style={style}
@@ -28,22 +28,22 @@ export const MapperSection: React.FC<{
     className?: string;
     contentClassName?: string;
 }> = ({ title, eyebrow, description, actions, children, className, contentClassName }) => (
-    <section className={cn('rounded-[20px] border border-white/10 bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]', className)}>
-        <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
+    <section className={cn('rounded-2xl border border-white/10 bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]', className)}>
+        <div className="flex items-start justify-between gap-2 border-b border-white/10 px-3 py-2">
             <div className="min-w-0">
                 {eyebrow && (
                     <div className="text-[10px] font-black uppercase tracking-[0.22em] text-stone-400">
                         {eyebrow}
                     </div>
                 )}
-                <div className="mt-1 text-sm font-semibold text-stone-50">{title}</div>
+                <div className="mt-0.5 text-sm font-semibold text-stone-50">{title}</div>
                 {description && (
-                    <div className="mt-1 text-xs leading-relaxed text-stone-400">{description}</div>
+                    <div className="mt-0.5 text-xs leading-snug text-stone-400">{description}</div>
                 )}
             </div>
             {actions ? <div className="shrink-0">{actions}</div> : null}
         </div>
-        <div className={cn('px-4 py-4', contentClassName)}>{children}</div>
+        <div className={cn('px-3 py-3', contentClassName)}>{children}</div>
     </section>
 );
 
@@ -63,9 +63,9 @@ export const MapperMetricPill: React.FC<{
                     : 'border-white/10 bg-white/[0.05] text-stone-100';
 
     return (
-        <div className={cn('rounded-2xl border px-3 py-2', toneClassName, className)}>
-            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">{label}</div>
-            <div className="mt-1 text-sm font-semibold">{value}</div>
+        <div className={cn('rounded-xl border px-2.5 py-1.5', toneClassName, className)}>
+            <div className="text-[9px] font-black uppercase tracking-[0.16em] text-stone-400">{label}</div>
+            <div className="mt-0.5 text-sm font-semibold leading-tight">{value}</div>
         </div>
     );
 };
@@ -100,14 +100,17 @@ export const MapperDockButton: React.FC<{
         type="button"
         onClick={onClick}
         className={cn(
-            'flex shrink-0 flex-col items-start gap-2 rounded-[22px] border border-white/10 bg-stone-950/88 px-3 py-4 text-left text-stone-100 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:border-amber-200/30 hover:bg-stone-900/92',
+            'flex w-12 shrink-0 flex-col items-center gap-2 rounded-2xl border border-white/10 bg-stone-950/88 px-1.5 py-3 text-center text-stone-100 shadow-[0_16px_44px_rgba(0,0,0,0.26)] backdrop-blur-xl transition-all hover:border-amber-200/30 hover:bg-stone-900/92',
             align === 'right' && 'items-end text-right',
         )}
+        title={`${title}: ${description}`}
     >
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-stone-200">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-stone-200">
             {icon}
         </div>
-        <div className="text-xs font-black uppercase tracking-[0.18em] text-stone-400">{title}</div>
-        <div className="max-w-[92px] text-[11px] leading-relaxed text-stone-400">{description}</div>
+        <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">
+            {title}
+        </div>
+        <span className="sr-only">{description}</span>
     </button>
 );

@@ -8,7 +8,7 @@ import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
 import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
-const RULER_SIZE_PX = 24;
+const RULER_SIZE_PX = 20;
 const MIN_GRID_CELL_SIZE_PX = 12;
 
 export const GridEditorPanel: React.FC = () => {
@@ -122,9 +122,9 @@ export const GridEditorPanel: React.FC = () => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
             // Reserve space for the rulers so they sit above/left of the map (never overlay it).
-            const containerWidth = Math.max(1, containerRef.current.clientWidth - 32 - RULER_SIZE_PX);
+            const containerWidth = Math.max(1, containerRef.current.clientWidth - 8 - RULER_SIZE_PX);
             const fallbackHeight = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.65) : 600;
-            const containerHeight = Math.max(1, ((containerRef.current.clientHeight || fallbackHeight) - 32 - RULER_SIZE_PX));
+            const containerHeight = Math.max(1, ((containerRef.current.clientHeight || fallbackHeight) - 8 - RULER_SIZE_PX));
 
             if (imageURL) {
                 if (!imageNaturalSize) return;
@@ -568,20 +568,20 @@ export const GridEditorPanel: React.FC = () => {
                 `Cell ${cellWidth.toFixed(1)}×${cellHeight.toFixed(1)}px`,
             ]
             : null;
-    const compactIconButtonClass = "h-7 w-7";
-    const compactButtonClass = "h-8 px-2.5";
-    const sliderClass = "w-20 sm:w-24";
-    const toolRowClass = "flex flex-wrap items-center gap-1 rounded-xl border border-border/60 bg-background/20 p-1";
+    const compactIconButtonClass = "h-6 w-6 [&_svg]:h-3.5 [&_svg]:w-3.5";
+    const compactButtonClass = "h-7 px-2 text-xs";
+    const sliderClass = "w-14 sm:w-16";
+    const toolRowClass = "flex flex-wrap items-center gap-1 rounded-lg border border-border/60 bg-background/20 p-0.5";
 
     return (
-        <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card/95 p-2 shadow-sm">
+        <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card/95 p-1 shadow-sm">
             <div
-                className="shrink-0 max-h-[42vh] overflow-auto rounded-lg border border-border/50 bg-background/10 p-1.5"
+                className="shrink-0 max-h-[24vh] overflow-auto rounded-md border border-border/50 bg-background/10 p-1"
             >
-                <div className="flex flex-wrap items-start justify-between gap-1 border-b border-border/60 pb-1">
+                <div className="flex flex-wrap items-center justify-between gap-1 border-b border-border/60 pb-1">
                     <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-1">
-                            <div className="text-xs font-semibold leading-none md:text-sm">
+                            <div className="text-xs font-semibold leading-none">
                                 Grid Editor ({rows}×{cols} = {rows * cols} cells)
                             </div>
                             {importLevel && (
@@ -621,14 +621,14 @@ export const GridEditorPanel: React.FC = () => {
                         <Button
                             size="sm"
                             variant="default"
-                            className="h-9 px-3.5 font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-900/30 disabled:text-emerald-100/60"
+                            className="h-7 px-2.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-900/30 disabled:text-emerald-100/60"
                             onClick={() => { void saveCurrentMap(); }}
                             disabled={isSaved}
                             title={isSaved ? "Saved" : "Save changes (also learns references if overlay is loaded)"}
                             aria-label="Save Changes"
                         >
                             <span className="flex items-center gap-2">
-                                <Save className="h-4 w-4" />
+                                <Save className="h-3.5 w-3.5" />
                                 {isSaved ? 'Saved' : 'Save Changes'}
                             </span>
                         </Button>
@@ -647,7 +647,7 @@ export const GridEditorPanel: React.FC = () => {
                         {overlayEnabled ? <Eye /> : <EyeOff />}
                     </Button>
                     {overlayEnabled && (
-                        <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-xs">
+                        <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 text-xs">
                             <span className="text-muted-foreground" title="Overlay opacity">α</span>
                             <input className={sliderClass} type="range" min={0} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
                             <span className="tabular-nums">{Math.round(overlayOpacity * 100)}%</span>
@@ -679,7 +679,7 @@ export const GridEditorPanel: React.FC = () => {
                         </div>
                     )}
                     {imageURL && overlayEnabled && (
-                        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2 py-1 text-xs" title="Scale only the overlay image (grid stays fixed). Alt+wheel scales uniformly. Alt+Shift stretches X. Alt+Ctrl stretches Y.">
+                        <div className="flex flex-wrap items-center gap-1 rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 text-xs" title="Scale only the overlay image (grid stays fixed). Alt+wheel scales uniformly. Alt+Shift stretches X. Alt+Ctrl stretches Y.">
                             <ImageIcon className="h-4 w-4 text-muted-foreground" />
                             <Button
                                 size="icon"
@@ -858,7 +858,7 @@ export const GridEditorPanel: React.FC = () => {
                     </div>
                 )}
                 {isDragMode && (
-                    <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-1 text-[11px] leading-snug text-amber-600">
+                    <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-0.5 text-[11px] leading-snug text-amber-600">
                         Drag anywhere on the grid to fine-tune alignment. Mouse wheel zooms the view; hold Alt to scale only the overlay image. Turn drag mode off to paint or click cells.
                     </div>
                 )}
@@ -867,10 +867,10 @@ export const GridEditorPanel: React.FC = () => {
             <div className="min-h-0 flex-1">
                 <div
                     ref={containerRef}
-                    className="h-full min-h-[220px] overflow-auto rounded-xl border border-border/60 bg-background/20 p-1 [color-scheme:dark] sm:min-h-[280px]"
+                    className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-0 [color-scheme:dark] sm:min-h-[280px]"
                     onWheel={onWheelZoom}
                 >
-                    <div className="flex min-h-full min-w-full items-start justify-center px-0.5 pb-0.5">
+                    <div className="flex min-h-full min-w-full items-start justify-center">
                         <div
                             className="relative"
                             style={{
