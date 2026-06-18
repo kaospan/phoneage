@@ -819,48 +819,46 @@ export const GridEditorPanel: React.FC = () => {
                             >
                                 1x
                             </Button>
+
+                            <Button
+                                size="icon"
+                                variant={isDragMode ? "secondary" : "outline"}
+                                className={compactIconButtonClass}
+                                onClick={() => {
+                                    setIsDragMode((prev) => !prev);
+                                    setIsDraggingGrid(false);
+                                }}
+                                title="Drag the grid layer over the image overlay"
+                                aria-pressed={isDragMode}
+                            >
+                                <Move />
+                            </Button>
+                            <span className="tabular-nums text-muted-foreground" title="Overlay frame offset (px)">({gridOffsetX}, {gridOffsetY})</span>
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                className={compactIconButtonClass}
+                                onClick={() => {
+                                    setGridOffsetX(0);
+                                    setGridOffsetY(0);
+                                }}
+                                aria-label="Reset offset"
+                                title="Reset offset"
+                            >
+                                <Maximize2 />
+                            </Button>
                         </div>
                     )}
                 </div>
 
-                {imageURL && overlayEnabled && (
-                    <div className={toolRowClass}>
-                        <Button
-                            size="icon"
-                            variant={isDragMode ? "secondary" : "outline"}
-                            className={compactIconButtonClass}
-                            onClick={() => {
-                                setIsDragMode((prev) => !prev);
-                                setIsDraggingGrid(false);
-                            }}
-                            title="Drag the grid layer over the image overlay"
-                            aria-pressed={isDragMode}
-                        >
-                            <Move />
-                        </Button>
-                        <span className="tabular-nums text-muted-foreground" title="Overlay frame offset (px)">({gridOffsetX}, {gridOffsetY})</span>
-                        <Button
-                            size="icon"
-                            variant="outline"
-                            className={compactIconButtonClass}
-                            onClick={() => {
-                                setGridOffsetX(0);
-                                setGridOffsetY(0);
-                            }}
-                            aria-label="Reset offset"
-                        >
-                            <Maximize2 />
-                        </Button>
-                    </div>
-                )}
+            </div>
+        </div>
+            <div className="relative min-h-0 flex-1">
                 {isDragMode && (
-                    <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2 py-0.5 text-[11px] leading-snug text-amber-600">
+                    <div className="pointer-events-none absolute left-2 top-2 z-40 max-w-[min(560px,calc(100%-1rem))] rounded-md border border-amber-500/30 bg-stone-950/90 px-2 py-1 text-[11px] leading-snug text-amber-100 shadow-lg">
                         Drag anywhere on the grid to fine-tune alignment. Mouse wheel zooms the view; hold Alt to scale only the overlay image. Turn drag mode off to paint or click cells.
                     </div>
                 )}
-            </div>
-        </div>
-            <div className="min-h-0 flex-1">
                 <div
                     ref={containerRef}
                     className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-0 [color-scheme:dark] sm:min-h-[280px]"
