@@ -497,10 +497,7 @@ export const GridEditorPanel: React.FC = () => {
 
         const sensitivity = e.shiftKey ? 0.003 : 0.0015;
         const factor = Math.exp(-e.deltaY * sensitivity);
-        setZoom((prev) => {
-            const next = Math.max(0.5, Math.min(2, Number((prev * factor).toFixed(2))));
-            return next;
-        });
+        setZoom(Math.max(0.5, Math.min(2, Number((zoom * factor).toFixed(2)))));
     };
 
     const learnCurrentMap = async (options?: { silent?: boolean }) => {
