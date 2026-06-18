@@ -480,17 +480,17 @@ export const GridEditorPanel: React.FC = () => {
             const delta = e.deltaY > 0 ? -step : step;
 
             // Alt + wheel: uniform scale (locked), unless Ctrl or Shift is held for axis-specific stretch.
-            const nextX = (prev: number) => Math.max(0.85, Math.min(1.15, Number((prev + delta).toFixed(3))));
+            const nextScale = (current: number) => Math.max(0.85, Math.min(1.15, Number((current + delta).toFixed(3))));
 
             if (e.ctrlKey) {
                 setLockImageAspect(false);
-                setImageScaleY((prev) => nextX(prev));
+                setImageScaleY(nextScale(imageScaleY));
             } else if (e.shiftKey) {
                 setLockImageAspect(false);
-                setImageScaleX((prev) => nextX(prev));
+                setImageScaleX(nextScale(imageScaleX));
             } else {
-                setImageScaleX((prev) => nextX(prev));
-                setImageScaleY((prev) => nextX(prev));
+                setImageScaleX(nextScale(imageScaleX));
+                setImageScaleY(nextScale(imageScaleY));
             }
             return;
         }
@@ -683,15 +683,13 @@ export const GridEditorPanel: React.FC = () => {
                                 className={compactIconButtonClass}
                                 onClick={() => {
                                     markUnsaved();
-                                    setLockImageAspect((v) => {
-                                        const next = !v;
-                                        if (next) {
-                                            const avg = Number((((imageScaleX + imageScaleY) / 2)).toFixed(3));
-                                            setImageScaleX(avg);
-                                            setImageScaleY(avg);
-                                        }
-                                        return next;
-                                    });
+                                    const next = !lockImageAspect;
+                                    if (next) {
+                                        const avg = Number((((imageScaleX + imageScaleY) / 2)).toFixed(3));
+                                        setImageScaleX(avg);
+                                        setImageScaleY(avg);
+                                    }
+                                    setLockImageAspect(next);
                                 }}
                                 title={lockImageAspect ? "Aspect locked" : "Aspect unlocked"}
                                 aria-pressed={lockImageAspect}
@@ -707,11 +705,9 @@ export const GridEditorPanel: React.FC = () => {
                                 className={compactIconButtonClass}
                                 onClick={() => {
                                     markUnsaved();
-                                    setImageScaleX((s) => {
-                                        const next = Math.max(0.85, Number((s - 0.005).toFixed(3)));
-                                        if (lockImageAspect) setImageScaleY(next);
-                                        return next;
-                                    });
+                                    const next = Math.max(0.85, Number((imageScaleX - 0.005).toFixed(3)));
+                                    setImageScaleX(next);
+                                    if (lockImageAspect) setImageScaleY(next);
                                 }}
                                 aria-label="Decrease image scale X"
                             >
@@ -738,11 +734,9 @@ export const GridEditorPanel: React.FC = () => {
                                 className={compactIconButtonClass}
                                 onClick={() => {
                                     markUnsaved();
-                                    setImageScaleX((s) => {
-                                        const next = Math.min(1.15, Number((s + 0.005).toFixed(3)));
-                                        if (lockImageAspect) setImageScaleY(next);
-                                        return next;
-                                    });
+                                    const next = Math.min(1.15, Number((imageScaleX + 0.005).toFixed(3)));
+                                    setImageScaleX(next);
+                                    if (lockImageAspect) setImageScaleY(next);
                                 }}
                                 aria-label="Increase image scale X"
                             >
@@ -767,7 +761,7 @@ export const GridEditorPanel: React.FC = () => {
                                         className={compactIconButtonClass}
                                         onClick={() => {
                                             markUnsaved();
-                                            setImageScaleY((s) => Math.max(0.85, Number((s - 0.005).toFixed(3))));
+                                            setImageScaleY(Math.max(0.85, Number((imageScaleY - 0.005).toFixed(3))));
                                         }}
                                         aria-label="Decrease image scale Y"
                                     >
@@ -792,7 +786,7 @@ export const GridEditorPanel: React.FC = () => {
                                         className={compactIconButtonClass}
                                         onClick={() => {
                                             markUnsaved();
-                                            setImageScaleY((s) => Math.min(1.15, Number((s + 0.005).toFixed(3))));
+                                            setImageScaleY(Math.min(1.15, Number((imageScaleY + 0.005).toFixed(3))));
                                         }}
                                         aria-label="Increase image scale Y"
                                     >
