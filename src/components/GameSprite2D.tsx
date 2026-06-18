@@ -29,6 +29,7 @@ interface GameSprite2DProps {
 type LevelSpriteAtlas = {
   tileSprites: Record<number, string>;
   heroSprite?: string;
+  heroFootprintKeys?: Set<string>;
   boardBackground?: string;
   status: string;
   confidence?: number;
@@ -191,71 +192,6 @@ const hasUsableDinoShape = (canvas: HTMLCanvasElement, minPixels: number) => {
   );
 };
 
-const createDinoSilhouetteCanvas = (canvas: HTMLCanvasElement) => {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-
-  const { width, height } = canvas;
-  const image = ctx.getImageData(0, 0, width, height);
-  const pixels = image.data;
-  const greenMask = new Uint8Array(width * height);
-  let greenPixels = 0;
-
-  for (let i = 0, p = 0; i < pixels.length; i += 4, p += 1) {
-    const r = pixels[i];
-    const g = pixels[i + 1];
-    const b = pixels[i + 2];
-    if (g > 58 && g - r > 18 && g - b > 14) {
-      greenMask[p] = 1;
-      greenPixels += 1;
-    }
-  }
-
-  if (greenPixels < Math.round(width * height * 0.01)) return null;
-
-  const keepMask = new Uint8Array(width * height);
-  const radius = 4;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = y * width + x;
-      if (!greenMask[index]) continue;
-
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        const yy = y + dy;
-        if (yy < 0 || yy >= height) continue;
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          const xx = x + dx;
-          if (xx < 0 || xx >= width) continue;
-          if (dx * dx + dy * dy > radius * radius) continue;
-          keepMask[yy * width + xx] = 1;
-        }
-      }
-    }
-  }
-
-  const out = document.createElement("canvas");
-  out.width = width;
-  out.height = height;
-  const outCtx = out.getContext("2d");
-  if (!outCtx) return null;
-
-  const outImage = outCtx.createImageData(width, height);
-  for (let i = 0, p = 0; i < pixels.length; i += 4, p += 1) {
-    if (!keepMask[p]) {
-      outImage.data[i + 3] = 0;
-      continue;
-    }
-
-    outImage.data[i] = pixels[i];
-    outImage.data[i + 1] = pixels[i + 1];
-    outImage.data[i + 2] = pixels[i + 2];
-    outImage.data[i + 3] = pixels[i + 3];
-  }
-
-  outCtx.putImageData(outImage, 0, 0);
-  return out;
-};
-
 export function GameSprite2D({
   grid,
   atlasSourceGrid,
@@ -352,6 +288,7 @@ export function GameSprite2D({
       setLevelAtlas((prev) => ({
         tileSprites: prev?.tileSprites ?? {},
         heroSprite: undefined,
+        heroFootprintKeys: undefined,
         boardBackground: undefined,
         status: "Building sprites...",
         confidence: prev?.confidence,
@@ -376,23 +313,25 @@ export function GameSprite2D({
         dsCtx.imageSmoothingEnabled = false;
         dsCtx.drawImage(img, 0, 0, dsW, dsH);
 
-        const buildDosGridFallback = () => {
-          if (rows !== 12 || cols !== 20) return null;
-          if (dsW < 900 || dsH < 600) return null;
+        const buildAspectGridFallback = () => {
+          if (rows <= 0 || cols <= 0) return null;
+          const minCellPx = 16;
+          if (dsW < cols * minCellPx || dsH < rows * minCellPx) return null;
           const targetAspect = cols / rows;
           const imageAspect = dsW / dsH;
-          if (Math.abs(imageAspect - targetAspect) / targetAspect > 0.035) return null;
+          if (Math.abs(imageAspect - targetAspect) / targetAspect > 0.18) return null;
 
-          const cell = dsW / cols;
-          if (dsH < cell * rows) return null;
+          const cellWidth = dsW / cols;
+          const cellHeight = dsH / rows;
+          if (cellWidth <= 0 || cellHeight <= 0) return null;
 
           return {
             rows,
             cols,
             offsetX: 0,
             offsetY: 0,
-            cellWidth: cell,
-            cellHeight: cell,
+            cellWidth,
+            cellHeight,
             runLenX: cols + 1,
             runLenY: rows + 1,
             scoreX: 1,
@@ -403,19 +342,20 @@ export function GameSprite2D({
           };
         };
 
-        let usedDosGridFallback = false;
+        let usedAspectGridFallback = false;
         let det = detectGridLines(dsCanvas, true, rows, cols, getAlignmentHints());
         if (!det || det.confidence < ATLAS_MIN_CONFIDENCE) {
-          const dosFallback = buildDosGridFallback();
-          if (dosFallback) {
-            det = dosFallback;
-            usedDosGridFallback = true;
+          const aspectFallback = buildAspectGridFallback();
+          if (aspectFallback) {
+            det = aspectFallback;
+            usedAspectGridFallback = true;
           }
         }
         if (!det) {
           setLevelAtlas((prev) => ({
             tileSprites: prev?.tileSprites ?? {},
             heroSprite: prev?.heroSprite,
+            heroFootprintKeys: prev?.heroFootprintKeys,
             boardBackground: prev?.boardBackground,
             status: "Sprite mode: grid detect failed (using reference sprites)",
             confidence: prev?.confidence,
@@ -427,17 +367,32 @@ export function GameSprite2D({
 
         const scaleX = img.width / dsW;
         const scaleY = img.height / dsH;
-        const offsetX = Math.max(0, Math.round(det.offsetX * scaleX));
-        const offsetY = Math.max(0, Math.round(det.offsetY * scaleY));
-        const cellW = Math.max(1, Math.round(det.cellWidth * scaleX));
-        const cellH = Math.max(1, Math.round(det.cellHeight * scaleY));
-        const frameW = Math.max(1, Math.round(cellW * cols));
-        const frameH = Math.max(1, Math.round(cellH * rows));
-        const frameFitsImage = offsetX + frameW <= img.width + 2 && offsetY + frameH <= img.height + 2;
+        let offsetX = Math.max(0, Math.round(det.offsetX * scaleX));
+        let offsetY = Math.max(0, Math.round(det.offsetY * scaleY));
+        let cellW = Math.max(1, Math.round(det.cellWidth * scaleX));
+        let cellH = Math.max(1, Math.round(det.cellHeight * scaleY));
+        let frameW = Math.max(1, Math.round(det.cellWidth * cols * scaleX));
+        let frameH = Math.max(1, Math.round(det.cellHeight * rows * scaleY));
+        let frameFitsImage = offsetX + frameW <= img.width + 2 && offsetY + frameH <= img.height + 2;
+        if (!frameFitsImage && !usedAspectGridFallback) {
+          const aspectFallback = buildAspectGridFallback();
+          if (aspectFallback) {
+            det = aspectFallback;
+            usedAspectGridFallback = true;
+            offsetX = Math.max(0, Math.round(det.offsetX * scaleX));
+            offsetY = Math.max(0, Math.round(det.offsetY * scaleY));
+            cellW = Math.max(1, Math.round(det.cellWidth * scaleX));
+            cellH = Math.max(1, Math.round(det.cellHeight * scaleY));
+            frameW = Math.max(1, Math.round(det.cellWidth * cols * scaleX));
+            frameH = Math.max(1, Math.round(det.cellHeight * rows * scaleY));
+            frameFitsImage = offsetX + frameW <= img.width + 2 && offsetY + frameH <= img.height + 2;
+          }
+        }
         if (!frameFitsImage) {
           setLevelAtlas((prev) => ({
             tileSprites: prev?.tileSprites ?? {},
             heroSprite: prev?.heroSprite,
+            heroFootprintKeys: prev?.heroFootprintKeys,
             boardBackground: undefined,
             status: "Sprite mode: rejected bad screenshot crop (using reference sprites)",
             confidence: det.confidence,
@@ -507,10 +462,30 @@ export function GameSprite2D({
         };
 
         const minDinoPixels = Math.round(outW * outH * 0.012);
+        const findHeroFootprintKeys = () => {
+          const keys = new Set<string>();
+          if (!playerStart || playerStart.x < 0 || playerStart.y < 0) return keys;
+
+          const weakDinoPixels = Math.round(outW * outH * 0.006);
+          const heroInset = Math.max(0, inset - 1);
+          for (let y = playerStart.y - 1; y <= playerStart.y + 1; y += 1) {
+            for (let x = playerStart.x - 1; x <= playerStart.x + 1; x += 1) {
+              if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+              const canvas = cropCell(y, x, heroInset);
+              if (!canvas) continue;
+              if (scoreDinoCrop(canvas) >= weakDinoPixels) keys.add(`${x},${y}`);
+            }
+          }
+
+          keys.add(`${playerStart.x},${playerStart.y}`);
+          return keys;
+        };
+
         const findBestDinoCrop = () => {
           if (!playerStart || playerStart.x < 0 || playerStart.y < 0) return null;
 
           const heroInset = Math.max(0, inset - 1);
+          const weakDinoPixels = Math.round(outW * outH * 0.006);
           const strongDinoPixels = Math.round(outW * outH * 0.035);
           let bestCanvas: HTMLCanvasElement | null = null;
           let bestScore = 0;
@@ -602,6 +577,7 @@ export function GameSprite2D({
 
           const clusterCanvas = findGreenClusterNearStart();
           if (clusterCanvas && hasUsableDinoShape(clusterCanvas, minDinoPixels)) return clusterCanvas;
+          if (clusterCanvas && scoreDinoCrop(clusterCanvas) >= weakDinoPixels) return clusterCanvas;
 
           for (let y = 0; y < rows; y += 1) {
             for (let x = 0; x < cols; x += 1) {
@@ -611,11 +587,13 @@ export function GameSprite2D({
             }
           }
 
+          if (bestCanvas && bestRawScore >= weakDinoPixels) return bestCanvas;
           return bestCanvas && hasUsableDinoShape(bestCanvas, minDinoPixels) ? bestCanvas : null;
         };
 
         const tileSprites: Record<number, string> = {};
         let floorCanvasForSanity: HTMLCanvasElement | null = null;
+        let sampledAtlasReliable = true;
         sampleByType.forEach((pos, tileType) => {
           const canvas = cropCell(pos.row, pos.col);
           if (!canvas) return;
@@ -642,14 +620,7 @@ export function GameSprite2D({
             const mean = sum / Math.max(1, total);
             const blackFrac = nearBlack / Math.max(1, total);
             if (mean < 28 && blackFrac > 0.55) {
-              setLevelAtlas((prev) => ({
-                tileSprites: prev?.tileSprites ?? {},
-                heroSprite: prev?.heroSprite,
-                boardBackground: prev?.boardBackground,
-                status: `Sprite mode: bad atlas crop (floor too dark) - using reference sprites`,
-                confidence: det.confidence,
-              }));
-              return;
+              sampledAtlasReliable = false;
             }
           }
         }
@@ -697,12 +668,10 @@ export function GameSprite2D({
         let heroSprite: string | undefined;
         const bestDinoCrop = findBestDinoCrop();
         if (bestDinoCrop) {
-          const silhouette = createDinoSilhouetteCanvas(bestDinoCrop);
-          heroSprite = (silhouette ?? bestDinoCrop).toDataURL("image/png");
+          heroSprite = bestDinoCrop.toDataURL("image/png");
         }
 
-        // Keep the older floor-diff path as a backup for non-green variants, but
-        // never accept a raw opaque crop unless it passes the dino color check above.
+        // Keep the older floor-diff path as a backup for non-green variants.
         const cleanFloor = findCleanFloorCell();
         if (!heroSprite && cleanFloor && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
           const floorCanvas = cropCell(cleanFloor.y, cleanFloor.x);
@@ -751,12 +720,21 @@ export function GameSprite2D({
           }
         }
 
+        if (!heroSprite && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
+          const rawStartCrop = cropCell(playerStart.y, playerStart.x, Math.max(0, inset - 1));
+          if (rawStartCrop) heroSprite = rawStartCrop.toDataURL("image/png");
+        }
+        const heroFootprintKeys = findHeroFootprintKeys();
+
         setLevelAtlas({
-          tileSprites,
+          tileSprites: sampledAtlasReliable ? tileSprites : {},
           heroSprite,
+          heroFootprintKeys,
           boardBackground,
-          status: usedDosGridFallback
-            ? "Sprites ready (DOS grid fallback)"
+          status: !sampledAtlasReliable
+            ? `Sprites ready (screenshot base; tile atlas rejected at conf ${det.confidence.toFixed(2)})`
+            : usedAspectGridFallback
+            ? "Sprites ready (aspect grid fallback)"
             : allowAtlas
             ? `Sprites ready (conf ${det.confidence.toFixed(2)})`
             : `Sprite mode: low grid confidence (conf ${det.confidence.toFixed(2)}) - using reference sprites`,
@@ -767,6 +745,7 @@ export function GameSprite2D({
         setLevelAtlas((prev) => ({
           tileSprites: prev?.tileSprites ?? {},
           heroSprite: prev?.heroSprite,
+          heroFootprintKeys: prev?.heroFootprintKeys,
           boardBackground: prev?.boardBackground,
           status: "Sprite mode: failed to build sprites (using reference sprites)",
           confidence: prev?.confidence,
@@ -852,6 +831,16 @@ export function GameSprite2D({
   const goalCaveFallbackUrl = useMemo(() => referenceSpriteUrls.cave, []);
   const boardBackgroundUrl = levelAtlas?.boardBackground ?? null;
   const useScreenshotBase = Boolean(boardBackgroundUrl);
+  const screenshotHeroCropStyle =
+    useScreenshotBase && boardBackgroundUrl && playerStart && playerStart.x >= 0 && playerStart.y >= 0
+      ? {
+          backgroundImage: `url(${boardBackgroundUrl})`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: `${cols > 1 ? (playerStart.x / (cols - 1)) * 100 : 0}% ${rows > 1 ? (playerStart.y / (rows - 1)) * 100 : 0}%`,
+          backgroundSize: `${cols * 100}% ${rows * 100}%`,
+          imageRendering: "pixelated" as const,
+        }
+      : null;
   const isBuildingScreenshotBase =
     Boolean(levelImageUrl) && !boardBackgroundUrl && (!levelAtlas || levelAtlas.status === "Building sprites...");
   const allowGeneratedFallback = !isBuildingScreenshotBase;
@@ -881,6 +870,9 @@ export function GameSprite2D({
         }}
       >
         <div
+          data-sprite-status={levelAtlas?.status ?? "no-atlas"}
+          data-sprite-has-board={boardBackgroundUrl ? "1" : "0"}
+          data-sprite-has-hero={levelAtlas?.heroSprite ? "1" : "0"}
           className={[
             "grid gap-0",
             fullBleed ? "rounded-none" : "rounded-lg",
@@ -932,6 +924,18 @@ export function GameSprite2D({
                 ? 3
                 : (renderBaselineRef.current?.grid[y]?.[x] ?? originalTileType);
               const originalIsArrow = originalTileType >= 7 && originalTileType <= 13;
+              const hasMovedOffScreenshotStart =
+                Boolean(
+                  useScreenshotBase &&
+                  playerStart &&
+                  localPlayer &&
+                  (localPlayer.pos.x !== playerStart.x || localPlayer.pos.y !== playerStart.y)
+                );
+              const heroFootprintNeedsCleanup =
+                Boolean(
+                  hasMovedOffScreenshotStart &&
+                  levelAtlas?.heroFootprintKeys?.has(`${x},${y}`)
+                );
               const playerStartNeedsCleanup =
                 Boolean(
                   playerStart &&
@@ -939,7 +943,7 @@ export function GameSprite2D({
                   playerStart.y === y &&
                   localPlayer &&
                   (localPlayer.pos.x !== x || localPlayer.pos.y !== y)
-                );
+                ) || heroFootprintNeedsCleanup;
               const tileChangedFromScreenshot = effectiveTileType !== baselineTileType;
               const shouldPaintStaticTile =
                 !suppressPlayerOverlay && (
@@ -1047,6 +1051,12 @@ export function GameSprite2D({
                         className="absolute inset-0 h-full w-full"
                         style={{ imageRendering: "pixelated" }}
                         draggable={false}
+                      />
+                    ) : screenshotHeroCropStyle ? (
+                      <div
+                        aria-label="Hero"
+                        className="absolute inset-0 h-full w-full"
+                        style={screenshotHeroCropStyle}
                       />
                     ) : renderHeroFallback()
                   )}
