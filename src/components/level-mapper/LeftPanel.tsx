@@ -288,7 +288,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             style={{ width, minWidth: min, maxWidth: max, maxHeight: '100%' }}
         >
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] px-5 py-4">
+            <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] px-5 py-3">
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -337,8 +337,8 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         <div className="mt-1 text-xl font-black tracking-[0.08em] text-stone-50">
                             {currentLevelTitle}
                         </div>
-                        <div className="mt-1 text-xs leading-relaxed text-stone-400">
-                            Load screenshots, steer level metadata, and prep the board before you move into alignment or paint work.
+                        <div className="mt-0.5 text-[11px] leading-snug text-stone-400">
+                            Screenshot, level, board.
                         </div>
                     </div>
                     <button
@@ -375,14 +375,14 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     </button>
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <MapperMetricPill label="Board" value={boardShapeLabel} />
                     <MapperMetricPill label="Theme" value={currentThemeKey === 'default' ? 'Default' : currentThemeKey} tone="warning" />
                     <MapperMetricPill label="Selected Tile" value={selectedTile.name} tone="info" />
                     <MapperMetricPill label="Screenshot" value={imageStatusLabel} tone={imageURL ? 'success' : 'default'} />
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                         size="sm"
                         variant="outline"
