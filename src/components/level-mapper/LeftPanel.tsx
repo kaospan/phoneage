@@ -16,7 +16,7 @@ import { putLevelImage } from './levelImageStore';
 import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT } from '@/lib/uiSettings';
 import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
-import { MapperMetricPill, MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
+import { MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
 import { getAdminMode, setAdminMode } from '@/lib/adminMode';
 import { toast } from 'sonner';
 
@@ -288,7 +288,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
             style={{ width, minWidth: min, maxWidth: max, maxHeight: '100%' }}
         >
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] px-5 py-3">
+            <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] px-4 py-2">
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -329,64 +329,11 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     }}
                 />
 
-                <div className="flex items-start justify-between gap-3 pr-10">
-                    <div className="min-w-0">
-                        <div className="text-[10px] font-black uppercase tracking-[0.22em] text-stone-400">
-                            Control Deck
-                        </div>
-                        <div className="mt-1 text-xl font-black tracking-[0.08em] text-stone-50">
-                            {currentLevelTitle}
-                        </div>
-                        <div className="mt-0.5 text-[11px] leading-snug text-stone-400">
-                            Screenshot, level, board.
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const next = !adminModeEnabled;
-                            setAdminModeEnabled(next);
-                            setAdminMode(next);
-                            toast.success(`Admin mode ${next ? 'enabled' : 'disabled'}.`, {
-                                position: 'bottom-right',
-                                duration: 2200,
-                            });
-                        }}
-                        className={[
-                            'inline-flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.14em] transition-colors',
-                            adminModeEnabled
-                                ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
-                                : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
-                        ].join(' ')}
-                        title="When enabled, the main game can freely skip/preview all levels."
-                        aria-pressed={adminModeEnabled}
-                    >
-                        <span>Admin</span>
-                        <span
-                            className={[
-                                'inline-flex min-w-[2.8rem] items-center justify-center rounded-full border px-2 py-0.5 text-[10px]',
-                                adminModeEnabled
-                                    ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
-                                    : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
-                            ].join(' ')}
-                        >
-                            {adminModeEnabled ? 'ON' : 'OFF'}
-                        </span>
-                    </button>
-                </div>
-
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <MapperMetricPill label="Board" value={boardShapeLabel} />
-                    <MapperMetricPill label="Theme" value={currentThemeKey === 'default' ? 'Default' : currentThemeKey} tone="warning" />
-                    <MapperMetricPill label="Selected Tile" value={selectedTile.name} tone="info" />
-                    <MapperMetricPill label="Screenshot" value={imageStatusLabel} tone={imageURL ? 'success' : 'default'} />
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2 pr-10">
                     <Button
                         size="sm"
                         variant="outline"
-                        className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
+                        className="h-8 border-white/10 bg-white/[0.03] px-2.5 text-xs text-stone-100 hover:bg-white/[0.08]"
                         onClick={() => {
                             replaceGridShape(createDefaultMapperVoidGrid());
                             setImageURL(null);
@@ -403,10 +350,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         }}
                         title="Clear current level and start fresh"
                     >
-                        New Level
+                        New
                     </Button>
                     <select
-                        className="h-9 min-w-[148px] rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-xs text-stone-100 [color-scheme:dark]"
+                        className="h-8 min-w-[132px] flex-1 rounded-xl border border-white/10 bg-stone-900/85 px-2.5 text-xs text-stone-100 [color-scheme:dark]"
                         value={importLevelIndex ?? ''}
                         onChange={(e) => {
                             const val = e.target.value;
@@ -417,21 +364,22 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             void loadLevelByIndex(idx);
                         }}
                         title="Load an existing level into the mapper"
+                        aria-label={currentLevelTitle}
                     >
                         <option value="">Load level...</option>
                         {allLevels.map((lvl, idx) => (<option key={lvl.id} value={idx}>Level {lvl.id}</option>))}
                     </select>
                     <Button
                         size="sm"
-                        className="bg-amber-300 text-stone-950 hover:bg-amber-200"
+                        className="h-8 bg-amber-300 px-2.5 text-xs text-stone-950 hover:bg-amber-200"
                         onClick={triggerFileUpload}
                     >
-                        Upload Screenshot
+                        Upload
                     </Button>
                     <Button
                         size="sm"
                         variant="outline"
-                        className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
+                        className="h-8 border-white/10 bg-white/[0.03] px-2.5 text-xs text-stone-100 hover:bg-white/[0.08]"
                         disabled={!canGoPrev}
                         title={importLevelIndex === null ? 'Load a level first' : 'Load previous level'}
                         onClick={() => {
@@ -447,7 +395,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     <Button
                         size="sm"
                         variant="outline"
-                        className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
+                        className="h-8 border-white/10 bg-white/[0.03] px-2.5 text-xs text-stone-100 hover:bg-white/[0.08]"
                         disabled={!canGoNext}
                         title={importLevelIndex === null ? 'Load a level first' : 'Load next level'}
                         onClick={() => {
@@ -460,6 +408,45 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                     >
                         Next
                     </Button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const next = !adminModeEnabled;
+                            setAdminModeEnabled(next);
+                            setAdminMode(next);
+                            toast.success(`Admin mode ${next ? 'enabled' : 'disabled'}.`, {
+                                position: 'bottom-right',
+                                duration: 2200,
+                            });
+                        }}
+                        className={[
+                            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors',
+                            adminModeEnabled
+                                ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
+                                : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
+                        ].join(' ')}
+                        title="When enabled, the main game can freely skip/preview all levels."
+                        aria-pressed={adminModeEnabled}
+                    >
+                        <span>Admin</span>
+                        <span
+                            className={[
+                                'inline-flex min-w-8 items-center justify-center rounded-full border px-1.5 py-0.5 text-[9px]',
+                                adminModeEnabled
+                                    ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
+                                    : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
+                            ].join(' ')}
+                        >
+                            {adminModeEnabled ? 'ON' : 'OFF'}
+                        </span>
+                    </button>
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-300">
+                    <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1">Board {boardShapeLabel}</span>
+                    <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1">Theme {currentThemeKey === 'default' ? 'Default' : currentThemeKey}</span>
+                    <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1">{selectedTile.name}</span>
+                    <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1">{imageStatusLabel}</span>
                 </div>
 
                 <div className="mt-4 grid gap-3 xl:grid-cols-[1.1fr,0.9fr]">

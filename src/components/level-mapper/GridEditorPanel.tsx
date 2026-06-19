@@ -171,17 +171,6 @@ export const GridEditorPanel: React.FC = () => {
         };
     }, [imageURL, imageNaturalSize, cols, rows, zoom, gridFrameHeight, gridFrameWidth]);
 
-    const differences = React.useMemo(() => {
-        const ref = compareLevel?.grid || [];
-        const diffs: { r: number; c: number }[] = [];
-        for (let r = 0; r < Math.max(ref.length, grid.length); r++) {
-            for (let c = 0; c < Math.max(ref[0]?.length || 0, grid[0]?.length || 0); c++) {
-                const a = ref[r]?.[c]; const b = grid[r]?.[c]; if (a !== b) diffs.push({ r, c });
-            }
-        }
-        return diffs;
-    }, [grid, compareLevel]);
-
     const isPaintingRef = React.useRef(false);
     const didPushUndoRef = React.useRef(false);
     const dragStartRef = React.useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
@@ -556,15 +545,6 @@ export const GridEditorPanel: React.FC = () => {
     const gridBottomPx = displayOffsetY + rows * cellHeight;
     const contentWidthPx = Math.max(imageRightPx, gridRightPx, cols * cellWidth);
     const contentHeightPx = Math.max(imageBottomPx, gridBottomPx, rows * cellHeight);
-    const imageMetaItems =
-        overlayEnabled && imageNaturalSize
-            ? [
-                `Img ${imageNaturalSize.width}×${imageNaturalSize.height}`,
-                `Frame ${Math.round(naturalFrameWidth)}×${Math.round(naturalFrameHeight)}`,
-                `View ${Math.round(displaySize.width)}×${Math.round(displaySize.height)}`,
-                `Cell ${cellWidth.toFixed(1)}×${cellHeight.toFixed(1)}px`,
-            ]
-            : null;
     const compactIconButtonClass = "h-6 w-6 [&_svg]:h-3.5 [&_svg]:w-3.5";
     const compactButtonClass = "h-7 px-2 text-xs";
     const sliderClass = "w-14 sm:w-16";
@@ -572,63 +552,27 @@ export const GridEditorPanel: React.FC = () => {
 
     return (
         <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card/95 p-1 shadow-sm">
-            <div
-                className="shrink-0 max-h-[24vh] overflow-auto rounded-md border border-border/50 bg-background/10 p-1"
-            >
-                <div className="flex flex-wrap items-center justify-between gap-1 border-b border-border/60 pb-1">
-                    <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1">
-                            <div className="text-xs font-semibold leading-none">
-                                Grid Editor ({rows}×{cols} = {rows * cols} cells)
-                            </div>
-                            {importLevel && (
-                                <div className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100 md:text-[11px]">
-                                    Editing: Level {importLevel.id}
-                                </div>
-                            )}
-                            {imageURL && overlayEnabled && (
-                                <div className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-100 md:text-[11px]">
-                                    Image overlay active
-                                </div>
-                            )}
-                            <div className="rounded-md border border-border/50 bg-background/55 px-2 py-0.5 text-[10px] text-muted-foreground md:text-[11px]">
-                                Diff cells: {differences.length}
-                            </div>
-                            {imageMetaItems?.map((item) => (
-                                <div
-                                    key={item}
-                                    className="rounded-md border border-border/50 bg-background/40 px-2 py-0.5 text-[10px] leading-snug text-muted-foreground"
-                                >
-                                    {item}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                        <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={undo} disabled={!canUndo} title="Undo" aria-label="Undo">
-                            <Undo2 />
-                        </Button>
-                        <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={redo} disabled={!canRedo} title="Redo" aria-label="Redo">
-                            <Redo2 />
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="default"
-                            className="h-7 px-2.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-900/30 disabled:text-emerald-100/60"
-                            onClick={() => { void saveCurrentMap(); }}
-                            disabled={isSaved}
-                            title={isSaved ? "Saved" : "Save changes (also learns references if overlay is loaded)"}
-                            aria-label="Save Changes"
-                        >
-                            <span className="flex items-center gap-2">
-                                <Save className="h-3.5 w-3.5" />
-                                {isSaved ? 'Saved' : 'Save Changes'}
-                            </span>
-                        </Button>
-                    </div>
-                </div>
-                <div className="mt-1 grid gap-1">
+            <div className="shrink-0 overflow-x-auto rounded-md border border-border/50 bg-background/10 p-0.5">
+                <div className="grid gap-0.5">
                 <div className={toolRowClass}>
+                    <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={undo} disabled={!canUndo} title="Undo" aria-label="Undo">
+                        <Undo2 />
+                    </Button>
+                    <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={redo} disabled={!canRedo} title="Redo" aria-label="Redo">
+                        <Redo2 />
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="default"
+                        className="h-6 px-2 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-900/30 disabled:text-emerald-100/60"
+                        onClick={() => { void saveCurrentMap(); }}
+                        disabled={isSaved}
+                        title={isSaved ? "Saved" : "Save changes (also learns references if overlay is loaded)"}
+                        aria-label="Save Changes"
+                    >
+                        <Save className="mr-1 h-3.5 w-3.5" />
+                        {isSaved ? 'Saved' : 'Save'}
+                    </Button>
                     <Button
                         size="icon"
                         variant={overlayEnabled ? "secondary" : "outline"}
