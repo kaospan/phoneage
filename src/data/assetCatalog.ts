@@ -1,11 +1,3 @@
-import menuPng from '../assets/menu.png';
-import backgroundPng from '../assets/stone-age-bg.png';
-import stonePng from '../assets/stone.png';
-import floorJpg from '../assets/floor.jpg';
-import caveJpg from '../assets/door.jpg';
-import arrowLeftJpg from '../assets/left.jpg';
-import arrowDownJpg from '../assets/down.jpg';
-
 export interface AssetEntry {
   name: string;
   url: string;
@@ -18,26 +10,28 @@ export interface StageImageSet {
 }
 
 const stagePngs = import.meta.glob('../assets/level_*.png', { eager: true, import: 'default' }) as Record<string, string>;
-
-const supportAssets = {
-  'menu.png': menuPng,
-  'stone-age-bg.png': backgroundPng,
-  'stone.png': stonePng,
-  'floor.jpg': floorJpg,
-  'door.jpg': caveJpg,
-  'left.jpg': arrowLeftJpg,
-  'down.jpg': arrowDownJpg,
-} satisfies Record<string, string>;
+const supportAssetModules = import.meta.glob('../assets/*.{png,jpg,jpeg,webp}', { eager: true, import: 'default' }) as Record<string, string>;
+const supportAssetNames = new Set([
+  'menu.png',
+  'stone-age-bg.png',
+  'stone.png',
+  'floor.jpg',
+  'door.jpg',
+  'left.jpg',
+  'down.jpg',
+]);
 
 const stageAssets: AssetEntry[] = Object.entries(stagePngs).map(([path, url]) => ({
   name: path.split('/').pop() || path,
   url,
 }));
 
-const supportAssetEntries: AssetEntry[] = Object.entries(supportAssets).map(([name, url]) => ({
-  name,
-  url,
-}));
+const supportAssetEntries: AssetEntry[] = Object.entries(supportAssetModules)
+  .map(([path, url]) => ({
+    name: path.split('/').pop() || path,
+    url,
+  }))
+  .filter((asset) => supportAssetNames.has(asset.name));
 
 const assets: AssetEntry[] = [...stageAssets, ...supportAssetEntries];
 
