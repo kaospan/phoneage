@@ -153,7 +153,7 @@ export interface LevelMapperContextValue {
   setAllLevels: Dispatch<SetStateAction<ReturnType<typeof getAllLevels>>>;
   compareLevelIndex: number;
   setCompareLevelIndex: (i: number) => void;
-  compareLevel: any;
+  compareLevel: ReturnType<typeof getAllLevels>[number] | undefined;
   importLevelIndex: number | null;
   setImportLevelIndex: (i: number | null) => void;
 
@@ -178,7 +178,7 @@ export interface LevelMapperContextValue {
 
   // Bulk context menu
   contextMenu: { x: number; y: number; type: BulkContextType } | null;
-  setContextMenu: (m: any) => void;
+  setContextMenu: Dispatch<SetStateAction<{ x: number; y: number; type: BulkContextType } | null>>;
   addMultipleColumns: (side: 'left' | 'right', count: number) => void;
   addMultipleRows: (side: 'top' | 'bottom', count: number) => void;
 

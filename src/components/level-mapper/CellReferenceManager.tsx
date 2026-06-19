@@ -90,7 +90,7 @@ export const CellReferenceManager: React.FC = () => {
         };
 
         void run();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [references, autoCleaned]);
 
     // Save references to localStorage

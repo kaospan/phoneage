@@ -209,7 +209,7 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
   const out: PromotedLevelDefault[] = [];
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') continue;
-    const e = entry as any;
+    const e = entry as Partial<Record<keyof PromotedLevelDefault, unknown>>;
     const id = Number(e.id);
     const grid = e.grid as unknown;
     const playerStart = e.playerStart as unknown;
@@ -220,14 +220,16 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
     if (!playerStart || typeof playerStart !== 'object') continue;
     if (!cavePos || typeof cavePos !== 'object') continue;
 
-    const psx = Number((playerStart as any).x);
-    const psy = Number((playerStart as any).y);
-    const cx = Number((cavePos as any).x);
-    const cy = Number((cavePos as any).y);
+    const start = playerStart as Partial<Record<'x' | 'y', unknown>>;
+    const cave = cavePos as Partial<Record<'x' | 'y', unknown>>;
+    const psx = Number(start.x);
+    const psy = Number(start.y);
+    const cx = Number(cave.x);
+    const cy = Number(cave.y);
     if (![psx, psy, cx, cy].every(Number.isInteger)) continue;
 
-    const rows = (grid as any[]).length;
-    const cols = Array.isArray((grid as any[])[0]) ? ((grid as any[])[0] as any[]).length : 0;
+    const rows = grid.length;
+    const cols = Array.isArray(grid[0]) ? grid[0].length : 0;
     if (rows <= 0 || cols <= 0) continue;
     if (psx < 0 || psy < 0 || psy >= rows || psx >= cols) continue;
     if (cx < 0 || cy < 0 || cy >= rows || cx >= cols) continue;
@@ -663,7 +665,7 @@ export const getAllLevels = (): Level[] => {
                result.timeLimitSeconds = Math.min(86400, Math.round(n));
              } else {
                // Treat 0/null/invalid as "no timer"
-               delete (result as any).timeLimitSeconds;
+               delete result.timeLimitSeconds;
              }
            }
            if (parsed.hourglassBonusByCell && typeof parsed.hourglassBonusByCell === 'object') {
@@ -687,7 +689,7 @@ export const getAllLevels = (): Level[] => {
              if (Object.keys(out).length > 0) {
                result.hourglassBonusByCell = out;
              } else {
-               delete (result as any).hourglassBonusByCell;
+               delete result.hourglassBonusByCell;
              }
            }
            return result;

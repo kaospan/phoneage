@@ -200,10 +200,11 @@ export const loadLevelLayoutOverride = (levelId: number): { rows: number; cols: 
     try {
         const raw = localStorage.getItem(`${LEVEL_LAYOUT_OVERRIDE_PREFIX}${levelId}`);
         if (!raw) return null;
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(raw) as unknown;
         if (!parsed || typeof parsed !== 'object') return null;
-        const rows = Number((parsed as any).rows);
-        const cols = Number((parsed as any).cols);
+        const layout = parsed as Partial<{ rows: unknown; cols: unknown }>;
+        const rows = Number(layout.rows);
+        const cols = Number(layout.cols);
         if (!Number.isFinite(rows) || !Number.isFinite(cols)) return null;
         if (!Number.isInteger(rows) || !Number.isInteger(cols)) return null;
         if (rows <= 0 || cols <= 0) return null;
@@ -231,19 +232,20 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
     try {
         const raw = localStorage.getItem(`${LEVEL_IMAGE_SCALE_PREFIX}${levelId}`);
         if (!raw) return null;
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(raw) as unknown;
         if (!parsed || typeof parsed !== 'object') return null;
-        const x = Number((parsed as any).x ?? 1);
-        const yRaw = Number((parsed as any).y ?? 1);
-        const offsetX = Number((parsed as any).offsetX ?? 0);
-        const offsetY = Number((parsed as any).offsetY ?? 0);
-        const lock = Boolean((parsed as any).lock ?? false);
-        const v = Number((parsed as any).v ?? 1);
+        const scale = parsed as Partial<Record<keyof LevelImageScale, unknown>>;
+        const x = Number(scale.x ?? 1);
+        const yRaw = Number(scale.y ?? 1);
+        const offsetX = Number(scale.offsetX ?? 0);
+        const offsetY = Number(scale.offsetY ?? 0);
+        const lock = Boolean(scale.lock ?? false);
+        const v = Number(scale.v ?? 1);
         if (!Number.isFinite(x) || !Number.isFinite(yRaw)) return null;
 
         // v1 stored the effective Y scale directly.
         // v2+ stores user-facing adjustment plus the baseline used at save time.
-        const storedBaseY = Number((parsed as any).baseY);
+        const storedBaseY = Number(scale.baseY);
         let y =
             v <= 1
                 ? yRaw / Math.max(1e-6, OVERLAY_IMAGE_SCALE_Y_BASE)

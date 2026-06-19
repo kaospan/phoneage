@@ -161,8 +161,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  // eslint-disable-next-line no-console
+   
   console.log(`asset-writer listening on http://localhost:${PORT}/write-level-image`);
-  // eslint-disable-next-line no-console
+   
   console.log(`asset-writer listening on http://localhost:${PORT}/write-level-default`);
 });

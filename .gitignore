@@ -13,6 +13,11 @@ dist-ssr
 *.local
 reports
 reports_test*/
+reports_tmp
+.tmp
+.tmp*
+.verify*
+apps/android/android/app/build
 
 # Editor directories and files
 .vscode/*

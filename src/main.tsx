@@ -54,8 +54,9 @@ const buildLocalStorageSeed = (): LocalStorageSeed => {
   };
 };
 
-const applyLocalStorageSeed = (seed: any) => {
-  const entries = seed?.localStorage && typeof seed.localStorage === 'object' ? seed.localStorage : null;
+const applyLocalStorageSeed = (seed: unknown) => {
+  const seedRecord = seed && typeof seed === 'object' ? seed as Partial<LocalStorageSeed> : null;
+  const entries = seedRecord?.localStorage && typeof seedRecord.localStorage === 'object' ? seedRecord.localStorage : null;
   if (!entries) return { applied: 0 };
   let applied = 0;
   for (const [k, v] of Object.entries(entries)) {
@@ -107,18 +108,29 @@ try {
   });
 
   if (typeof window !== 'undefined') {
-    (window as any).runBulkBuildAndDownload = runBulkBuildAndDownload;
-    (window as any).runBulkBuildReport = runBulkBuildReport;
-    (window as any).runSolveAllLevels = runSolveAllLevels;
-    (window as any).runSolveLevel = runSolveLevel;
-    (window as any).dumpLevel = dumpLevel;
-    (window as any).runLevelQaReport = runLevelQaReport;
+    const debugWindow = window as Window & {
+      runBulkBuildAndDownload: typeof runBulkBuildAndDownload;
+      runBulkBuildReport: typeof runBulkBuildReport;
+      runSolveAllLevels: typeof runSolveAllLevels;
+      runSolveLevel: typeof runSolveLevel;
+      dumpLevel: typeof dumpLevel;
+      runLevelQaReport: typeof runLevelQaReport;
+      exportLocalStorageSeed: typeof buildLocalStorageSeed;
+      importLocalStorageSeed: typeof applyLocalStorageSeed;
+    };
+
+    debugWindow.runBulkBuildAndDownload = runBulkBuildAndDownload;
+    debugWindow.runBulkBuildReport = runBulkBuildReport;
+    debugWindow.runSolveAllLevels = runSolveAllLevels;
+    debugWindow.runSolveLevel = runSolveLevel;
+    debugWindow.dumpLevel = dumpLevel;
+    debugWindow.runLevelQaReport = runLevelQaReport;
 
     // Used to make Playwright reports match your current mapper edits/overrides.
     // Example:
     //   const seed = exportLocalStorageSeed(); copy(JSON.stringify(seed, null, 2));
-    (window as any).exportLocalStorageSeed = buildLocalStorageSeed;
-    (window as any).importLocalStorageSeed = applyLocalStorageSeed;
+    debugWindow.exportLocalStorageSeed = buildLocalStorageSeed;
+    debugWindow.importLocalStorageSeed = applyLocalStorageSeed;
 
     const params = new URLSearchParams(window.location.search);
     if (params.has('bulkbuild') && sessionStorage.getItem('bulkbuild-ran') !== '1') {
