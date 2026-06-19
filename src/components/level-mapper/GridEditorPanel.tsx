@@ -112,7 +112,9 @@ export const GridEditorPanel: React.FC = () => {
         setGuideGrid(asGuide);
     }, [overlayEnabled, imageURL, imageNaturalSize, lastGridDetection, rows, cols]);
 
-    // Calculate cell size based on available viewport space (avoid scroll by default).
+    // Calculate cell size from the editable board, not from the screenshot canvas.
+    // Screenshots in the repo have mixed pixel dimensions; tying the board to the
+    // image aspect makes the editor visibly resize while each image finishes loading.
     React.useEffect(() => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
@@ -121,34 +123,50 @@ export const GridEditorPanel: React.FC = () => {
             const fallbackHeight = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.65) : 600;
             const containerHeight = Math.max(1, ((containerRef.current.clientHeight || fallbackHeight) - 8 - RULER_SIZE_PX));
 
+            const fitBoard = (aspectWidth: number, aspectHeight: number) => {
+                const safeAspectWidth = Math.max(1, aspectWidth);
+                const safeAspectHeight = Math.max(1, aspectHeight);
+                const fitWidthByHeight = Math.floor(containerHeight * (safeAspectWidth / safeAspectHeight));
+                const renderedWidth = Math.max(1, Math.floor(Math.min(containerWidth, fitWidthByHeight) * zoom));
+                const renderedHeight = Math.max(1, Math.floor(renderedWidth * (safeAspectHeight / safeAspectWidth)));
+                return { renderedWidth, renderedHeight };
+            };
+
             if (imageURL) {
-                if (!imageNaturalSize) return;
+                if (!imageNaturalSize) {
+                    const { renderedWidth, renderedHeight } = fitBoard(cols, rows);
+                    setCellWidth(renderedWidth / cols);
+                    setCellHeight(renderedHeight / rows);
+                    setDisplaySize({ width: renderedWidth, height: renderedHeight });
+                    return;
+                }
+
                 const imgW = imageNaturalSize.width;
                 const imgH = imageNaturalSize.height;
-                const naturalGridWidth = gridFrameWidth ?? imgW;
-                const naturalGridHeight = gridFrameHeight ?? imgH;
-                // Fit within both width and height, then apply user zoom.
-                const fitWidthByHeight = Math.floor(containerHeight * (imgW / imgH));
-                const baseWidth = Math.max(1, Math.min(containerWidth, fitWidthByHeight));
-                const renderedWidth = Math.max(1, Math.floor(baseWidth * zoom));
-                const renderedHeight = Math.max(1, Math.floor(renderedWidth * (imgH / imgW)));
-                setDisplaySize({ width: renderedWidth, height: renderedHeight });
-                const imageScaleX = renderedWidth / imgW;
-                const imageScaleY = renderedHeight / imgH;
-                const imageCellWidth = (naturalGridWidth * imageScaleX) / cols;
-                const imageCellHeight = (naturalGridHeight * imageScaleY) / rows;
+                const fitAspectWidth = gridFrameWidth ?? cols;
+                const fitAspectHeight = gridFrameHeight ?? rows;
+                const framePixelWidth = gridFrameWidth ?? imgW;
+                const framePixelHeight = gridFrameHeight ?? imgH;
+                const { renderedWidth, renderedHeight } = fitBoard(fitAspectWidth, fitAspectHeight);
+                const imageScaleX = renderedWidth / Math.max(1, framePixelWidth);
+                const imageScaleY = renderedHeight / Math.max(1, framePixelHeight);
+                setDisplaySize({
+                    width: Math.max(1, Math.floor(imgW * imageScaleX)),
+                    height: Math.max(1, Math.floor(imgH * imageScaleY)),
+                });
 
                 // Keep X/Y independent so the grid can match screenshots whose tiles are a few pixels
                 // wider or taller after capture, scaling, or DOS-era aspect distortion.
-                setCellWidth(imageCellWidth);
-                setCellHeight(imageCellHeight);
+                setCellWidth(renderedWidth / cols);
+                setCellHeight(renderedHeight / rows);
             } else {
                 // Without overlay, fit to container size
-                const calculatedCellSize = Math.floor(Math.min(containerWidth / cols, containerHeight / rows));
-                const clamped = Math.max(MIN_GRID_CELL_SIZE_PX, Math.min(calculatedCellSize, 80));
-                setCellWidth(clamped);
-                setCellHeight(clamped);
-                setDisplaySize({ width: clamped * cols, height: clamped * rows });
+                const { renderedWidth, renderedHeight } = fitBoard(cols, rows);
+                const nextCellWidth = Math.max(MIN_GRID_CELL_SIZE_PX, Math.min(renderedWidth / cols, 80));
+                const nextCellHeight = Math.max(MIN_GRID_CELL_SIZE_PX, Math.min(renderedHeight / rows, 80));
+                setCellWidth(nextCellWidth);
+                setCellHeight(nextCellHeight);
+                setDisplaySize({ width: nextCellWidth * cols, height: nextCellHeight * rows });
                 setImageNaturalSize(null);
             }
         };
@@ -791,7 +809,7 @@ export const GridEditorPanel: React.FC = () => {
                 )}
                 <div
                     ref={containerRef}
-                    className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-0 [color-scheme:dark] sm:min-h-[280px]"
+                    className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-0 [color-scheme:dark] [scrollbar-gutter:stable_both-edges] sm:min-h-[280px]"
                     onWheel={onWheelZoom}
                 >
                     <div className="flex min-h-full min-w-full items-start justify-center">
