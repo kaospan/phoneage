@@ -13,7 +13,7 @@ const MIN_GRID_CELL_SIZE_PX = 12;
 
 export const GridEditorPanel: React.FC = () => {
     const {
-        compareLevelIndex, setCompareLevelIndex, allLevels, compareLevel,
+        allLevels, compareLevel,
         importLevelIndex,
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
@@ -74,11 +74,6 @@ export const GridEditorPanel: React.FC = () => {
         },
         [setHourglassBonusByCell, hourglassBrushSeconds]
     );
-
-    const importedLevelId = React.useMemo(() => {
-        if (importLevelIndex === null) return null;
-        return allLevels[importLevelIndex]?.id ?? null;
-    }, [importLevelIndex, allLevels]);
 
     // Load overlay image size once per URL (prevents resize jitter).
     React.useEffect(() => {
