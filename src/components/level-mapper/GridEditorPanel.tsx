@@ -10,6 +10,8 @@ import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
 const RULER_SIZE_PX = 20;
 const MIN_GRID_CELL_SIZE_PX = 12;
+const GRID_VIEWPORT_PADDING_PX = 8;
+const GRID_OVERFLOW_SAFETY_PX = 14;
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -118,10 +120,12 @@ export const GridEditorPanel: React.FC = () => {
     React.useEffect(() => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
-            // Reserve space for the rulers so they sit above/left of the map (never overlay it).
-            const containerWidth = Math.max(1, containerRef.current.clientWidth - 8 - RULER_SIZE_PX);
+            // Reserve room for the rulers, viewport inset, and resize handles so the
+            // default fitted board never creates horizontal or vertical scrollbars.
+            const reservedSpace = RULER_SIZE_PX + GRID_VIEWPORT_PADDING_PX * 2 + GRID_OVERFLOW_SAFETY_PX;
+            const containerWidth = Math.max(1, containerRef.current.clientWidth - reservedSpace);
             const fallbackHeight = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.65) : 600;
-            const containerHeight = Math.max(1, ((containerRef.current.clientHeight || fallbackHeight) - 8 - RULER_SIZE_PX));
+            const containerHeight = Math.max(1, (containerRef.current.clientHeight || fallbackHeight) - reservedSpace);
 
             const fitBoard = (aspectWidth: number, aspectHeight: number) => {
                 const safeAspectWidth = Math.max(1, aspectWidth);
@@ -809,10 +813,10 @@ export const GridEditorPanel: React.FC = () => {
                 )}
                 <div
                     ref={containerRef}
-                    className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-0 [color-scheme:dark] [scrollbar-gutter:stable_both-edges] sm:min-h-[280px]"
+                    className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-2 [color-scheme:dark] [scrollbar-gutter:stable_both-edges] sm:min-h-[280px]"
                     onWheel={onWheelZoom}
                 >
-                    <div className="flex min-h-full min-w-full items-start justify-center">
+                    <div className="flex min-h-full min-w-full items-center justify-center">
                         <div
                             className="relative"
                             style={{
