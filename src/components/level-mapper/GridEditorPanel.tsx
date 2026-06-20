@@ -10,8 +10,8 @@ import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
 const RULER_SIZE_PX = 20;
 const MIN_GRID_CELL_SIZE_PX = 12;
-const GRID_VIEWPORT_PADDING_PX = 8;
-const GRID_OVERFLOW_SAFETY_PX = 14;
+const GRID_VIEWPORT_PADDING_PX = 12;
+const GRID_OVERFLOW_SAFETY_PX = 24;
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -813,7 +813,7 @@ export const GridEditorPanel: React.FC = () => {
                 )}
                 <div
                     ref={containerRef}
-                    className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-2 [color-scheme:dark] [scrollbar-gutter:stable_both-edges] sm:min-h-[280px]"
+                    className="h-full min-h-[220px] overflow-auto rounded-md border border-border/60 bg-background/20 p-3 [color-scheme:dark] [scrollbar-gutter:stable_both-edges] sm:min-h-[280px]"
                     onWheel={onWheelZoom}
                 >
                     <div className="flex min-h-full min-w-full items-center justify-center">
