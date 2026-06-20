@@ -8,11 +8,54 @@ import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
 import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
 
-const RULER_SIZE_PX = 20;
-const MIN_GRID_CELL_SIZE_PX = 12;
-const GRID_VIEWPORT_PADDING_PX = 12;
-const GRID_OVERFLOW_SAFETY_PX = 24;
-const GRID_ZOOM_BASELINE = 0.95;
+const GRID_EDITOR_LAYOUT = {
+    rulerSizePx: 20,
+    minCellSizePx: 12,
+    maxCellSizePx: 80,
+    viewportPaddingPx: 12,
+    resizeHandleClearancePx: 24,
+    logicalZoomBaseline: 0.95,
+    stableToolbarHeightPx: 74,
+    fallbackViewportHeightPx: 600,
+    fallbackViewportHeightRatio: 0.65,
+} as const;
+
+type GridEditorSize = { width: number; height: number };
+
+const getAvailableBoardSize = (viewport: GridEditorSize): GridEditorSize => {
+    const reservedSpace =
+        GRID_EDITOR_LAYOUT.rulerSizePx +
+        GRID_EDITOR_LAYOUT.viewportPaddingPx * 2 +
+        GRID_EDITOR_LAYOUT.resizeHandleClearancePx;
+
+    return {
+        width: Math.max(1, viewport.width - reservedSpace),
+        height: Math.max(1, viewport.height - reservedSpace),
+    };
+};
+
+const fitBoardToViewport = (
+    available: GridEditorSize,
+    aspect: GridEditorSize,
+    zoom: number,
+): GridEditorSize => {
+    const aspectWidth = Math.max(1, aspect.width);
+    const aspectHeight = Math.max(1, aspect.height);
+    const widthLimitedByHeight = Math.floor(available.height * (aspectWidth / aspectHeight));
+    const width = Math.max(
+        1,
+        Math.floor(
+            Math.min(available.width, widthLimitedByHeight) *
+            zoom *
+            GRID_EDITOR_LAYOUT.logicalZoomBaseline,
+        ),
+    );
+
+    return {
+        width,
+        height: Math.max(1, Math.floor(width * (aspectHeight / aspectWidth))),
+    };
+};
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -115,63 +158,67 @@ export const GridEditorPanel: React.FC = () => {
         setGuideGrid(asGuide);
     }, [overlayEnabled, imageURL, imageNaturalSize, lastGridDetection, rows, cols]);
 
-    // Calculate cell size from the editable board, not from the screenshot canvas.
-    // Screenshots in the repo have mixed pixel dimensions; tying the board to the
-    // image aspect makes the editor visibly resize while each image finishes loading.
+    // The editable board drives layout. Screenshot dimensions only determine how the
+    // overlay maps into that stable board footprint after the image has loaded.
     React.useEffect(() => {
         const updateCellSize = () => {
             if (!containerRef.current) return;
-            // Reserve room for the rulers, viewport inset, and resize handles so the
-            // default fitted board never creates horizontal or vertical scrollbars.
-            const reservedSpace = RULER_SIZE_PX + GRID_VIEWPORT_PADDING_PX * 2 + GRID_OVERFLOW_SAFETY_PX;
-            const containerWidth = Math.max(1, containerRef.current.clientWidth - reservedSpace);
-            const fallbackHeight = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.65) : 600;
-            const containerHeight = Math.max(1, (containerRef.current.clientHeight || fallbackHeight) - reservedSpace);
+            const fallbackHeight = typeof window !== 'undefined'
+                ? Math.floor(window.innerHeight * GRID_EDITOR_LAYOUT.fallbackViewportHeightRatio)
+                : GRID_EDITOR_LAYOUT.fallbackViewportHeightPx;
+            const available = getAvailableBoardSize({
+                width: containerRef.current.clientWidth,
+                height: containerRef.current.clientHeight || fallbackHeight,
+            });
 
-            const fitBoard = (aspectWidth: number, aspectHeight: number) => {
-                const safeAspectWidth = Math.max(1, aspectWidth);
-                const safeAspectHeight = Math.max(1, aspectHeight);
-                const fitWidthByHeight = Math.floor(containerHeight * (safeAspectWidth / safeAspectHeight));
-                const renderedWidth = Math.max(1, Math.floor(Math.min(containerWidth, fitWidthByHeight) * zoom * GRID_ZOOM_BASELINE));
-                const renderedHeight = Math.max(1, Math.floor(renderedWidth * (safeAspectHeight / safeAspectWidth)));
-                return { renderedWidth, renderedHeight };
+            const commitLayout = (board: GridEditorSize, display: GridEditorSize = board) => {
+                setCellWidth(board.width / cols);
+                setCellHeight(board.height / rows);
+                setDisplaySize((current) => (
+                    current.width === display.width && current.height === display.height
+                        ? current
+                        : display
+                ));
             };
 
             if (imageURL) {
                 if (!imageNaturalSize) {
-                    const { renderedWidth, renderedHeight } = fitBoard(cols, rows);
-                    setCellWidth(renderedWidth / cols);
-                    setCellHeight(renderedHeight / rows);
-                    setDisplaySize({ width: renderedWidth, height: renderedHeight });
+                    commitLayout(fitBoardToViewport(available, { width: cols, height: rows }, zoom));
                     return;
                 }
 
                 const imgW = imageNaturalSize.width;
                 const imgH = imageNaturalSize.height;
-                const fitAspectWidth = gridFrameWidth ?? cols;
-                const fitAspectHeight = gridFrameHeight ?? rows;
                 const framePixelWidth = gridFrameWidth ?? imgW;
                 const framePixelHeight = gridFrameHeight ?? imgH;
-                const { renderedWidth, renderedHeight } = fitBoard(fitAspectWidth, fitAspectHeight);
-                const imageScaleX = renderedWidth / Math.max(1, framePixelWidth);
-                const imageScaleY = renderedHeight / Math.max(1, framePixelHeight);
-                setDisplaySize({
+                const board = fitBoardToViewport(available, {
+                    width: gridFrameWidth ?? cols,
+                    height: gridFrameHeight ?? rows,
+                }, zoom);
+                const imageScaleX = board.width / Math.max(1, framePixelWidth);
+                const imageScaleY = board.height / Math.max(1, framePixelHeight);
+                const display = {
                     width: Math.max(1, Math.floor(imgW * imageScaleX)),
                     height: Math.max(1, Math.floor(imgH * imageScaleY)),
-                });
+                };
 
                 // Keep X/Y independent so the grid can match screenshots whose tiles are a few pixels
                 // wider or taller after capture, scaling, or DOS-era aspect distortion.
-                setCellWidth(renderedWidth / cols);
-                setCellHeight(renderedHeight / rows);
+                commitLayout(board, display);
             } else {
-                // Without overlay, fit to container size
-                const { renderedWidth, renderedHeight } = fitBoard(cols, rows);
-                const nextCellWidth = Math.max(MIN_GRID_CELL_SIZE_PX, Math.min(renderedWidth / cols, 80));
-                const nextCellHeight = Math.max(MIN_GRID_CELL_SIZE_PX, Math.min(renderedHeight / rows, 80));
-                setCellWidth(nextCellWidth);
-                setCellHeight(nextCellHeight);
-                setDisplaySize({ width: nextCellWidth * cols, height: nextCellHeight * rows });
+                const fitted = fitBoardToViewport(available, { width: cols, height: rows }, zoom);
+                const cellWidth = Math.max(
+                    GRID_EDITOR_LAYOUT.minCellSizePx,
+                    Math.min(fitted.width / cols, GRID_EDITOR_LAYOUT.maxCellSizePx),
+                );
+                const cellHeight = Math.max(
+                    GRID_EDITOR_LAYOUT.minCellSizePx,
+                    Math.min(fitted.height / rows, GRID_EDITOR_LAYOUT.maxCellSizePx),
+                );
+                commitLayout({
+                    width: cellWidth * cols,
+                    height: cellHeight * rows,
+                });
                 setImageNaturalSize(null);
             }
         };
