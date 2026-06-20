@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDownUp, ArrowLeftRight, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { learnReferencesFromAlignedMap } from './learningOperations';
@@ -100,6 +100,19 @@ export const GridEditorPanel: React.FC = () => {
     const [displaySize, setDisplaySize] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
     const markUnsaved = React.useCallback(() => setIsSaved(false), [setIsSaved]);
+    const isGridAllVoid = React.useMemo(
+        () => grid.every((row) => row.every((tileId) => tileId === 5)),
+        [grid],
+    );
+
+    const voidAllCells = React.useCallback(() => {
+        if (isGridAllVoid) return;
+        pushUndo();
+        setGrid((currentGrid) => currentGrid.map((row) => row.map(() => 5)));
+        setPlayerStart(null);
+        setHourglassBonusByCell({});
+        trustedCellsRef.current.clear();
+    }, [isGridAllVoid, pushUndo, setGrid, setHourglassBonusByCell, setPlayerStart]);
 
     const updateHourglassMetaAt = React.useCallback(
         (row: number, col: number, tileId: number) => {
@@ -628,6 +641,17 @@ export const GridEditorPanel: React.FC = () => {
                     </Button>
                     <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={redo} disabled={!canRedo} title="Redo" aria-label="Redo">
                         <Redo2 />
+                    </Button>
+                    <Button
+                        size="icon"
+                        variant="outline"
+                        className={compactIconButtonClass}
+                        onClick={voidAllCells}
+                        disabled={isGridAllVoid}
+                        title="Set all cells to Void"
+                        aria-label="Set all cells to Void"
+                    >
+                        <Trash2 />
                     </Button>
                     <Button
                         size="sm"
