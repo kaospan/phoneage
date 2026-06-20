@@ -569,7 +569,7 @@ export const GridEditorPanel: React.FC = () => {
 
     return (
         <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card/95 p-1 shadow-sm">
-            <div className="min-h-[66px] shrink-0 overflow-x-auto rounded-md border border-border/50 bg-background/10 p-0.5">
+            <div className="min-h-[74px] shrink-0 overflow-x-auto rounded-md border border-border/50 bg-background/10 p-0.5">
                 <div className="grid gap-0.5">
                 <div className={toolRowClass}>
                     <Button size="icon" variant="outline" className={compactIconButtonClass} onClick={undo} disabled={!canUndo} title="Undo" aria-label="Undo">
