@@ -12,6 +12,7 @@ const RULER_SIZE_PX = 20;
 const MIN_GRID_CELL_SIZE_PX = 12;
 const GRID_VIEWPORT_PADDING_PX = 12;
 const GRID_OVERFLOW_SAFETY_PX = 24;
+const GRID_ZOOM_BASELINE = 0.95;
 
 export const GridEditorPanel: React.FC = () => {
     const {
@@ -131,7 +132,7 @@ export const GridEditorPanel: React.FC = () => {
                 const safeAspectWidth = Math.max(1, aspectWidth);
                 const safeAspectHeight = Math.max(1, aspectHeight);
                 const fitWidthByHeight = Math.floor(containerHeight * (safeAspectWidth / safeAspectHeight));
-                const renderedWidth = Math.max(1, Math.floor(Math.min(containerWidth, fitWidthByHeight) * zoom));
+                const renderedWidth = Math.max(1, Math.floor(Math.min(containerWidth, fitWidthByHeight) * zoom * GRID_ZOOM_BASELINE));
                 const renderedHeight = Math.max(1, Math.floor(renderedWidth * (safeAspectHeight / safeAspectWidth)));
                 return { renderedWidth, renderedHeight };
             };
