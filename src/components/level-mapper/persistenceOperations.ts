@@ -246,22 +246,10 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
         // v1 stored the effective Y scale directly.
         // v2+ stores user-facing adjustment plus the baseline used at save time.
         const storedBaseY = Number(scale.baseY);
-        let y =
+        const y =
             v <= 1
                 ? yRaw / Math.max(1e-6, OVERLAY_IMAGE_SCALE_Y_BASE)
                 : normalizeOverlayUserScaleY(yRaw, storedBaseY);
-
-        // Older sessions often persisted the old "make Y 115%" calibration as a
-        // per-level scale before 115% became the baseline. Treat that exact
-        // calibration as today's default 100% unless a full saved mapper state
-        // overrides it before this scale-only fallback is consulted.
-        if (
-            v >= LEVEL_IMAGE_SCALE_STORAGE_VERSION &&
-            Math.abs(storedBaseY - OVERLAY_IMAGE_SCALE_Y_BASE) < 0.0001 &&
-            Math.abs(yRaw - OVERLAY_IMAGE_SCALE_Y_BASE) < 0.0001
-        ) {
-            y = 1;
-        }
 
         return {
             x,

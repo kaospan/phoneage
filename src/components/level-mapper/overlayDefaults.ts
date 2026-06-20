@@ -4,12 +4,15 @@
 // with the source image. Treat that correction as the baseline so "100%" is aligned.
 
 // Storage schema version for per-level overlay image scale persisted in localStorage.
-export const LEVEL_IMAGE_SCALE_STORAGE_VERSION = 3;
+export const LEVEL_IMAGE_SCALE_STORAGE_VERSION = 4;
 
 // Baseline vertical correction (applied to Y only).
-// At user scaleY=1.0 (100%), the effective vertical scale is this baseline.
-export const OVERLAY_IMAGE_SCALE_Y_BASE = 1.15;
-export const LEGACY_OVERLAY_IMAGE_SCALE_Y_BASE = 0.968;
+// The former 91% calibration is now the aligned 100% position.
+const PREVIOUS_OVERLAY_IMAGE_SCALE_Y_BASE = 1.15;
+const PREVIOUS_DEFAULT_USER_Y_SCALE = 0.91;
+export const OVERLAY_IMAGE_SCALE_Y_BASE =
+    PREVIOUS_OVERLAY_IMAGE_SCALE_Y_BASE * PREVIOUS_DEFAULT_USER_Y_SCALE;
+const OLDEST_OVERLAY_IMAGE_SCALE_Y_BASE = 0.968;
 
 // Default user-facing Y stretch used when a level has no saved per-level calibration.
 export const DEFAULT_OVERLAY_USER_Y_SCALE = 1;
@@ -18,14 +21,30 @@ export const clampOverlayUserScale = (value: number) => (
     Math.max(0.85, Math.min(1.15, value))
 );
 
+const approximatelyEqual = (left: number, right: number) => Math.abs(left - right) < 0.0001;
+
 export const normalizeOverlayUserScaleY = (
     value: number,
     savedBaseY: number | null | undefined,
 ) => {
     if (!Number.isFinite(value)) return DEFAULT_OVERLAY_USER_Y_SCALE;
-    const baseline = Number.isFinite(Number(savedBaseY)) && Number(savedBaseY) > 0
-        ? Number(savedBaseY)
-        : LEGACY_OVERLAY_IMAGE_SCALE_Y_BASE;
+    const hasSavedBaseline = Number.isFinite(Number(savedBaseY)) && Number(savedBaseY) > 0;
+    const baseline = hasSavedBaseline ? Number(savedBaseY) : OLDEST_OVERLAY_IMAGE_SCALE_Y_BASE;
+
+    if (approximatelyEqual(baseline, OVERLAY_IMAGE_SCALE_Y_BASE)) {
+        return clampOverlayUserScale(value);
+    }
+
+    const isPreviousDefault =
+        approximatelyEqual(value, PREVIOUS_DEFAULT_USER_Y_SCALE) ||
+        approximatelyEqual(value, DEFAULT_OVERLAY_USER_Y_SCALE);
+    if (
+        isPreviousDefault &&
+        (!hasSavedBaseline || approximatelyEqual(baseline, PREVIOUS_OVERLAY_IMAGE_SCALE_Y_BASE))
+    ) {
+        return DEFAULT_OVERLAY_USER_Y_SCALE;
+    }
+
     return clampOverlayUserScale((value * baseline) / OVERLAY_IMAGE_SCALE_Y_BASE);
 };
 
