@@ -970,7 +970,8 @@ export function GameSprite2D({
               const edge = edgeMasks?.[y]?.[x] ?? null;
               const isDirectionalArrowTile = displayTileType >= 7 && displayTileType <= 13;
               // Keep arrow hidden while the player occupies that tile (DOS behavior feel).
-              const effectiveTileType = isPlayer && isDirectionalArrowTile ? 0 : displayTileType;
+              const effectiveTileType =
+                isPlayer && isDirectionalArrowTile && !useScreenshotBase ? 0 : displayTileType;
               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
               const originalTileType = atlasGoalCaveKeys.has(`${x},${y}`) ? 3 : (sourceGrid[y]?.[x] ?? tileType);
               const baselineTileType = goalCaveKeys.has(`${x},${y}`)
