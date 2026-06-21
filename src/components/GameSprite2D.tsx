@@ -20,7 +20,6 @@ interface GameSprite2DProps {
   selectorPos?: { x: number; y: number } | null;
   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
   zoomFactor?: number;
-  showCoords?: boolean;
   fullBleed?: boolean;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
@@ -39,6 +38,32 @@ type LevelSpriteAtlas = {
 // when detection is clearly wrong (e.g. sampling black borders/HUD).
 const ATLAS_MIN_CONFIDENCE = 0.08;
 const SPRITE_ZOOM_BASELINE_FACTOR = 0.66;
+const MAX_CACHED_LEVEL_ATLASES = 12;
+const levelSpriteAtlasCache = new Map<string, LevelSpriteAtlas>();
+
+const getCachedLevelAtlas = (key: string) => {
+  const cached = levelSpriteAtlasCache.get(key);
+  if (!cached) return null;
+  levelSpriteAtlasCache.delete(key);
+  levelSpriteAtlasCache.set(key, cached);
+  return cached;
+};
+
+const cacheLevelAtlas = (key: string, atlas: LevelSpriteAtlas) => {
+  levelSpriteAtlasCache.delete(key);
+  levelSpriteAtlasCache.set(key, atlas);
+  if (levelSpriteAtlasCache.size <= MAX_CACHED_LEVEL_ATLASES) return;
+  const oldestKey = levelSpriteAtlasCache.keys().next().value;
+  if (oldestKey) levelSpriteAtlasCache.delete(oldestKey);
+};
+
+const waitForAtlasWorkSlot = () => new Promise<void>((resolve) => {
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(() => resolve(), { timeout: 250 });
+    return;
+  }
+  window.setTimeout(resolve, 0);
+});
 
 const pickLatestByType = (refs: CellReference[]) => {
   const latest = new Map<number, CellReference>();
@@ -202,7 +227,6 @@ export function GameSprite2D({
   selectorPos,
   players,
   zoomFactor = 1,
-  showCoords = false,
   fullBleed = false,
   onArrowClick,
   onCancelSelection,
@@ -231,6 +255,16 @@ export function GameSprite2D({
   const atlasGrid = useMemo(() => sourceGrid.map((r) => [...r]), [sourceGrid]);
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
   const atlasGoalCaveKeys = useMemo(() => buildGoalCaveKeySet(sourceGrid, cavePos), [sourceGrid, cavePos]);
+  const atlasCacheKey = useMemo(
+    () => [
+      levelImageUrl ?? "no-image",
+      `${rows}x${cols}`,
+      `${cavePos.x},${cavePos.y}`,
+      `${playerStart?.x ?? -1},${playerStart?.y ?? -1}`,
+      atlasGrid.map((row) => row.join(",")).join(";"),
+    ].join("|"),
+    [atlasGrid, cavePos.x, cavePos.y, cols, levelImageUrl, playerStart?.x, playerStart?.y, rows],
+  );
   const renderBaselineKey = `${levelImageUrl ?? "no-image"}|${rows}x${cols}|${cavePos.x},${cavePos.y}|${playerStart?.x ?? -1},${playerStart?.y ?? -1}`;
   if (renderBaselineRef.current?.key !== renderBaselineKey) {
     renderBaselineRef.current = {
@@ -285,14 +319,21 @@ export function GameSprite2D({
         return;
       }
 
-      setLevelAtlas((prev) => ({
-        tileSprites: prev?.tileSprites ?? {},
-        heroSprite: undefined,
-        heroFootprintKeys: undefined,
-        boardBackground: undefined,
+      const cachedAtlas = getCachedLevelAtlas(atlasCacheKey);
+      if (cachedAtlas) {
+        setLevelAtlas(cachedAtlas);
+        return;
+      }
+
+      setLevelAtlas({
+        tileSprites: {},
         status: "Building sprites...",
-        confidence: prev?.confidence,
-      }));
+      });
+
+      // Let React paint the generated board before screenshot normalization and
+      // grid detection consume a browser work slot.
+      await waitForAtlasWorkSlot();
+      if (cancelled) return;
 
       try {
         // Normalize/crop level screenshots (trim borders + HUD row) so grid detection isn't polluted.
@@ -739,7 +780,7 @@ export function GameSprite2D({
         }
         const heroFootprintKeys = findHeroFootprintKeys();
 
-        setLevelAtlas({
+        const atlas = {
           tileSprites: sampledAtlasReliable ? tileSprites : {},
           heroSprite,
           heroFootprintKeys,
@@ -752,7 +793,9 @@ export function GameSprite2D({
             ? `Sprites ready (conf ${det.confidence.toFixed(2)})`
             : `Sprite mode: low grid confidence (conf ${det.confidence.toFixed(2)}) - using reference sprites`,
           confidence: det.confidence,
-        });
+        };
+        cacheLevelAtlas(atlasCacheKey, atlas);
+        setLevelAtlas(atlas);
       } catch (e) {
         console.error(e);
         setLevelAtlas((prev) => ({
@@ -771,7 +814,7 @@ export function GameSprite2D({
     return () => {
       cancelled = true;
     };
-  }, [levelImageUrl, rows, cols, atlasGoalCaveKeys, atlasGrid, playerStart, sourceGrid]);
+  }, [levelImageUrl, rows, cols, atlasGoalCaveKeys, atlasGrid, atlasCacheKey, playerStart, sourceGrid]);
 
   const scale = useMemo(() => {
     // Match gameplay zoom semantics: 0.66 was the old 152% view and is now 100%.
@@ -854,9 +897,7 @@ export function GameSprite2D({
           imageRendering: "pixelated" as const,
         }
       : null;
-  const isBuildingScreenshotBase =
-    Boolean(levelImageUrl) && !boardBackgroundUrl && (!levelAtlas || levelAtlas.status === "Building sprites...");
-  const allowGeneratedFallback = !isBuildingScreenshotBase;
+  const allowGeneratedFallback = !useScreenshotBase;
 
   return (
     <div
@@ -1025,7 +1066,7 @@ export function GameSprite2D({
                     e.stopPropagation();
                     if (isArrow) onArrowClick?.(x, y);
                   }}
-                  title={`(${y},${x}) = ${tileType}`}
+                  title={`Tile ${tileType}`}
                 >
                   {edge?.any && allowGeneratedFallback && !useScreenshotBase && (
                     <div
@@ -1039,22 +1080,6 @@ export function GameSprite2D({
                         borderRadius: 6,
                       }}
                     />
-                  )}
-                  {showCoords && y === 0 && (
-                    <div
-                      className="pointer-events-none absolute top-[2px] left-0 right-0 text-center text-[9px] font-black text-white/70"
-                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
-                    >
-                      {x}
-                    </div>
-                  )}
-                  {showCoords && x === 0 && (
-                    <div
-                      className="pointer-events-none absolute left-[2px] top-0 bottom-0 flex items-center text-[9px] font-black text-white/70"
-                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
-                    >
-                      {y}
-                    </div>
                   )}
                   {isPlayer && allowGeneratedFallback && !isPlayerAtScreenshotStart && (
                     levelAtlas?.heroSprite ? (

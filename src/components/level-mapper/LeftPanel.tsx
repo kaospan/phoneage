@@ -13,7 +13,6 @@ import { getAlignmentHints } from './alignmentProfile';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLevels';
 import { putLevelImage } from './levelImageStore';
-import { getShowCoordsOverlay, setShowCoordsOverlay, UI_SETTINGS_UPDATED_EVENT } from '@/lib/uiSettings';
 import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
@@ -63,7 +62,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [autoDetectStatus, setAutoDetectStatus] = useState<string>('');
     const [tileFitStatus, setTileFitStatus] = useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
     const [tileFit, setTileFit] = useState<null | { rows: number; cols: number; cellWidth: number; cellHeight: number }>(null);
-    const [showCoordsOverlay, setShowCoordsOverlayState] = useState(() => getShowCoordsOverlay());
 
     // Upload flow: choose an image, then decide which level id to apply it to.
     const [applyDialogOpen, setApplyDialogOpen] = useState(false);
@@ -101,19 +99,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 : 'No reliable floor-tile measurement yet.'
         : 'Upload a screenshot to enable alignment and scan tools.';
     const triggerFileUpload = () => fileInputRef.current?.click();
-
-    useEffect(() => {
-        const refresh = () => setShowCoordsOverlayState(getShowCoordsOverlay());
-        const onStorage = (e: StorageEvent) => {
-            if (e.key === 'show_coords_overlay_v1') refresh();
-        };
-        window.addEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
-        window.addEventListener('storage', onStorage);
-        return () => {
-            window.removeEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
-            window.removeEventListener('storage', onStorage);
-        };
-    }, []);
 
     const handleSpriteCapture = (cellData: {
         imageData: string;
@@ -844,26 +829,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             </summary>
                             <div className="mt-2 text-xs leading-relaxed text-stone-400">
                                 Auto-detect may change rows and columns. Use the snap-only path when you want to keep your existing board shape and only realign the frame.
-                            </div>
-                            <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                                <div className="min-w-0">
-                                    <div className="text-xs font-semibold text-stone-100">In-game coordinates</div>
-                                    <div className="text-[11px] leading-snug text-stone-400">
-                                        Show X labels across the top row and Y labels down the left column in <strong>SPR</strong> view.
-                                    </div>
-                                </div>
-                                <label className="flex shrink-0 items-center gap-2 select-none text-xs text-stone-100">
-                                    <input
-                                        type="checkbox"
-                                        checked={showCoordsOverlay}
-                                        onChange={(e) => {
-                                            const next = e.target.checked;
-                                            setShowCoordsOverlay(next);
-                                            setShowCoordsOverlayState(next);
-                                        }}
-                                    />
-                                    Show
-                                </label>
                             </div>
                         </details>
                     </MapperSection>

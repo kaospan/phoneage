@@ -22,7 +22,6 @@ import {
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
-import { UI_SETTINGS_UPDATED_EVENT, getShowCoordsOverlay } from "@/lib/uiSettings";
 import { ADMIN_MODE_UPDATED_EVENT, getAdminMode } from "@/lib/adminMode";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
@@ -382,7 +381,6 @@ export const PuzzleGame = () => {
   const buildInFlightRef = useRef<Set<number>>(new Set());
 
   const [overrideRevision, setOverrideRevision] = useState(0);
-  const [showCoordsOverlay, setShowCoordsOverlayState] = useState(() => getShowCoordsOverlay());
   const [isAdminMode, setIsAdminMode] = useState(() => getAdminMode());
   const [resolvedLevelImageUrl, setResolvedLevelImageUrl] = useState<string | null>(null);
 
@@ -398,20 +396,6 @@ export const PuzzleGame = () => {
     window.addEventListener("storage", onStorage);
     return () => {
       window.removeEventListener(LEVEL_OVERRIDES_UPDATED_EVENT, bump as EventListener);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const refresh = () => setShowCoordsOverlayState(getShowCoordsOverlay());
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'show_coords_overlay_v1') refresh();
-    };
-    window.addEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener(UI_SETTINGS_UPDATED_EVENT, refresh as EventListener);
       window.removeEventListener("storage", onStorage);
     };
   }, []);
@@ -2539,7 +2523,6 @@ export const PuzzleGame = () => {
                 selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
                 players={renderPlayers}
                 zoomFactor={cameraZoomFactor}
-                showCoords={showCoordsOverlay}
                 fullBleed={isFullscreenMode}
                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
