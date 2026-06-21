@@ -365,7 +365,6 @@ export function GameSprite2D({
         if (!det) {
           updateCurrentAtlas((current) => ({
             tileSprites: current?.tileSprites ?? {},
-            heroSprite: current?.heroSprite,
             heroFootprintKeys: current?.heroFootprintKeys,
             boardBackground: current?.boardBackground,
             status: "Sprite mode: grid detect failed (using reference sprites)",
@@ -386,7 +385,6 @@ export function GameSprite2D({
         let frameH = Math.max(1, Math.round(det.cellHeight * rows * scaleY));
         let frameFitsImage = offsetX + frameW <= img.width + 2 && offsetY + frameH <= img.height + 2;
         if (!frameFitsImage && !usedAspectGridFallback) {
-          const aspectFallback = buildAspectGridFallback();
           if (aspectFallback) {
             det = aspectFallback;
             usedAspectGridFallback = true;
@@ -402,7 +400,6 @@ export function GameSprite2D({
         if (!frameFitsImage) {
           updateCurrentAtlas((current) => ({
             tileSprites: current?.tileSprites ?? {},
-            heroSprite: current?.heroSprite,
             heroFootprintKeys: current?.heroFootprintKeys,
             boardBackground: undefined,
             status: "Sprite mode: rejected bad screenshot crop (using reference sprites)",
