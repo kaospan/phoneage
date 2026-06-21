@@ -259,6 +259,15 @@ export function GameSprite2D({
         atlas: update(current?.key === atlasCacheKey ? current.atlas : null),
       }));
     };
+    const setAtlasFailure = (status: string, confidence?: number, keepBoard = true) => {
+      updateCurrentAtlas((current) => ({
+        tileSprites: current?.tileSprites ?? {},
+        heroFootprintKeys: current?.heroFootprintKeys,
+        boardBackground: keepBoard ? current?.boardBackground : undefined,
+        status,
+        confidence: confidence ?? current?.confidence,
+      }));
+    };
 
     const loadImage = async (url: string): Promise<HTMLImageElement> => {
       return await new Promise((resolve, reject) => {
@@ -363,13 +372,7 @@ export function GameSprite2D({
           }
         }
         if (!det) {
-          updateCurrentAtlas((current) => ({
-            tileSprites: current?.tileSprites ?? {},
-            heroFootprintKeys: current?.heroFootprintKeys,
-            boardBackground: current?.boardBackground,
-            status: "Sprite mode: grid detect failed (using reference sprites)",
-            confidence: current?.confidence,
-          }));
+          setAtlasFailure("Sprite mode: grid detect failed (using reference sprites)");
           return;
         }
 
@@ -377,34 +380,26 @@ export function GameSprite2D({
 
         const scaleX = img.width / dsW;
         const scaleY = img.height / dsH;
-        let offsetX = Math.max(0, Math.round(det.offsetX * scaleX));
-        let offsetY = Math.max(0, Math.round(det.offsetY * scaleY));
-        let cellW = Math.max(1, Math.round(det.cellWidth * scaleX));
-        let cellH = Math.max(1, Math.round(det.cellHeight * scaleY));
-        let frameW = Math.max(1, Math.round(det.cellWidth * cols * scaleX));
-        let frameH = Math.max(1, Math.round(det.cellHeight * rows * scaleY));
+        const getFrameMetrics = (gridDetection: NonNullable<typeof det>) => ({
+          offsetX: Math.max(0, Math.round(gridDetection.offsetX * scaleX)),
+          offsetY: Math.max(0, Math.round(gridDetection.offsetY * scaleY)),
+          cellW: Math.max(1, Math.round(gridDetection.cellWidth * scaleX)),
+          cellH: Math.max(1, Math.round(gridDetection.cellHeight * scaleY)),
+          frameW: Math.max(1, Math.round(gridDetection.cellWidth * cols * scaleX)),
+          frameH: Math.max(1, Math.round(gridDetection.cellHeight * rows * scaleY)),
+        });
+        let { offsetX, offsetY, cellW, cellH, frameW, frameH } = getFrameMetrics(det);
         let frameFitsImage = offsetX + frameW <= img.width + 2 && offsetY + frameH <= img.height + 2;
         if (!frameFitsImage && !usedAspectGridFallback) {
           if (aspectFallback) {
             det = aspectFallback;
             usedAspectGridFallback = true;
-            offsetX = Math.max(0, Math.round(det.offsetX * scaleX));
-            offsetY = Math.max(0, Math.round(det.offsetY * scaleY));
-            cellW = Math.max(1, Math.round(det.cellWidth * scaleX));
-            cellH = Math.max(1, Math.round(det.cellHeight * scaleY));
-            frameW = Math.max(1, Math.round(det.cellWidth * cols * scaleX));
-            frameH = Math.max(1, Math.round(det.cellHeight * rows * scaleY));
+            ({ offsetX, offsetY, cellW, cellH, frameW, frameH } = getFrameMetrics(det));
             frameFitsImage = offsetX + frameW <= img.width + 2 && offsetY + frameH <= img.height + 2;
           }
         }
         if (!frameFitsImage) {
-          updateCurrentAtlas((current) => ({
-            tileSprites: current?.tileSprites ?? {},
-            heroFootprintKeys: current?.heroFootprintKeys,
-            boardBackground: undefined,
-            status: "Sprite mode: rejected bad screenshot crop (using reference sprites)",
-            confidence: det.confidence,
-          }));
+          setAtlasFailure("Sprite mode: rejected bad screenshot crop (using reference sprites)", det.confidence, false);
           return;
         }
 
@@ -412,10 +407,10 @@ export function GameSprite2D({
         const srcCanvas = document.createElement("canvas");
         srcCanvas.width = img.width;
         srcCanvas.height = img.height;
-        const srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
-        if (!srcCtx) throw new Error("Failed to create sprite canvas context");
-        srcCtx.imageSmoothingEnabled = false;
-        srcCtx.drawImage(img, 0, 0);
+        const sourceContext = srcCanvas.getContext("2d");
+        if (!sourceContext) throw new Error("Failed to create sprite canvas context");
+        sourceContext.imageSmoothingEnabled = false;
+        sourceContext.drawImage(img, 0, 0);
 
         const boardCanvas = document.createElement("canvas");
         boardCanvas.width = frameW;
@@ -526,13 +521,7 @@ export function GameSprite2D({
         setCurrentAtlas(atlas);
       } catch (e) {
         console.error(e);
-        updateCurrentAtlas((current) => ({
-          tileSprites: current?.tileSprites ?? {},
-          heroFootprintKeys: current?.heroFootprintKeys,
-          boardBackground: current?.boardBackground,
-          status: "Sprite mode: failed to build sprites (using reference sprites)",
-          confidence: current?.confidence,
-        }));
+        setAtlasFailure("Sprite mode: failed to build sprites (using reference sprites)");
       }
     };
 
@@ -616,16 +605,6 @@ export function GameSprite2D({
   const boardBackgroundUrl = processedBoardBackgroundUrl ?? levelImageUrl ?? null;
   const hasProcessedBoard = Boolean(processedBoardBackgroundUrl);
   const useScreenshotBase = Boolean(boardBackgroundUrl);
-  const screenshotHeroCropStyle =
-    useScreenshotBase && boardBackgroundUrl && playerStart && playerStart.x >= 0 && playerStart.y >= 0
-      ? {
-          backgroundImage: `url(${boardBackgroundUrl})`,
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: `${cols > 1 ? (playerStart.x / (cols - 1)) * 100 : 0}% ${rows > 1 ? (playerStart.y / (rows - 1)) * 100 : 0}%`,
-          backgroundSize: `${cols * 100}% ${rows * 100}%`,
-          imageRendering: "pixelated" as const,
-        }
-      : null;
   const allowGeneratedFallback = !useScreenshotBase;
 
   return (
@@ -655,7 +634,6 @@ export function GameSprite2D({
         <div
           data-sprite-status={levelAtlas?.status ?? "no-atlas"}
           data-sprite-has-board={boardBackgroundUrl ? "1" : "0"}
-          data-sprite-has-hero={levelAtlas?.heroSprite ? "1" : "0"}
           className={[
             "grid gap-0",
             fullBleed ? "rounded-none" : "rounded-lg",
@@ -671,7 +649,7 @@ export function GameSprite2D({
             backgroundPosition: hasProcessedBoard ? "center" : "center top",
             backgroundSize: hasProcessedBoard ? "100% 100%" : "112% 113%",
             imageRendering: "pixelated",
-            boxShadow: useScreenshotBase || !allowGeneratedFallback
+            boxShadow: useScreenshotBase
               ? undefined
               : "inset 0 0 0 3px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.08)",
           }}
@@ -789,7 +767,7 @@ export function GameSprite2D({
                     backgroundPosition: "center",
                     imageRendering: "pixelated",
                     boxShadow:
-                      allowGeneratedFallback && !useScreenshotBase && !backgroundImage && displayTileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
+                      allowGeneratedFallback && !backgroundImage && displayTileType === 0 ? "inset 0 0 0 1px rgba(75,85,99,0.9)" :
                       undefined,
                   }}
                   onClick={(e) => {
@@ -798,7 +776,7 @@ export function GameSprite2D({
                   }}
                   title={`Tile ${tileType}`}
                 >
-                  {edge?.any && allowGeneratedFallback && !useScreenshotBase && (
+                  {edge?.any && allowGeneratedFallback && (
                     <div
                       className="pointer-events-none absolute inset-0"
                       style={{
@@ -812,21 +790,7 @@ export function GameSprite2D({
                     />
                   )}
                   {isPlayer && !isPlayerAtScreenshotStart && !suppressPlayerOverlay && (
-                    useScreenshotBase ? renderHeroFallback() : levelAtlas?.heroSprite ? (
-                      <img
-                        src={levelAtlas.heroSprite}
-                        alt="Hero"
-                        className="absolute inset-0 h-full w-full"
-                        style={{ imageRendering: "pixelated" }}
-                        draggable={false}
-                      />
-                    ) : screenshotHeroCropStyle ? (
-                      <div
-                        aria-label="Hero"
-                        className="absolute inset-0 h-full w-full"
-                        style={screenshotHeroCropStyle}
-                      />
-                    ) : renderHeroFallback()
+                    renderHeroFallback()
                   )}
                   {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
