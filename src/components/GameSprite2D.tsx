@@ -34,6 +34,11 @@ type LevelSpriteAtlas = {
   confidence?: number;
 };
 
+type LevelSpriteAtlasState = {
+  key: string;
+  atlas: LevelSpriteAtlas;
+};
+
 // Sprite mode atlas building is useful even at moderate confidence; only bail out
 // when detection is clearly wrong (e.g. sampling black borders/HUD).
 const ATLAS_MIN_CONFIDENCE = 0.08;
@@ -235,7 +240,7 @@ export function GameSprite2D({
     if (typeof window === "undefined") return [];
     return getCellReferences();
   });
-  const [levelAtlas, setLevelAtlas] = useState<LevelSpriteAtlas | null>(null);
+  const [levelAtlasState, setLevelAtlasState] = useState<LevelSpriteAtlasState | null>(null);
 
   useEffect(() => {
     const refresh = () => setReferences(getCellReferences());
@@ -265,6 +270,7 @@ export function GameSprite2D({
     ].join("|"),
     [atlasGrid, cavePos.x, cavePos.y, cols, levelImageUrl, playerStart?.x, playerStart?.y, rows],
   );
+  const levelAtlas = levelAtlasState?.key === atlasCacheKey ? levelAtlasState.atlas : null;
   const renderBaselineKey = `${levelImageUrl ?? "no-image"}|${rows}x${cols}|${cavePos.x},${cavePos.y}|${playerStart?.x ?? -1},${playerStart?.y ?? -1}`;
   if (renderBaselineRef.current?.key !== renderBaselineKey) {
     renderBaselineRef.current = {
@@ -302,6 +308,15 @@ export function GameSprite2D({
 
   useEffect(() => {
     let cancelled = false;
+    const setCurrentAtlas = (atlas: LevelSpriteAtlas) => {
+      setLevelAtlasState({ key: atlasCacheKey, atlas });
+    };
+    const updateCurrentAtlas = (update: (current: LevelSpriteAtlas | null) => LevelSpriteAtlas) => {
+      setLevelAtlasState((current) => ({
+        key: atlasCacheKey,
+        atlas: update(current?.key === atlasCacheKey ? current.atlas : null),
+      }));
+    };
 
     const loadImage = async (url: string): Promise<HTMLImageElement> => {
       return await new Promise((resolve, reject) => {
@@ -315,17 +330,17 @@ export function GameSprite2D({
 
     const buildAtlas = async () => {
       if (!levelImageUrl || rows <= 0 || cols <= 0) {
-        setLevelAtlas(null);
+        setLevelAtlasState(null);
         return;
       }
 
       const cachedAtlas = getCachedLevelAtlas(atlasCacheKey);
       if (cachedAtlas) {
-        setLevelAtlas(cachedAtlas);
+        setCurrentAtlas(cachedAtlas);
         return;
       }
 
-      setLevelAtlas({
+      setCurrentAtlas({
         tileSprites: {},
         status: "Building sprites...",
       });
@@ -406,13 +421,13 @@ export function GameSprite2D({
           }
         }
         if (!det) {
-          setLevelAtlas((prev) => ({
-            tileSprites: prev?.tileSprites ?? {},
-            heroSprite: prev?.heroSprite,
-            heroFootprintKeys: prev?.heroFootprintKeys,
-            boardBackground: prev?.boardBackground,
+          updateCurrentAtlas((current) => ({
+            tileSprites: current?.tileSprites ?? {},
+            heroSprite: current?.heroSprite,
+            heroFootprintKeys: current?.heroFootprintKeys,
+            boardBackground: current?.boardBackground,
             status: "Sprite mode: grid detect failed (using reference sprites)",
-            confidence: prev?.confidence,
+            confidence: current?.confidence,
           }));
           return;
         }
@@ -443,10 +458,10 @@ export function GameSprite2D({
           }
         }
         if (!frameFitsImage) {
-          setLevelAtlas((prev) => ({
-            tileSprites: prev?.tileSprites ?? {},
-            heroSprite: prev?.heroSprite,
-            heroFootprintKeys: prev?.heroFootprintKeys,
+          updateCurrentAtlas((current) => ({
+            tileSprites: current?.tileSprites ?? {},
+            heroSprite: current?.heroSprite,
+            heroFootprintKeys: current?.heroFootprintKeys,
             boardBackground: undefined,
             status: "Sprite mode: rejected bad screenshot crop (using reference sprites)",
             confidence: det.confidence,
@@ -794,16 +809,16 @@ export function GameSprite2D({
           confidence: det.confidence,
         };
         cacheLevelAtlas(atlasCacheKey, atlas);
-        setLevelAtlas(atlas);
+        setCurrentAtlas(atlas);
       } catch (e) {
         console.error(e);
-        setLevelAtlas((prev) => ({
-          tileSprites: prev?.tileSprites ?? {},
-          heroSprite: prev?.heroSprite,
-          heroFootprintKeys: prev?.heroFootprintKeys,
-          boardBackground: prev?.boardBackground,
+        updateCurrentAtlas((current) => ({
+          tileSprites: current?.tileSprites ?? {},
+          heroSprite: current?.heroSprite,
+          heroFootprintKeys: current?.heroFootprintKeys,
+          boardBackground: current?.boardBackground,
           status: "Sprite mode: failed to build sprites (using reference sprites)",
-          confidence: prev?.confidence,
+          confidence: current?.confidence,
         }));
       }
     };
@@ -884,7 +899,9 @@ export function GameSprite2D({
   const startCaveFallbackUrl = useMemo(() => getStartCaveSpriteFallback(), []);
   const startCaveSpriteUrl = levelAtlas?.tileSprites?.[3] ?? startCaveFallbackUrl;
   const goalCaveFallbackUrl = useMemo(() => referenceSpriteUrls.cave, []);
-  const boardBackgroundUrl = levelAtlas?.boardBackground ?? null;
+  const processedBoardBackgroundUrl = levelAtlas?.boardBackground ?? null;
+  const boardBackgroundUrl = processedBoardBackgroundUrl ?? levelImageUrl ?? null;
+  const hasProcessedBoard = Boolean(processedBoardBackgroundUrl);
   const useScreenshotBase = Boolean(boardBackgroundUrl);
   const screenshotHeroCropStyle =
     useScreenshotBase && boardBackgroundUrl && playerStart && playerStart.x >= 0 && playerStart.y >= 0
@@ -938,8 +955,8 @@ export function GameSprite2D({
             backgroundColor: "black",
             backgroundImage: boardBackgroundUrl ? `url(${boardBackgroundUrl})` : undefined,
             backgroundRepeat: "no-repeat",
-            backgroundPosition: "center",
-            backgroundSize: "100% 100%",
+            backgroundPosition: hasProcessedBoard ? "center" : "center top",
+            backgroundSize: hasProcessedBoard ? "100% 100%" : "112% 113%",
             imageRendering: "pixelated",
             boxShadow: useScreenshotBase || !allowGeneratedFallback
               ? undefined
