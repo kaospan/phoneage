@@ -503,110 +503,14 @@ export function GameSprite2D({
           }
         }
 
-        const findCleanFloorCell = () => {
-          const isFloorAt = (x: number, y: number) => {
-            const v = sourceGrid[y]?.[x];
-            if (v == null) return false;
-            if (atlasGoalCaveKeys.has(`${x},${y}`)) return false;
-            // Start cave (18) is synthetic; do not treat it as a clean floor sample.
-            if (v === 18) return false;
-            return v === 0;
-          };
-
-          // Prefer an interior floor tile (surrounded by floor) to reduce edge/shadow contamination.
-          for (let y = 1; y < rows - 1; y += 1) {
-            for (let x = 1; x < cols - 1; x += 1) {
-              if (playerStart && playerStart.x === x && playerStart.y === y) continue;
-              if (!isFloorAt(x, y)) continue;
-
-              let ok = true;
-              for (let dy = -1; dy <= 1 && ok; dy += 1) {
-                for (let dx = -1; dx <= 1; dx += 1) {
-                  if (dx === 0 && dy === 0) continue;
-                  if (!isFloorAt(x + dx, y + dy)) { ok = false; break; }
-                }
-              }
-              if (ok) return { x, y };
-            }
-          }
-
-          // Fallback: any non-start floor tile.
-          for (let y = 0; y < rows; y += 1) {
-            for (let x = 0; x < cols; x += 1) {
-              if (playerStart && playerStart.x === x && playerStart.y === y) continue;
-              if (isFloorAt(x, y)) return { x, y };
-            }
-          }
-
-          return null;
-        };
-
-        // Prefer the original screenshot dino crop, but only if the crop actually
-        // contains the green dinosaur. A bad opaque crop would hide the fallback.
-        let heroSprite: string | undefined;
-        const bestDinoCrop = findBestDinoCrop();
-        if (bestDinoCrop) {
-          heroSprite = bestDinoCrop.toDataURL("image/png");
+        const heroFootprintKeys = new Set<string>();
+        if (playerStart && playerStart.x >= 0 && playerStart.x < cols && playerStart.y >= 0 && playerStart.y < rows) {
+          heroFootprintKeys.add(`${playerStart.x},${playerStart.y}`);
+          if (playerStart.y > 0) heroFootprintKeys.add(`${playerStart.x},${playerStart.y - 1}`);
         }
-
-        // Keep the older floor-diff path as a backup for non-green variants.
-        const cleanFloor = findCleanFloorCell();
-        if (!heroSprite && cleanFloor && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
-          const floorCanvas = cropCell(cleanFloor.y, cleanFloor.x);
-          // Slightly smaller inset for the hero crop so we don't clip the sprite.
-          const heroCanvas = cropCell(playerStart.y, playerStart.x, Math.max(0, inset - 1));
-          if (floorCanvas && heroCanvas) {
-            const fc = floorCanvas.getContext("2d", { willReadFrequently: true });
-            const hc = heroCanvas.getContext("2d", { willReadFrequently: true });
-            if (fc && hc) {
-              const floorData = fc.getImageData(0, 0, outW, outH);
-              const heroData = hc.getImageData(0, 0, outW, outH);
-              const out = document.createElement("canvas");
-              out.width = outW;
-              out.height = outH;
-              const oc = out.getContext("2d");
-              if (oc) {
-                const outData = oc.createImageData(outW, outH);
-                // Keep anything that differs from floor by enough luma/chroma.
-                const thr = 26;
-                let nonFloorPixels = 0;
-                for (let i = 0; i < outData.data.length; i += 4) {
-                  const dr = Math.abs(heroData.data[i] - floorData.data[i]);
-                  const dg = Math.abs(heroData.data[i + 1] - floorData.data[i + 1]);
-                  const db = Math.abs(heroData.data[i + 2] - floorData.data[i + 2]);
-                  const d = dr + dg + db;
-                  if (d > thr) {
-                    nonFloorPixels += 1;
-                    outData.data[i] = heroData.data[i];
-                    outData.data[i + 1] = heroData.data[i + 1];
-                    outData.data[i + 2] = heroData.data[i + 2];
-                    outData.data[i + 3] = 255;
-                  } else {
-                    outData.data[i + 3] = 0;
-                  }
-                }
-
-                // Require a meaningful extracted silhouette; very sparse alpha masks
-                // can appear invisible on some levels (e.g. 1/4/8/13).
-                const minPixels = Math.round(outW * outH * 0.055); // ~225 px for 64x64
-                if (nonFloorPixels >= minPixels) {
-                  oc.putImageData(outData, 0, 0);
-                  heroSprite = out.toDataURL("image/png");
-                }
-              }
-            }
-          }
-        }
-
-        if (!heroSprite && playerStart && playerStart.x >= 0 && playerStart.y >= 0) {
-          const rawStartCrop = cropCell(playerStart.y, playerStart.x, Math.max(0, inset - 1));
-          if (rawStartCrop) heroSprite = rawStartCrop.toDataURL("image/png");
-        }
-        const heroFootprintKeys = findHeroFootprintKeys();
 
         const atlas = {
           tileSprites: sampledAtlasReliable ? tileSprites : {},
-          heroSprite,
           heroFootprintKeys,
           boardBackground,
           status: !sampledAtlasReliable
@@ -624,7 +528,6 @@ export function GameSprite2D({
         console.error(e);
         updateCurrentAtlas((current) => ({
           tileSprites: current?.tileSprites ?? {},
-          heroSprite: current?.heroSprite,
           heroFootprintKeys: current?.heroFootprintKeys,
           boardBackground: current?.boardBackground,
           status: "Sprite mode: failed to build sprites (using reference sprites)",
