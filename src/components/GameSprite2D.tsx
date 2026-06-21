@@ -523,12 +523,11 @@ export function GameSprite2D({
           const weakDinoPixels = Math.round(outW * outH * 0.006);
           const heroInset = Math.max(0, inset - 1);
           for (let y = playerStart.y - 1; y <= playerStart.y + 1; y += 1) {
-            for (let x = playerStart.x - 1; x <= playerStart.x + 1; x += 1) {
-              if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
-              const canvas = cropCell(y, x, heroInset);
-              if (!canvas) continue;
-              if (scoreDinoCrop(canvas) >= weakDinoPixels) keys.add(`${x},${y}`);
-            }
+            const x = playerStart.x;
+            if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+            const canvas = cropCell(y, x, heroInset);
+            if (!canvas) continue;
+            if (scoreDinoCrop(canvas) >= weakDinoPixels) keys.add(`${x},${y}`);
           }
 
           keys.add(`${playerStart.x},${playerStart.y}`);
@@ -1081,7 +1080,7 @@ export function GameSprite2D({
                       }}
                     />
                   )}
-                  {isPlayer && allowGeneratedFallback && !isPlayerAtScreenshotStart && (
+                  {isPlayer && !isPlayerAtScreenshotStart && !suppressPlayerOverlay && (
                     levelAtlas?.heroSprite ? (
                       <img
                         src={levelAtlas.heroSprite}
