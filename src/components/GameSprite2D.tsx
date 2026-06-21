@@ -27,7 +27,6 @@ interface GameSprite2DProps {
 
 type LevelSpriteAtlas = {
   tileSprites: Record<number, string>;
-  heroSprite?: string;
   heroFootprintKeys?: Set<string>;
   boardBackground?: string;
   status: string;
@@ -44,6 +43,7 @@ type LevelSpriteAtlasState = {
 const ATLAS_MIN_CONFIDENCE = 0.08;
 const SPRITE_ZOOM_BASELINE_FACTOR = 0.66;
 const MAX_CACHED_LEVEL_ATLASES = 12;
+const RAW_SCREENSHOT_BACKGROUND_SIZE = "112% 113%";
 const levelSpriteAtlasCache = new Map<string, LevelSpriteAtlas>();
 
 const getCachedLevelAtlas = (key: string) => {
@@ -163,64 +163,6 @@ const renderHeroFallback = () => (
     <path d="M28 33 L35 33 M30 39 L40 39" stroke="#85f7bf" strokeWidth="3" strokeLinecap="round" opacity="0.75" />
   </svg>
 );
-
-const measureDinoCrop = (canvas: HTMLCanvasElement) => {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return { greenPixels: 0, width: 0, height: 0, minX: 0, minY: 0, maxX: -1, maxY: -1 };
-
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  let greenPixels = 0;
-  let minX = canvas.width;
-  let minY = canvas.height;
-  let maxX = -1;
-  let maxY = -1;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    if (g > 70 && g - r > 24 && g - b > 18) {
-      const pixel = i / 4;
-      const x = pixel % canvas.width;
-      const y = Math.floor(pixel / canvas.width);
-      greenPixels += 1;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  }
-
-  return {
-    greenPixels,
-    width: maxX >= minX ? maxX - minX + 1 : 0,
-    height: maxY >= minY ? maxY - minY + 1 : 0,
-    minX,
-    minY,
-    maxX,
-    maxY,
-  };
-};
-
-const scoreDinoCrop = (canvas: HTMLCanvasElement) => measureDinoCrop(canvas).greenPixels;
-
-const hasUsableDinoShape = (canvas: HTMLCanvasElement, minPixels: number) => {
-  const measurement = measureDinoCrop(canvas);
-  const total = Math.max(1, canvas.width * canvas.height);
-  const greenFraction = measurement.greenPixels / total;
-  const edgeTouches = [
-    measurement.minX <= 1,
-    measurement.minY <= 1,
-    measurement.maxX >= canvas.width - 2,
-    measurement.maxY >= canvas.height - 2,
-  ].filter(Boolean).length;
-  return (
-    measurement.greenPixels >= minPixels &&
-    greenFraction <= 0.18 &&
-    edgeTouches < 2 &&
-    measurement.width >= Math.round(canvas.width * 0.14) &&
-    measurement.height >= Math.round(canvas.height * 0.18)
-  );
-};
 
 export function GameSprite2D({
   grid,
