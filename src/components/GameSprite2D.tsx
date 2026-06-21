@@ -522,7 +522,7 @@ export function GameSprite2D({
 
           const weakDinoPixels = Math.round(outW * outH * 0.006);
           const heroInset = Math.max(0, inset - 1);
-          for (let y = playerStart.y - 1; y <= playerStart.y + 1; y += 1) {
+          for (let y = playerStart.y - 1; y <= playerStart.y; y += 1) {
             const x = playerStart.x;
             if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
             const canvas = cropCell(y, x, heroInset);
@@ -959,7 +959,7 @@ export function GameSprite2D({
                   playerStart.y === y
                 );
               const suppressPlayerOverlay =
-                isPlayer && useScreenshotBase && (!levelAtlas?.heroSprite || isPlayerAtScreenshotStart);
+                isPlayer && useScreenshotBase && isPlayerAtScreenshotStart;
               const tileType = isCave ? 3 : cell;
               // If the player is standing on the start-marker cave (18), render the base tile as floor
               // so the cave appears only after the hero moves off the spawn tile (nostalgia behavior).
@@ -1081,7 +1081,7 @@ export function GameSprite2D({
                     />
                   )}
                   {isPlayer && !isPlayerAtScreenshotStart && !suppressPlayerOverlay && (
-                    levelAtlas?.heroSprite ? (
+                    useScreenshotBase ? renderHeroFallback() : levelAtlas?.heroSprite ? (
                       <img
                         src={levelAtlas.heroSprite}
                         alt="Hero"
