@@ -837,9 +837,6 @@ export const GridEditorPanel: React.FC = () => {
                                     markUnsaved();
                                     setImageScaleX(1);
                                     setImageScaleY(1);
-                                    setImageOffsetX(0);
-                                    setImageOffsetY(0);
-                                    setLockImageAspect(true);
                                 }}
                                 aria-label="Reset image scale"
                                 title="Reset image scale"
