@@ -342,10 +342,23 @@ export function GameSprite2D({
           };
         };
 
+        const geometryMatchesAspectFallback = (
+          candidate: NonNullable<ReturnType<typeof detectGridLines>>,
+          fallback: NonNullable<ReturnType<typeof buildAspectGridFallback>>,
+        ) => {
+          const candidateCellAspect = candidate.cellWidth / Math.max(1, candidate.cellHeight);
+          const fallbackCellAspect = fallback.cellWidth / Math.max(1, fallback.cellHeight);
+          return Math.abs(candidateCellAspect - fallbackCellAspect) / fallbackCellAspect <= 0.18;
+        };
+
         let usedAspectGridFallback = false;
         let det = detectGridLines(dsCanvas, true, rows, cols, getAlignmentHints());
-        if (!det || det.confidence < ATLAS_MIN_CONFIDENCE) {
-          const aspectFallback = buildAspectGridFallback();
+        const aspectFallback = buildAspectGridFallback();
+        if (
+          !det ||
+          det.confidence < ATLAS_MIN_CONFIDENCE ||
+          (aspectFallback && !geometryMatchesAspectFallback(det, aspectFallback))
+        ) {
           if (aspectFallback) {
             det = aspectFallback;
             usedAspectGridFallback = true;
