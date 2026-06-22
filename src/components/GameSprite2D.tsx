@@ -7,6 +7,7 @@ import { referenceSpriteUrls } from "@/data/assetCatalog";
 import { detectGridLines } from "@/components/level-mapper/gridDetection";
 import { getAlignmentHints } from "@/components/level-mapper/alignmentProfile";
 import { normalizeMapperImage } from "@/components/level-mapper/imageNormalization";
+import playerSpriteUrl from "@/assets/player-sprite.png";
 
 type PlayerFacing = "up" | "right" | "down" | "left";
 
@@ -79,6 +80,21 @@ const pickLatestByType = (refs: CellReference[]) => {
   return latest;
 };
 
+const getSpawnCleanupTileType = (
+  grid: number[][],
+  playerStart?: { x: number; y: number } | null,
+) => {
+  if (!playerStart) return 0;
+  const staticTerrainTypes = new Set([0, 1, 2, 4, 6]);
+  const neighbors = [
+    grid[playerStart.y]?.[playerStart.x - 1],
+    grid[playerStart.y]?.[playerStart.x + 1],
+    grid[playerStart.y + 1]?.[playerStart.x],
+    grid[playerStart.y - 1]?.[playerStart.x],
+  ];
+  return neighbors.find((tileType) => tileType !== undefined && staticTerrainTypes.has(tileType)) ?? 0;
+};
+
 const getStartCaveSpriteFallback = () => {
   // Start cave (18) is a synthetic marker we paint into the grid to show the original spawn tile.
   // It does not exist in the level screenshot (the hero covers a floor tile), so sampling it from
@@ -145,23 +161,13 @@ const renderArrowVector = (tileType: number) => {
   );
 };
 
-const renderHeroFallback = () => (
-  <svg
-    viewBox="0 0 64 64"
-    className="absolute inset-[8%] h-[84%] w-[84%]"
-    aria-label="Hero"
-    style={{
-      filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 5px rgba(0,0,0,0.72))",
-      imageRendering: "pixelated",
-    }}
-  >
-    <path d="M20 40 L20 32 L25 27 L34 27 L43 32 L47 42 L42 49 L28 49 Z" fill="#10b981" stroke="#063b2a" strokeWidth="4" strokeLinejoin="round" />
-    <path d="M39 27 L45 19 L54 19 L58 24 L56 31 L47 31 Z" fill="#12d68a" stroke="#063b2a" strokeWidth="4" strokeLinejoin="round" />
-    <path d="M21 36 L10 30 L7 24 L12 27 L24 31 Z" fill="#0a8f61" stroke="#063b2a" strokeWidth="4" strokeLinejoin="round" />
-    <path d="M30 47 L27 58 M42 46 L47 57" stroke="#063b2a" strokeWidth="5" strokeLinecap="round" />
-    <circle cx="52" cy="23" r="2.2" fill="#f8fafc" />
-    <path d="M28 33 L35 33 M30 39 L40 39" stroke="#85f7bf" strokeWidth="3" strokeLinecap="round" opacity="0.75" />
-  </svg>
+const renderPlayerSprite = () => (
+  <img
+    src={playerSpriteUrl}
+    alt="Hero"
+    className="pointer-events-none absolute bottom-[3%] left-1/2 h-[172%] w-[94%] max-w-none -translate-x-1/2 object-contain object-bottom"
+    style={{ imageRendering: "pixelated" }}
+  />
 );
 
 export function GameSprite2D({
@@ -200,6 +206,10 @@ export function GameSprite2D({
   const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
   const atlasGrid = useMemo(() => sourceGrid.map((r) => [...r]), [sourceGrid]);
+  const spawnCleanupTileType = useMemo(
+    () => getSpawnCleanupTileType(atlasGrid, playerStart),
+    [atlasGrid, playerStart],
+  );
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
   const atlasGoalCaveKeys = useMemo(() => buildGoalCaveKeySet(sourceGrid, cavePos), [sourceGrid, cavePos]);
   const atlasCacheKey = useMemo(
@@ -714,10 +724,14 @@ export function GameSprite2D({
                     : allowGeneratedFallback
                 );
 
-              const atlasSprite = levelAtlas?.tileSprites?.[effectiveTileType];
+              const atlasSprite =
+                levelAtlas?.tileSprites?.[effectiveTileType] ??
+                (useScreenshotBase && effectiveTileType === 18
+                  ? levelAtlas?.tileSprites?.[spawnCleanupTileType]
+                  : undefined);
               const refSprite = latestByType.get(effectiveTileType)?.imageData;
               const canUseRefSprite = effectiveTileType !== 5;
-              const staticTileBackgroundImage =
+              const fallbackTileBackgroundImage =
                   effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
                   effectiveTileType === 3 && goalCaveFallbackUrl ? `url(${goalCaveFallbackUrl})` :
                   effectiveTileType === 6 && breakableRockFallbackUrl ? `url(${breakableRockFallbackUrl})` :
@@ -728,6 +742,9 @@ export function GameSprite2D({
                   effectiveTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
                   effectiveTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
                   undefined;
+              const staticTileBackgroundImage = useScreenshotBase
+                ? (atlasSprite ? `url(${atlasSprite})` : undefined)
+                : fallbackTileBackgroundImage;
               const backgroundImage = shouldPaintStaticTile ? staticTileBackgroundImage : undefined;
               const arrowVector =
                 effectiveIsArrow && !isPlayer && shouldPaintStaticTile && !backgroundImage
@@ -735,7 +752,7 @@ export function GameSprite2D({
                   : null;
 
               const fallback =
-                !shouldPaintStaticTile ? "transparent" :
+                !shouldPaintStaticTile || (useScreenshotBase && !backgroundImage) ? "transparent" :
                 effectiveTileType === 5 ? "black" :
                 effectiveTileType === 0 ? "rgba(255,255,255,0.08)" :
                 effectiveTileType === 4 ? "rgba(30,144,255,0.55)" :
@@ -755,7 +772,8 @@ export function GameSprite2D({
                 <div
                   key={`${x}-${y}`}
                   className={[
-                    "relative min-h-0 min-w-0 overflow-hidden",
+                    "relative min-h-0 min-w-0",
+                    isPlayer && !suppressPlayerOverlay ? "z-10 overflow-visible" : "overflow-hidden",
                     isArrow ? "cursor-pointer hover:brightness-110" : "",
                     isSelected ? "ring-2 ring-white" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
@@ -790,7 +808,7 @@ export function GameSprite2D({
                     />
                   )}
                   {isPlayer && !isPlayerAtScreenshotStart && !suppressPlayerOverlay && (
-                    renderHeroFallback()
+                    renderPlayerSprite()
                   )}
                   {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
