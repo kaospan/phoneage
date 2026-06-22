@@ -190,9 +190,8 @@ export const isPlaceholderGrid = (grid?: number[][]) => {
 export const shouldAllowLevelOverride = (level: Level) =>
   level.lockOverride !== true;
 
-const normalizePersistedGrid = (levelId: number, grid: number[][]): number[][] => {
+const normalizeScreenshotGrid = (grid: number[][]): number[][] => {
   if (
-    levelId === 4 &&
     grid.length === 12 &&
     grid[11]?.length === 20 &&
     grid[11].every((cell) => cell === 5)
@@ -262,7 +261,7 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
 
     out.push({
       id,
-      grid: grid as number[][],
+      grid: normalizeScreenshotGrid(grid as number[][]),
       playerStart: { x: psx, y: psy },
       cavePos: { x: cx, y: cy },
       ...(provenance ? { provenance } : {}),
@@ -657,7 +656,7 @@ export const getAllLevels = (): Level[] => {
          // Handle new format: { grid, playerStart }
          if (parsed && typeof parsed === 'object' && parsed.grid) {
            console.log(`✓ Override found for level ${l.id} (new format)`);
-           const nextGrid = normalizePersistedGrid(l.id, parsed.grid as number[][]);
+           const nextGrid = normalizeScreenshotGrid(parsed.grid as number[][]);
            const result: Level = { ...l, grid: nextGrid };
            if (parsed.playerStart) {
              result.playerStart = parsed.playerStart;
@@ -710,7 +709,7 @@ export const getAllLevels = (): Level[] => {
          // Handle old format: just the grid array
          if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
            console.log(`✓ Override found for level ${l.id} (old format)`);
-          return { ...l, grid: normalizePersistedGrid(l.id, parsed as number[][]) };
+          return { ...l, grid: normalizeScreenshotGrid(parsed as number[][]) };
         }
       } catch (err) {
         console.warn(`⚠️ Failed to parse override for level ${l.id}:`, err);
