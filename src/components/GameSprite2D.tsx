@@ -7,7 +7,7 @@ import { referenceSpriteUrls } from "@/data/assetCatalog";
 import { detectGridLines } from "@/components/level-mapper/gridDetection";
 import { getAlignmentHints } from "@/components/level-mapper/alignmentProfile";
 import { normalizeMapperImage } from "@/components/level-mapper/imageNormalization";
-import playerSpriteUrl from "@/assets/player-sprite.png";
+import playerSpriteUrl from "@/assets/dino.png";
 
 type PlayerFacing = "up" | "right" | "down" | "left";
 
@@ -165,7 +165,7 @@ const renderPlayerSprite = () => (
   <img
     src={playerSpriteUrl}
     alt="Hero"
-    className="pointer-events-none absolute bottom-[3%] left-1/2 h-[172%] w-[94%] max-w-none -translate-x-1/2 object-contain object-bottom"
+    className="pointer-events-none absolute bottom-[6%] left-1/2 h-[88%] w-[88%] max-w-none -translate-x-1/2 object-contain object-bottom"
     style={{ imageRendering: "pixelated" }}
   />
 );
