@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Lock, Map, Play, TimerReset, Trophy } from "lucide-react";
+import { Lock, Map, Play, TimerReset, Trophy, X } from "lucide-react";
 
 import { themes, type ColorTheme } from "@/data/levels";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -74,17 +75,31 @@ export const CampaignDialog = ({
           {!compact && <span>Campaign</span>}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden border-white/10 bg-stone-950/95 p-0 text-stone-100">
-        <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_42%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_40%)] px-6 py-5">
-          <DialogHeader className="gap-2 text-left">
-            <DialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-[0.14em] text-stone-50">
-              <Map className="h-5 w-5 text-amber-300" />
-              Campaign Map
-            </DialogTitle>
-            <DialogDescription className="text-stone-300">
-              Track clears, revisit solved stages, and push the campaign frontier forward one puzzle at a time.
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="max-h-[calc(100svh-1rem)] w-[calc(100vw-1rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden border-white/10 bg-stone-950/95 p-0 text-stone-100">
+        <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_42%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_40%)] px-4 py-4 sm:px-6 sm:py-5">
+          <div className="flex items-start justify-between gap-4">
+            <DialogHeader className="min-w-0 flex-1 gap-2 text-left">
+              <DialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-[0.14em] text-stone-50">
+                <Map className="h-5 w-5 text-amber-300" />
+                Campaign Map
+              </DialogTitle>
+              <DialogDescription className="text-stone-300">
+                Track clears, revisit solved stages, and push the campaign frontier forward one puzzle at a time.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 shrink-0 rounded-full border border-white/10 bg-white/10 text-stone-100 hover:bg-white/20 hover:text-white"
+                aria-label="Close campaign map"
+                title="Close campaign map"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </DialogClose>
+          </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -112,7 +127,7 @@ export const CampaignDialog = ({
           </div>
         </div>
 
-        <div className="max-h-[65vh] overflow-y-auto px-6 py-5">
+        <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {levels.map((level) => {
               const accentColor = themes[level.theme ?? "default"]?.arrow ?? "#d4a574";

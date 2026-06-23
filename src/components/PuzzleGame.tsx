@@ -55,6 +55,11 @@ console.log('📦 PuzzleGame.tsx loading...');
 type PlayerId = string;
 type FacingDirection = "up" | "right" | "down" | "left";
 
+const isKeyboardShortcutTarget = (target: EventTarget | null): target is HTMLElement => {
+  if (!(target instanceof HTMLElement)) return false;
+  return !target.closest("button, input, textarea, select, [contenteditable='true'], [role='dialog']");
+};
+
 type InputCommand =
   | { type: "move"; dx: number; dy: number; seq: number }
   | { type: "select"; x: number; y: number; seq: number }
@@ -1487,8 +1492,9 @@ export const PuzzleGame = () => {
       const handleKeyPress = (e: KeyboardEvent) => {
         if (isBuilding) return;
         const key = e.key;
+        const isStartKey = key === ' ' || key === 'Enter' || e.code === 'Space';
 
-        if (e.repeat && (key === ' ' || key === 'Enter')) {
+        if (e.repeat && isStartKey) {
           e.preventDefault();
           return;
         }
@@ -1498,7 +1504,22 @@ export const PuzzleGame = () => {
         const isLeft = key === 'ArrowLeft' || key === 'a' || key === 'A';
         const isRight = key === 'ArrowRight' || key === 'd' || key === 'D';
 
-        if (key === ' ' || key === 'Enter') {
+        if (isStartKey && isKeyboardShortcutTarget(e.target)) {
+          if (!hasStartedGame) {
+            e.preventDefault();
+            startGameFromTitle();
+            return;
+          }
+
+          if (isWaitingToStart) {
+            e.preventDefault();
+            startLevelWhenReady();
+            return;
+          }
+        }
+
+        if (isStartKey) {
+          if (!isKeyboardShortcutTarget(e.target)) return;
           e.preventDefault();
           toggleKeyboardSelection();
           return;
@@ -1537,13 +1558,17 @@ export const PuzzleGame = () => {
     }, [
       allLevels.length,
       currentLevelIndex,
+      hasStartedGame,
       isBuilding,
       isSelectorActive,
+      isWaitingToStart,
       moveKeyboardSelector,
       goToLevelIndex,
       queueMove,
       resetLevel,
       selectedArrow,
+      startGameFromTitle,
+      startLevelWhenReady,
       pushHudMessage,
       toggleKeyboardSelection
     ]);
