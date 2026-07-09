@@ -1737,11 +1737,9 @@ export const PuzzleGame = () => {
             twoFingerSwipeHandledRef.current = true;
             pinchStartDistanceRef.current = null;
             pinchStartZoomIndexRef.current = null;
-            setIsMiniMapOverlayVisible((visible) => {
-              const nextVisible = !visible;
-              pushHudMessage(nextVisible ? "Map overlay shown" : "Map overlay hidden", 1200);
-              return nextVisible;
-            });
+            const nextVisible = !isMiniMapOverlayVisible;
+            setIsMiniMapOverlayVisible(nextVisible);
+            pushHudMessage(nextVisible ? "Map overlay shown" : "Map overlay hidden", 1200);
             return;
           }
         }
@@ -2787,7 +2785,11 @@ export const PuzzleGame = () => {
                     row.map((cell, x) => {
                       const isPlayerCell = localPlayerPos.x === x && localPlayerPos.y === y;
                       const isCaveCell = renderCavePos.x === x && renderCavePos.y === y;
-                      const label = isPlayerCell ? "P" : miniMapCellLabel(cell) || (isCaveCell ? "C" : "");
+                      const label = isPlayerCell && isCaveCell
+                        ? "PC"
+                        : isPlayerCell
+                          ? "P"
+                          : miniMapCellLabel(cell) || (isCaveCell ? "C" : "");
                       return (
                         <div
                           key={`${x}:${y}`}
