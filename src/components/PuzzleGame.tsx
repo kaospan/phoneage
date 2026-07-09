@@ -121,6 +121,14 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
 };
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
+const PINCH_ZOOM_PIXELS_PER_STEP = 28;
+
+const getTouchDistance = (touches: React.TouchList): number => {
+  if (touches.length < 2) return 0;
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+};
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
@@ -257,6 +265,8 @@ export const PuzzleGame = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
+  const pinchStartDistanceRef = useRef<number | null>(null);
+  const pinchStartZoomIndexRef = useRef<number | null>(null);
 
   // Player highlight flash state for control transfer feedback
   const [playerFlashCount, setPlayerFlashCount] = useState(0);
@@ -1627,6 +1637,16 @@ export const PuzzleGame = () => {
     // Touch handlers for mobile dragging
     const handleTouchStart = (e: React.TouchEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
+      if (e.touches.length === 2) {
+        const distance = getTouchDistance(e.touches);
+        if (distance > 0) {
+          setIsDragging(false);
+          setUserZoomTouched(true);
+          pinchStartDistanceRef.current = distance;
+          pinchStartZoomIndexRef.current = cameraZoomIndex;
+        }
+        return;
+      }
       if (e.touches.length === 1 && e.target === e.currentTarget) {
         const touch = e.touches[0];
         setIsDragging(true);
@@ -1637,6 +1657,18 @@ export const PuzzleGame = () => {
 
     const handleTouchMove = (e: React.TouchEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
+      if (e.touches.length === 2) {
+        const startDistance = pinchStartDistanceRef.current;
+        const startZoomIndex = pinchStartZoomIndexRef.current;
+        if (startDistance && startZoomIndex != null) {
+          const distance = getTouchDistance(e.touches);
+          const stepDelta = Math.round((distance - startDistance) / PINCH_ZOOM_PIXELS_PER_STEP);
+          const nextZoomIndex = Math.max(0, Math.min(CAMERA_ZOOM_LEVELS.length - 1, startZoomIndex + stepDelta));
+          setUserZoomTouched(true);
+          setCameraZoomIndex(nextZoomIndex);
+        }
+        return;
+      }
       if (isDragging && e.touches.length === 1) {
         const touch = e.touches[0];
         const deltaX = touch.clientX - dragStart.x;
@@ -1650,8 +1682,14 @@ export const PuzzleGame = () => {
       }
     };
 
-    const handleTouchEnd = () => {
-      setIsDragging(false);
+    const handleTouchEnd = (e: React.TouchEvent) => {
+      if (e.touches.length < 2) {
+        pinchStartDistanceRef.current = null;
+        pinchStartZoomIndexRef.current = null;
+      }
+      if (e.touches.length === 0) {
+        setIsDragging(false);
+      }
     };
 
     // Double-click or double-tap to reset camera
