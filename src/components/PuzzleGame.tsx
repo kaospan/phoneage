@@ -1859,14 +1859,6 @@ export const PuzzleGame = () => {
         )}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,205,138,0.20),transparent_24%),radial-gradient(circle_at_top_right,rgba(98,220,255,0.16),transparent_22%),linear-gradient(180deg,rgba(5,12,14,0.18)_0%,rgba(5,12,14,0.68)_58%,rgba(3,8,9,0.88)_100%)]" />
         <div className="absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
-        {showRotateHint && (
-          <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+0.4rem)] z-[75] flex justify-center px-3">
-            <div className="max-w-md rounded-2xl border border-white/15 bg-black/60 px-4 py-2 text-center shadow-xl backdrop-blur-sm">
-              <div className="text-[11px] font-black tracking-[0.14em] text-white/90">ROTATE FOR BEST VIEW</div>
-              <div className="mt-1 text-xs text-white/75">Portrait is supported, but landscape gives a wider board view.</div>
-            </div>
-          </div>
-        )}
         {isBuilding && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 text-white">
             <div className="bg-black/70 border border-white/20 rounded-lg px-6 py-4 text-center">
@@ -2490,6 +2482,15 @@ export const PuzzleGame = () => {
                     <Expand className="h-4 w-4" />
                   </Button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {useSplitHud && showRotateHint && (
+          <div className="relative z-50 mt-2 px-2">
+            <div className="rounded-lg border border-border/50 bg-card/95 px-3 py-2 text-center shadow-lg backdrop-blur">
+              <div className="text-[11px] font-black tracking-[0.14em] text-muted-foreground">
+                ROTATE SCREEN FOR BEST VIEW
               </div>
             </div>
           </div>
