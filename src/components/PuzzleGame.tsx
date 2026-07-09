@@ -122,12 +122,73 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
 const PINCH_ZOOM_PIXELS_PER_STEP = 28;
+const TWO_FINGER_SWIPE_MIN_DISTANCE = 72;
+const TWO_FINGER_PINCH_TOLERANCE = 20;
 
 const getTouchDistance = (touches: React.TouchList): number => {
   if (touches.length < 2) return 0;
   const dx = touches[0].clientX - touches[1].clientX;
   const dy = touches[0].clientY - touches[1].clientY;
   return Math.hypot(dx, dy);
+};
+
+const getTouchCenter = (touches: React.TouchList) => {
+  if (touches.length < 2) return { x: 0, y: 0 };
+  return {
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  };
+};
+
+const miniMapCellTone = (cell: CellType): string => {
+  if ((cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13) return "bg-violet-600/80 text-violet-100";
+  if (cell === 3 || cell === 18) return "bg-emerald-600/85 text-emerald-100";
+  if (cell === 4) return "bg-sky-700/85 text-sky-100";
+  if (cell === 5) return "bg-slate-700/85 text-slate-100";
+  if (cell === 6) return "bg-amber-700/85 text-amber-100";
+  if (cell === 14 || cell === 15) return "bg-yellow-500/90 text-yellow-950";
+  if (cell === 16 || cell === 17) return "bg-rose-700/85 text-rose-100";
+  if (cell === 19) return "bg-indigo-700/85 text-indigo-100";
+  if (cell === 20) return "bg-orange-600/85 text-orange-100";
+  if (cell === 1 || cell === 2) return "bg-red-700/85 text-red-100";
+  return "bg-stone-800/90 text-stone-300";
+};
+
+const miniMapCellLabel = (cell: CellType): string => {
+  switch (cell) {
+    case 3:
+      return "C";
+    case 7:
+      return "↑";
+    case 8:
+      return "→";
+    case 9:
+      return "↓";
+    case 10:
+      return "←";
+    case 11:
+      return "↔";
+    case 12:
+      return "↕";
+    case 13:
+      return "✚";
+    case 14:
+      return "R";
+    case 15:
+      return "G";
+    case 16:
+      return "r";
+    case 17:
+      return "g";
+    case 18:
+      return "S";
+    case 19:
+      return "◎";
+    case 20:
+      return "⌛";
+    default:
+      return "";
+  }
 };
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
@@ -267,6 +328,10 @@ export const PuzzleGame = () => {
   const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomIndexRef = useRef<number | null>(null);
+  const twoFingerStartCenterRef = useRef<{ x: number; y: number } | null>(null);
+  const twoFingerStartDistanceRef = useRef<number | null>(null);
+  const twoFingerSwipeHandledRef = useRef(false);
+  const [isMiniMapOverlayVisible, setIsMiniMapOverlayVisible] = useState(false);
 
   // Player highlight flash state for control transfer feedback
   const [playerFlashCount, setPlayerFlashCount] = useState(0);
@@ -574,6 +639,7 @@ export const PuzzleGame = () => {
     // New level: start from the shared 100% baseline.
     setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
     setUserZoomTouched(false);
+    setIsMiniMapOverlayVisible(false);
   }, [currentLevelIndex]);
 
     const isPlaceholderGrid = useCallback((levelGrid?: number[][]) => {
@@ -1642,6 +1708,9 @@ export const PuzzleGame = () => {
         if (distance > 0) {
           setIsDragging(false);
           setUserZoomTouched(true);
+          twoFingerStartCenterRef.current = getTouchCenter(e.touches);
+          twoFingerStartDistanceRef.current = distance;
+          twoFingerSwipeHandledRef.current = false;
           pinchStartDistanceRef.current = distance;
           pinchStartZoomIndexRef.current = cameraZoomIndex;
         }
@@ -1658,6 +1727,25 @@ export const PuzzleGame = () => {
     const handleTouchMove = (e: React.TouchEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (e.touches.length === 2) {
+        const startCenter = twoFingerStartCenterRef.current;
+        const startDistanceForSwipe = twoFingerStartDistanceRef.current;
+        if (!twoFingerSwipeHandledRef.current && startCenter && startDistanceForSwipe) {
+          const center = getTouchCenter(e.touches);
+          const centerTravel = Math.hypot(center.x - startCenter.x, center.y - startCenter.y);
+          const pinchDrift = Math.abs(getTouchDistance(e.touches) - startDistanceForSwipe);
+          if (centerTravel >= TWO_FINGER_SWIPE_MIN_DISTANCE && pinchDrift <= TWO_FINGER_PINCH_TOLERANCE) {
+            twoFingerSwipeHandledRef.current = true;
+            pinchStartDistanceRef.current = null;
+            pinchStartZoomIndexRef.current = null;
+            setIsMiniMapOverlayVisible((visible) => {
+              const nextVisible = !visible;
+              pushHudMessage(nextVisible ? "Map overlay shown" : "Map overlay hidden", 1200);
+              return nextVisible;
+            });
+            return;
+          }
+        }
+        if (twoFingerSwipeHandledRef.current) return;
         const startDistance = pinchStartDistanceRef.current;
         const startZoomIndex = pinchStartZoomIndexRef.current;
         if (startDistance && startZoomIndex != null) {
@@ -1684,6 +1772,9 @@ export const PuzzleGame = () => {
 
     const handleTouchEnd = (e: React.TouchEvent) => {
       if (e.touches.length < 2) {
+        twoFingerStartCenterRef.current = null;
+        twoFingerStartDistanceRef.current = null;
+        twoFingerSwipeHandledRef.current = false;
         pinchStartDistanceRef.current = null;
         pinchStartZoomIndexRef.current = null;
       }
@@ -2664,6 +2755,60 @@ export const PuzzleGame = () => {
             )}
           </div>
         </div>
+        {isMiniMapOverlayVisible && renderGrid.length > 0 && (
+          <div
+            className="absolute inset-0 z-[68] flex items-center justify-center bg-black/55 px-3 py-4 backdrop-blur-sm"
+            onClick={() => setIsMiniMapOverlayVisible(false)}
+          >
+            <div
+              className="pointer-events-auto w-full max-w-md rounded-2xl border border-white/20 bg-stone-950/90 p-3 shadow-2xl"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-black tracking-[0.16em] text-stone-200">TACTICAL MAP</div>
+                  <div className="mt-1 text-xs text-stone-400">Two-finger swipe toggles • Tap outside to close</div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-bold text-stone-200 hover:bg-white/10"
+                  onClick={() => setIsMiniMapOverlayVisible(false)}
+                >
+                  Close
+                </Button>
+              </div>
+
+              <div className="mt-3 max-h-[55svh] overflow-auto rounded-xl border border-white/10 bg-black/35 p-2">
+                <div
+                  className="grid gap-0.5"
+                  style={{ gridTemplateColumns: `repeat(${Math.max(1, renderGrid[0]?.length ?? 1)}, minmax(0, 1fr))` }}
+                >
+                  {renderGrid.flatMap((row, y) =>
+                    row.map((cell, x) => {
+                      const isPlayerCell = localPlayerPos.x === x && localPlayerPos.y === y;
+                      const isCaveCell = renderCavePos.x === x && renderCavePos.y === y;
+                      const label = isPlayerCell ? "P" : miniMapCellLabel(cell) || (isCaveCell ? "C" : "");
+                      return (
+                        <div
+                          key={`${x}:${y}`}
+                          className={[
+                            "flex aspect-square min-h-3 min-w-3 items-center justify-center rounded-[2px] text-[9px] font-black leading-none",
+                            miniMapCellTone(cell),
+                            isCaveCell ? "ring-1 ring-emerald-200/80" : "",
+                            isPlayerCell ? "ring-2 ring-cyan-200 shadow-[0_0_8px_rgba(56,189,248,0.7)]" : "",
+                          ].join(" ")}
+                          title={`(${x}, ${y})`}
+                        >
+                          {label}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {selectedArrow && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
         )}
