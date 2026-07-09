@@ -445,6 +445,11 @@ export const PuzzleGame = () => {
     };
   }, [isMiniMapVisible]);
 
+  useEffect(() => {
+    if (isMobile) return;
+    setIsMiniMapVisible(false);
+  }, [isMobile]);
+
   const resetLevelTimer = useCallback((limitSeconds: number | undefined) => {
     clearTimerInterval();
     timerEndAtMsRef.current = null;
@@ -2692,6 +2697,7 @@ export const PuzzleGame = () => {
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
           onDoubleClick={handleDoubleClick}
           style={{
             cursor: viewMode === 'fps' || viewMode === 'sprite' ? 'default' : isDragging ? 'grabbing' : 'grab',
