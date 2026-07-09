@@ -1706,7 +1706,7 @@ export const PuzzleGame = () => {
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
     const miniMapRows = renderGrid.length;
-    const miniMapCols = renderGrid[0]?.length ?? 0;
+    const miniMapCols = miniMapRows > 0 ? (renderGrid[0]?.length ?? 0) : 0;
     const miniMapCellSize = Math.max(
       10,
       Math.min(
@@ -2744,7 +2744,7 @@ export const PuzzleGame = () => {
                         Mini Map
                       </div>
                       <div className="mt-1 text-xs text-stone-400">
-                        Tap anywhere or swipe again to close
+                        Tap anywhere or use a two-finger swipe to close
                       </div>
                     </div>
                     <div className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-300">
