@@ -1653,7 +1653,7 @@ export const PuzzleGame = () => {
         const nextDistance = distanceBetweenTouches(e.touches[0], e.touches[1]);
         const previousDistance = pinchDistanceRef.current;
         setIsDragging(false);
-        if (previousDistance == null) {
+        if (previousDistance === null) {
           pinchDistanceRef.current = nextDistance;
           return;
         }
