@@ -121,6 +121,18 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
 };
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
+const TWO_FINGER_SWIPE_MIN_DISTANCE = 40;
+const TWO_FINGER_PINCH_DISTANCE_TOLERANCE = 24;
+const TWO_FINGER_DIRECTION_MIN_TRAVEL = 10;
+
+interface TwoFingerSwipeGesture {
+  idA: number;
+  idB: number;
+  startA: { x: number; y: number };
+  startB: { x: number; y: number };
+  startDistance: number;
+  handled: boolean;
+}
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
@@ -257,6 +269,8 @@ export const PuzzleGame = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
+  const [showMiniMapOverlay, setShowMiniMapOverlay] = useState(false);
+  const twoFingerSwipeGestureRef = useRef<TwoFingerSwipeGesture | null>(null);
 
   // Player highlight flash state for control transfer feedback
   const [playerFlashCount, setPlayerFlashCount] = useState(0);
@@ -1332,6 +1346,10 @@ export const PuzzleGame = () => {
       [renderPlayers]
     );
     const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
+    const goalCaveKeys = useMemo(
+      () => buildGoalCaveKeySet(renderGrid, renderCavePos),
+      [renderCavePos, renderGrid]
+    );
     const redKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.red) || 0));
     const greenKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.green) || 0));
     const timeLeftText = timeLeftSeconds == null
@@ -1626,6 +1644,20 @@ export const PuzzleGame = () => {
 
     // Touch handlers for mobile dragging
     const handleTouchStart = (e: React.TouchEvent) => {
+      if (isMobile && e.touches.length === 2 && e.target === e.currentTarget) {
+        setIsDragging(false);
+        const touchA = e.touches[0];
+        const touchB = e.touches[1];
+        twoFingerSwipeGestureRef.current = {
+          idA: touchA.identifier,
+          idB: touchB.identifier,
+          startA: { x: touchA.clientX, y: touchA.clientY },
+          startB: { x: touchB.clientX, y: touchB.clientY },
+          startDistance: Math.hypot(touchA.clientX - touchB.clientX, touchA.clientY - touchB.clientY),
+          handled: false,
+        };
+        return;
+      }
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (e.touches.length === 1 && e.target === e.currentTarget) {
         const touch = e.touches[0];
@@ -1634,8 +1666,55 @@ export const PuzzleGame = () => {
         setDragOffsetStart({ x: cameraOffset.x, z: cameraOffset.z });
       }
     };
-
     const handleTouchMove = (e: React.TouchEvent) => {
+      if (isMobile && e.touches.length === 2) {
+        if (!twoFingerSwipeGestureRef.current) {
+          const touchA = e.touches[0];
+          const touchB = e.touches[1];
+          twoFingerSwipeGestureRef.current = {
+            idA: touchA.identifier,
+            idB: touchB.identifier,
+            startA: { x: touchA.clientX, y: touchA.clientY },
+            startB: { x: touchB.clientX, y: touchB.clientY },
+            startDistance: Math.hypot(touchA.clientX - touchB.clientX, touchA.clientY - touchB.clientY),
+            handled: false,
+          };
+          return;
+        }
+
+        const gesture = twoFingerSwipeGestureRef.current;
+        const activeTouches = Array.from(e.touches);
+        const touchA = activeTouches.find((touch) => touch.identifier === gesture.idA);
+        const touchB = activeTouches.find((touch) => touch.identifier === gesture.idB);
+        if (!touchA || !touchB) return;
+
+        const deltaAX = touchA.clientX - gesture.startA.x;
+        const deltaAY = touchA.clientY - gesture.startA.y;
+        const deltaBX = touchB.clientX - gesture.startB.x;
+        const deltaBY = touchB.clientY - gesture.startB.y;
+        const averageDeltaX = (deltaAX + deltaBX) / 2;
+        const averageDeltaY = (deltaAY + deltaBY) / 2;
+        const movedFarEnough =
+          Math.abs(averageDeltaX) > TWO_FINGER_SWIPE_MIN_DISTANCE ||
+          Math.abs(averageDeltaY) > TWO_FINGER_SWIPE_MIN_DISTANCE;
+        const firstFingerTravel = Math.hypot(deltaAX, deltaAY);
+        const secondFingerTravel = Math.hypot(deltaBX, deltaBY);
+        const movementDotProduct = deltaAX * deltaBX + deltaAY * deltaBY;
+        const fingersMoveTogether =
+          firstFingerTravel > TWO_FINGER_DIRECTION_MIN_TRAVEL &&
+          secondFingerTravel > TWO_FINGER_DIRECTION_MIN_TRAVEL &&
+          movementDotProduct > 0;
+        const distanceDelta = Math.abs(
+          Math.hypot(touchA.clientX - touchB.clientX, touchA.clientY - touchB.clientY) - gesture.startDistance
+        );
+        const looksLikePinch = distanceDelta > TWO_FINGER_PINCH_DISTANCE_TOLERANCE;
+
+        if (!gesture.handled && movedFarEnough && fingersMoveTogether && !looksLikePinch) {
+          setShowMiniMapOverlay((visible) => !visible);
+          gesture.handled = true;
+        }
+        return;
+      }
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (isDragging && e.touches.length === 1) {
         const touch = e.touches[0];
@@ -1650,7 +1729,15 @@ export const PuzzleGame = () => {
       }
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e: React.TouchEvent) => {
+      if (e.touches.length < 2) {
+        twoFingerSwipeGestureRef.current = null;
+      }
+      setIsDragging(false);
+    };
+
+    const handleTouchCancel = () => {
+      twoFingerSwipeGestureRef.current = null;
       setIsDragging(false);
     };
 
@@ -1666,6 +1753,16 @@ export const PuzzleGame = () => {
         setIsDragging(false);
       }
     }, [viewMode]);
+
+    useEffect(() => {
+      if (!showMiniMapOverlay) return;
+      const timeout = window.setTimeout(() => {
+        setShowMiniMapOverlay(false);
+      }, 3000);
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }, [showMiniMapOverlay]);
 
   const levelBackground = resolvedLevelImageUrl;
   const activeThemeKey = currentLevel?.theme ?? "default";
@@ -2509,6 +2606,7 @@ export const PuzzleGame = () => {
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
           onDoubleClick={handleDoubleClick}
           style={{
             cursor: viewMode === 'fps' || viewMode === 'sprite' ? 'default' : isDragging ? 'grabbing' : 'grab',
@@ -2522,6 +2620,61 @@ export const PuzzleGame = () => {
           ].join(' ')}>
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,215,160,0.15),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_18%,rgba(0,0,0,0.18)_100%)]" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_100%)]" />
+            {showMiniMapOverlay && (
+              <div
+                className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+                onClick={() => setShowMiniMapOverlay(false)}
+              >
+                <div className="w-full max-w-[84vw] rounded-2xl border border-white/15 bg-[#0b1418]/95 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.6)]">
+                  <div className="mb-2 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.16em] text-stone-300">
+                    <div className="flex items-center gap-1.5">
+                      <MapIcon className="h-3.5 w-3.5 text-cyan-300" />
+                      Mini map
+                    </div>
+                    <div>Tap to close</div>
+                  </div>
+                  <div className="max-h-[62vh] overflow-auto rounded-xl border border-white/10 bg-black/35 p-2">
+                    {renderGrid.length > 0 && (renderGrid[0]?.length ?? 0) > 0 ? (
+                      <div
+                        className="grid gap-[2px]"
+                        style={{ gridTemplateColumns: `repeat(${renderGrid[0]?.length ?? 0}, minmax(0, 1fr))` }}
+                      >
+                        {renderGrid.flatMap((row, y) =>
+                          row.map((cell, x) => {
+                            const key = `${x},${y}`;
+                            const isPlayer = localPlayerPos.x === x && localPlayerPos.y === y;
+                            const isGoalCave = goalCaveKeys.has(key);
+                            const isArrow = isArrowCell(cell);
+                            const cellColor = (() => {
+                              if (cell === 5) return "#070c0f";
+                              if (cell === 4) return "#0f2d44";
+                              if (cell === 1 || cell === 2 || cell === 6 || cell === 16 || cell === 17) return "#374151";
+                              if (isArrow) return "#8b5a14";
+                              if (cell === 3) return "#0b5d43";
+                              return "#4b5563";
+                            })();
+
+                            return (
+                              <div
+                                key={key}
+                                className="relative h-2.5 w-2.5 overflow-hidden rounded-[2px]"
+                                style={{ backgroundColor: cellColor }}
+                              >
+                                {isArrow && <div className="absolute inset-[2px] rounded-full bg-amber-300/80" />}
+                                {isGoalCave && <div className="absolute inset-[1px] rounded-[2px] border border-emerald-300" />}
+                                {isPlayer && <div className="absolute inset-[1px] rounded-full bg-cyan-300 ring-1 ring-cyan-100" />}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    ) : (
+                      <div className="px-2 py-6 text-center text-xs text-stone-400">Map unavailable</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {desktopShellActive && (
               <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 hidden xl:flex items-end justify-between gap-4">
