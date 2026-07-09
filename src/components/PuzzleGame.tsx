@@ -19,7 +19,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
+import { getAllLevels, themes, manualFallbackById, type ThemeColors } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { ADMIN_MODE_UPDATED_EVENT, getAdminMode } from "@/lib/adminMode";
@@ -189,6 +189,94 @@ type BrowserFullscreenElement = HTMLElement & {
   msRequestFullscreen?: () => Promise<void> | void;
 };
 
+type TouchPoint = { x: number; y: number };
+
+type TwoFingerSwipeGestureState = {
+  startTouches: [TouchPoint, TouchPoint];
+  startedAt: number;
+  handled: boolean;
+};
+
+const TWO_FINGER_SWIPE_THRESHOLD_PX = 40;
+const TWO_FINGER_PINCH_DELTA_PX = 24;
+const TWO_FINGER_GESTURE_MAX_MS = 900;
+const MINI_MAP_AUTO_CLOSE_MS = 3000;
+
+const getTouchPoint = (touch: Touch | React.Touch): TouchPoint => ({
+  x: touch.clientX,
+  y: touch.clientY,
+});
+
+const getTouchDistance = (a: TouchPoint, b: TouchPoint) => Math.hypot(b.x - a.x, b.y - a.y);
+
+const getTouchCenter = (a: TouchPoint, b: TouchPoint): TouchPoint => ({
+  x: (a.x + b.x) / 2,
+  y: (a.y + b.y) / 2,
+});
+
+const getMiniMapArrowGlyph = (tile: CellType) => {
+  switch (tile) {
+    case 7:
+      return "↑";
+    case 8:
+      return "→";
+    case 9:
+      return "↓";
+    case 10:
+      return "←";
+    case 11:
+      return "↕";
+    case 12:
+      return "↔";
+    case 13:
+      return "✣";
+    default:
+      return null;
+  }
+};
+
+const getMiniMapTileColor = (tile: CellType, activeTheme: ThemeColors) => {
+  switch (tile) {
+    case 1:
+      return activeTheme.wall;
+    case 2:
+      return activeTheme.stone;
+    case 3:
+      return activeTheme.cave;
+    case 4:
+      return "#1d4ed8";
+    case 5:
+      return "#05070b";
+    case 6:
+      return activeTheme.breakable;
+    case 7:
+    case 8:
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+    case 13:
+      return activeTheme.arrow;
+    case 14:
+      return "#dc2626";
+    case 15:
+      return "#22c55e";
+    case 16:
+      return "#7f1d1d";
+    case 17:
+      return "#166534";
+    case 18:
+      return "#111827";
+    case 19:
+      return "#0ea5e9";
+    case 20:
+      return "#f59e0b";
+    case 0:
+    default:
+      return activeTheme.floor;
+  }
+};
+
 export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
@@ -257,7 +345,7 @@ export const PuzzleGame = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
-
+  const [isMiniMapVisible, setIsMiniMapVisible] = useState(false);
   // Player highlight flash state for control transfer feedback
   const [playerFlashCount, setPlayerFlashCount] = useState(0);
   const [isBuilding, setIsBuilding] = useState(false);
@@ -283,6 +371,8 @@ export const PuzzleGame = () => {
     initialCampaignProgressRef.current ?? loadCampaignProgress()
   );
   const didRestoreCampaignLevelRef = useRef(false);
+  const twoFingerSwipeRef = useRef<TwoFingerSwipeGestureState | null>(null);
+  const miniMapDismissTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     campaignProgressRef.current = campaignProgress;
@@ -333,6 +423,27 @@ export const PuzzleGame = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (miniMapDismissTimeoutRef.current != null) {
+      window.clearTimeout(miniMapDismissTimeoutRef.current);
+      miniMapDismissTimeoutRef.current = null;
+    }
+
+    if (!isMiniMapVisible) return;
+
+    miniMapDismissTimeoutRef.current = window.setTimeout(() => {
+      setIsMiniMapVisible(false);
+      miniMapDismissTimeoutRef.current = null;
+    }, MINI_MAP_AUTO_CLOSE_MS);
+
+    return () => {
+      if (miniMapDismissTimeoutRef.current != null) {
+        window.clearTimeout(miniMapDismissTimeoutRef.current);
+        miniMapDismissTimeoutRef.current = null;
+      }
+    };
+  }, [isMiniMapVisible]);
 
   const resetLevelTimer = useCallback((limitSeconds: number | undefined) => {
     clearTimerInterval();
@@ -1589,6 +1700,55 @@ export const PuzzleGame = () => {
   const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex] ?? CAMERA_BASELINE_ZOOM_FACTOR;
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
+    const miniMapRows = renderGrid.length;
+    const miniMapCols = renderGrid[0]?.length ?? 0;
+    const miniMapCellSize = Math.max(
+      10,
+      Math.min(
+        18,
+        Math.floor(Math.min(260 / Math.max(miniMapCols, 1), 260 / Math.max(miniMapRows, 1)))
+      )
+    );
+
+    const triggerTwoFingerSwipeMap = (touches: React.TouchList) => {
+      const gesture = twoFingerSwipeRef.current;
+      if (!gesture || touches.length !== 2) return false;
+
+      const currentTouches = [getTouchPoint(touches[0]), getTouchPoint(touches[1])] as const;
+      const elapsed = Date.now() - gesture.startedAt;
+      if (elapsed > TWO_FINGER_GESTURE_MAX_MS) return false;
+
+      const [startA, startB] = gesture.startTouches;
+      const [currentA, currentB] = currentTouches;
+      const startCenter = getTouchCenter(startA, startB);
+      const currentCenter = getTouchCenter(currentA, currentB);
+      const centerDeltaX = currentCenter.x - startCenter.x;
+      const centerDeltaY = currentCenter.y - startCenter.y;
+      const horizontalSwipe = Math.abs(centerDeltaX) >= Math.abs(centerDeltaY);
+      const primaryDelta = horizontalSwipe ? centerDeltaX : centerDeltaY;
+      const secondaryDelta = horizontalSwipe ? centerDeltaY : centerDeltaX;
+      const fingerOnePrimaryDelta = horizontalSwipe ? currentA.x - startA.x : currentA.y - startA.y;
+      const fingerTwoPrimaryDelta = horizontalSwipe ? currentB.x - startB.x : currentB.y - startB.y;
+      const fingerOneSecondaryDelta = horizontalSwipe ? currentA.y - startA.y : currentA.x - startA.x;
+      const fingerTwoSecondaryDelta = horizontalSwipe ? currentB.y - startB.y : currentB.x - startB.x;
+      const distanceDelta = Math.abs(getTouchDistance(currentA, currentB) - getTouchDistance(startA, startB));
+      const sameDirection = fingerOnePrimaryDelta * fingerTwoPrimaryDelta > 0;
+      const movedFarEnough = Math.abs(primaryDelta) > TWO_FINGER_SWIPE_THRESHOLD_PX;
+      const stayingOnAxis =
+        Math.abs(secondaryDelta) < Math.abs(primaryDelta) * 0.6 &&
+        Math.abs(fingerOneSecondaryDelta) < TWO_FINGER_SWIPE_THRESHOLD_PX &&
+        Math.abs(fingerTwoSecondaryDelta) < TWO_FINGER_SWIPE_THRESHOLD_PX;
+      const looksLikePinch = distanceDelta > TWO_FINGER_PINCH_DELTA_PX;
+
+      if (!gesture.handled && sameDirection && movedFarEnough && stayingOnAxis && !looksLikePinch) {
+        gesture.handled = true;
+        setIsDragging(false);
+        setIsMiniMapVisible((visible) => !visible);
+        return true;
+      }
+
+      return false;
+    };
 
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -1626,6 +1786,16 @@ export const PuzzleGame = () => {
 
     // Touch handlers for mobile dragging
     const handleTouchStart = (e: React.TouchEvent) => {
+      if (isMobile && e.touches.length === 2) {
+        setIsDragging(false);
+        twoFingerSwipeRef.current = {
+          startTouches: [getTouchPoint(e.touches[0]), getTouchPoint(e.touches[1])],
+          startedAt: Date.now(),
+          handled: false,
+        };
+        return;
+      }
+
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (e.touches.length === 1 && e.target === e.currentTarget) {
         const touch = e.touches[0];
@@ -1636,6 +1806,14 @@ export const PuzzleGame = () => {
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
+      if (isMobile && e.touches.length === 2) {
+        setIsDragging(false);
+        if (triggerTwoFingerSwipeMap(e.touches)) {
+          e.preventDefault();
+        }
+        return;
+      }
+
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (isDragging && e.touches.length === 1) {
         const touch = e.touches[0];
@@ -1650,8 +1828,13 @@ export const PuzzleGame = () => {
       }
     };
 
-    const handleTouchEnd = () => {
-      setIsDragging(false);
+    const handleTouchEnd = (e: React.TouchEvent) => {
+      if (e.touches.length < 2) {
+        twoFingerSwipeRef.current = null;
+      }
+      if (e.touches.length === 0) {
+        setIsDragging(false);
+      }
     };
 
     // Double-click or double-tap to reset camera
@@ -2534,6 +2717,103 @@ export const PuzzleGame = () => {
                 <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md text-sm text-stone-200">
                   <BookOpen className="h-4 w-4 text-amber-200" />
                   <span>View {VIEW_MODE_LABELS[viewMode]} • Theme {activeThemeKey}</span>
+                </div>
+              </div>
+            )}
+
+            {isMiniMapVisible && miniMapRows > 0 && miniMapCols > 0 && (
+              <div
+                className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm"
+                onClick={() => setIsMiniMapVisible(false)}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  setIsMiniMapVisible(false);
+                }}
+              >
+                <div className="w-full max-w-sm rounded-[28px] border border-white/10 bg-[#0b1217]/95 p-4 shadow-[0_24px_90px_rgba(0,0,0,0.6)]">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.22em] text-stone-300">
+                        <MapIcon className="h-4 w-4 text-amber-200" />
+                        Mini Map
+                      </div>
+                      <div className="mt-1 text-xs text-stone-400">
+                        Tap anywhere or swipe again to close
+                      </div>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-300">
+                      {miniMapCols}×{miniMapRows}
+                    </div>
+                  </div>
+
+                  <div className="overflow-auto rounded-[22px] border border-white/10 bg-[#060b10] p-3">
+                    <div
+                      className="mx-auto grid gap-px"
+                      style={{
+                        gridTemplateColumns: `repeat(${miniMapCols}, minmax(0, ${miniMapCellSize}px))`,
+                        gridAutoRows: `${miniMapCellSize}px`,
+                        width: "fit-content",
+                      }}
+                    >
+                      {renderGrid.flatMap((row, y) =>
+                        row.map((tile, x) => {
+                          const isPlayerCell = localPlayerPos.x === x && localPlayerPos.y === y;
+                          const isGoalCell = renderCavePos.x === x && renderCavePos.y === y;
+                          const arrowGlyph = getMiniMapArrowGlyph(tile);
+
+                          return (
+                            <div
+                              key={`minimap-${x}-${y}`}
+                              className="relative flex items-center justify-center rounded-[3px]"
+                              style={{
+                                width: `${miniMapCellSize}px`,
+                                height: `${miniMapCellSize}px`,
+                                backgroundColor: getMiniMapTileColor(tile, activeTheme),
+                                boxShadow: isPlayerCell
+                                  ? `0 0 0 2px ${activeTheme.player}, inset 0 0 0 1px rgba(255,255,255,0.55)`
+                                  : isGoalCell
+                                    ? `0 0 0 1px ${activeTheme.cave}`
+                                    : "inset 0 0 0 1px rgba(255,255,255,0.08)",
+                              }}
+                            >
+                              {arrowGlyph && !isPlayerCell && (
+                                <span
+                                  className="select-none text-[9px] font-black leading-none text-[#1b1308]"
+                                  aria-hidden
+                                >
+                                  {arrowGlyph}
+                                </span>
+                              )}
+                              {isGoalCell && !isPlayerCell && (
+                                <span className="absolute h-[40%] w-[40%] rounded-full border border-white/70 bg-black/30" />
+                              )}
+                              {isPlayerCell && (
+                                <span
+                                  className="absolute h-[58%] w-[58%] rounded-full border border-[#031014]"
+                                  style={{ backgroundColor: activeTheme.player }}
+                                />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-stone-300">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: activeTheme.player }} />
+                      You
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full border border-white/60 bg-black/30" />
+                      Cave
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-3 w-3 items-center justify-center rounded-[3px] bg-amber-500 text-[8px] font-black text-[#1b1308]">→</span>
+                      Arrows
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
