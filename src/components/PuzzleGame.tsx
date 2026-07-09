@@ -1705,21 +1705,24 @@ export const PuzzleGame = () => {
   const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex] ?? CAMERA_BASELINE_ZOOM_FACTOR;
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
-    const miniMapRows = renderGrid.length;
-    const miniMapCols = renderGrid[0]?.length ?? 0;
-    const miniMapCellSize = Math.max(
-      10,
-      Math.min(
-        18,
-        Math.floor(Math.min(260 / Math.max(miniMapCols, 1), 260 / Math.max(miniMapRows, 1)))
-      )
-    );
+    const { rows: miniMapRows, cols: miniMapCols, cellSize: miniMapCellSize } = useMemo(() => {
+      const rows = renderGrid.length;
+      const cols = renderGrid[0]?.length ?? 0;
+      const cellSize = Math.max(
+        10,
+        Math.min(
+          18,
+          Math.floor(Math.min(260 / Math.max(cols, 1), 260 / Math.max(rows, 1)))
+        )
+      );
+      return { rows, cols, cellSize };
+    }, [renderGrid]);
 
-    const evaluateTwoFingerSwipeGesture = (touches: React.TouchList) => {
+    const evaluateTwoFingerSwipeGesture = useCallback((touches: React.TouchList) => {
       const gesture = twoFingerSwipeRef.current;
       if (!gesture || touches.length !== 2) return false;
 
-      const currentTouches = [getTouchPoint(touches[0]), getTouchPoint(touches[1])] as const;
+      const currentTouches = [getTouchPoint(touches[0]), getTouchPoint(touches[1])];
       const elapsed = Date.now() - gesture.startedAt;
       if (elapsed > TWO_FINGER_GESTURE_MAX_MS) return false;
 
@@ -1752,7 +1755,7 @@ export const PuzzleGame = () => {
       }
 
       return false;
-    };
+    }, []);
 
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
