@@ -1748,7 +1748,7 @@ export const PuzzleGame = () => {
         if (twoFingerSwipeHandledRef.current) return;
         const startDistance = pinchStartDistanceRef.current;
         const startZoomIndex = pinchStartZoomIndexRef.current;
-        if (startDistance && startZoomIndex != null) {
+        if (startDistance && startZoomIndex !== null) {
           const distance = getTouchDistance(e.touches);
           const stepDelta = Math.round((distance - startDistance) / PINCH_ZOOM_PIXELS_PER_STEP);
           const nextZoomIndex = Math.max(0, Math.min(CAMERA_ZOOM_LEVELS.length - 1, startZoomIndex + stepDelta));
