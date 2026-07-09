@@ -124,6 +124,7 @@ const DEFAULT_BONUS_TIME_SECONDS = 50;
 const TWO_FINGER_SWIPE_MIN_DISTANCE = 40;
 const TWO_FINGER_PINCH_DISTANCE_TOLERANCE = 24;
 const TWO_FINGER_DIRECTION_MIN_TRAVEL = 10;
+const MINIMAP_AUTO_DISMISS_MS = 3000;
 
 interface TwoFingerSwipeGesture {
   idA: number;
@@ -1645,7 +1646,9 @@ export const PuzzleGame = () => {
     // Touch handlers for mobile dragging
     const handleTouchStart = (e: React.TouchEvent) => {
       if (isMobile && e.touches.length === 2 && e.target === e.currentTarget) {
-        setIsDragging(false);
+        if (isDragging) {
+          setIsDragging(false);
+        }
         const touchA = e.touches[0];
         const touchB = e.touches[1];
         twoFingerSwipeGestureRef.current = {
@@ -1758,7 +1761,7 @@ export const PuzzleGame = () => {
       if (!showMiniMapOverlay) return;
       const timeout = window.setTimeout(() => {
         setShowMiniMapOverlay(false);
-      }, 3000);
+      }, MINIMAP_AUTO_DISMISS_MS);
       return () => {
         window.clearTimeout(timeout);
       };
