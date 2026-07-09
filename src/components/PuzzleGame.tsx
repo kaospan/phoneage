@@ -1706,7 +1706,7 @@ export const PuzzleGame = () => {
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
     const miniMapRows = renderGrid.length;
-    const miniMapCols = miniMapRows > 0 ? (renderGrid[0]?.length ?? 0) : 0;
+    const miniMapCols = renderGrid[0]?.length ?? 0;
     const miniMapCellSize = Math.max(
       10,
       Math.min(
@@ -1715,7 +1715,7 @@ export const PuzzleGame = () => {
       )
     );
 
-    const triggerTwoFingerSwipeMap = (touches: React.TouchList) => {
+    const evaluateTwoFingerSwipeGesture = (touches: React.TouchList) => {
       const gesture = twoFingerSwipeRef.current;
       if (!gesture || touches.length !== 2) return false;
 
@@ -1747,7 +1747,6 @@ export const PuzzleGame = () => {
 
       if (!gesture.handled && sameDirection && movedFarEnough && stayingOnAxis && !looksLikePinch) {
         gesture.handled = true;
-        setIsDragging(false);
         setIsMiniMapVisible((visible) => !visible);
         return true;
       }
@@ -1813,7 +1812,7 @@ export const PuzzleGame = () => {
     const handleTouchMove = (e: React.TouchEvent) => {
       if (isMobile && e.touches.length === 2) {
         setIsDragging(false);
-        if (triggerTwoFingerSwipeMap(e.touches)) {
+        if (evaluateTwoFingerSwipeGesture(e.touches)) {
           e.preventDefault();
         }
         return;
@@ -2730,8 +2729,7 @@ export const PuzzleGame = () => {
             {isMiniMapVisible && miniMapRows > 0 && miniMapCols > 0 && (
               <div
                 className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm"
-                onClick={() => setIsMiniMapVisible(false)}
-                onTouchEnd={(e) => {
+                onPointerUp={(e) => {
                   e.preventDefault();
                   setIsMiniMapVisible(false);
                 }}
