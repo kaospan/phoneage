@@ -200,7 +200,9 @@ type TwoFingerSwipeGestureState = {
 const TWO_FINGER_SWIPE_THRESHOLD_PX = 40;
 const TWO_FINGER_PINCH_DELTA_PX = 24;
 const TWO_FINGER_GESTURE_MAX_MS = 900;
+const TWO_FINGER_SWIPE_AXIS_TOLERANCE_RATIO = 0.6;
 const MINI_MAP_AUTO_CLOSE_MS = 3000;
+const MINI_MAP_ARROW_GLYPH_COLOR = "#1b1308";
 
 const getTouchPoint = (touch: Touch | React.Touch): TouchPoint => ({
   x: touch.clientX,
@@ -1706,16 +1708,16 @@ export const PuzzleGame = () => {
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
     const { rows: miniMapRows, cols: miniMapCols, cellSize: miniMapCellSize } = useMemo(() => {
-      const rows = renderGrid.length;
-      const cols = renderGrid[0]?.length ?? 0;
-      const cellSize = Math.max(
+      const gridRows = renderGrid.length;
+      const gridCols = renderGrid[0]?.length ?? 0;
+      const calculatedCellSize = Math.max(
         10,
         Math.min(
           18,
-          Math.floor(Math.min(260 / Math.max(cols, 1), 260 / Math.max(rows, 1)))
+          Math.floor(Math.min(260 / Math.max(gridCols, 1), 260 / Math.max(gridRows, 1)))
         )
       );
-      return { rows, cols, cellSize };
+      return { rows: gridRows, cols: gridCols, cellSize: calculatedCellSize };
     }, [renderGrid]);
 
     const evaluateTwoFingerSwipeGesture = useCallback((touches: React.TouchList) => {
@@ -1724,7 +1726,10 @@ export const PuzzleGame = () => {
 
       const currentTouches = [getTouchPoint(touches[0]), getTouchPoint(touches[1])];
       const elapsed = Date.now() - gesture.startedAt;
-      if (elapsed > TWO_FINGER_GESTURE_MAX_MS) return false;
+      if (elapsed > TWO_FINGER_GESTURE_MAX_MS) {
+        twoFingerSwipeRef.current = null;
+        return false;
+      }
 
       const [startA, startB] = gesture.startTouches;
       const [currentA, currentB] = currentTouches;
@@ -1743,7 +1748,7 @@ export const PuzzleGame = () => {
       const sameDirection = fingerOnePrimaryDelta * fingerTwoPrimaryDelta > 0;
       const movedFarEnough = Math.abs(primaryDelta) > TWO_FINGER_SWIPE_THRESHOLD_PX;
       const stayingOnAxis =
-        Math.abs(secondaryDelta) < Math.abs(primaryDelta) * 0.6 &&
+        Math.abs(secondaryDelta) < Math.abs(primaryDelta) * TWO_FINGER_SWIPE_AXIS_TOLERANCE_RATIO &&
         Math.abs(fingerOneSecondaryDelta) < TWO_FINGER_SWIPE_THRESHOLD_PX &&
         Math.abs(fingerTwoSecondaryDelta) < TWO_FINGER_SWIPE_THRESHOLD_PX;
       const looksLikePinch = distanceDelta > TWO_FINGER_PINCH_DELTA_PX;
@@ -1815,6 +1820,13 @@ export const PuzzleGame = () => {
     const handleTouchMove = (e: React.TouchEvent) => {
       if (isMobile && e.touches.length === 2) {
         setIsDragging(false);
+        if (!twoFingerSwipeRef.current) {
+          twoFingerSwipeRef.current = {
+            startTouches: [getTouchPoint(e.touches[0]), getTouchPoint(e.touches[1])],
+            startedAt: Date.now(),
+            handled: false,
+          };
+        }
         if (evaluateTwoFingerSwipeGesture(e.touches)) {
           e.preventDefault();
         }
@@ -2785,7 +2797,8 @@ export const PuzzleGame = () => {
                             >
                               {arrowGlyph && !isPlayerCell && (
                                 <span
-                                  className="select-none text-[9px] font-black leading-none text-[#1b1308]"
+                                  className="select-none text-[9px] font-black leading-none"
+                                  style={{ color: MINI_MAP_ARROW_GLYPH_COLOR }}
                                   aria-hidden
                                 >
                                   {arrowGlyph}
@@ -2817,7 +2830,12 @@ export const PuzzleGame = () => {
                       Cave
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="flex h-3 w-3 items-center justify-center rounded-[3px] bg-amber-500 text-[8px] font-black text-[#1b1308]">→</span>
+                      <span
+                        className="flex h-3 w-3 items-center justify-center rounded-[3px] bg-amber-500 text-[8px] font-black"
+                        style={{ color: MINI_MAP_ARROW_GLYPH_COLOR }}
+                      >
+                        →
+                      </span>
                       Arrows
                     </div>
                   </div>
