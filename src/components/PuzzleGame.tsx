@@ -2321,16 +2321,16 @@ export const PuzzleGame = () => {
             </div>
 
             {/* Right HUD cluster */}
-            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-2 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
+            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-[calc(50vw-8px)] overflow-x-auto">
               <Button
                 onClick={resetLevel}
                 variant="outline"
-                size="default"
+                size="sm"
                 disabled={isComplete || localPlayer?.isGliding}
-                className="h-9 px-3 text-sm font-semibold hover:bg-primary/20"
+                className="h-9 w-9 p-0 text-base font-semibold hover:bg-primary/20"
                 title="Restart level (R)"
               >
-                {isFullscreenMode ? "↻" : "Restart"}
+                ↻
               </Button>
 
               {campaignDialog}
@@ -2355,8 +2355,6 @@ export const PuzzleGame = () => {
                 <MapIcon className="h-4 w-4" />
               </Button>
 
-              {!isFullscreenMode && <HowToPlayDialog disabled={shouldRotateGate} />}
-
                 <Button
                   onClick={() => {
                     setUserZoomTouched(true);
@@ -2365,15 +2363,11 @@ export const PuzzleGame = () => {
                   variant="ghost"
                   size="sm"
                   className="h-9 w-9 p-0 text-base hover:bg-primary/20"
-                title="Zoom out"
+                title={`Zoom out (${cameraZoomPercent}%)`}
                 disabled={!canZoomOut}
               >
-                -
+                −
               </Button>
-
-              <div className="min-w-10 text-center font-semibold text-muted-foreground text-xs whitespace-nowrap">
-                {cameraZoomPercent}%
-              </div>
 
                 <Button
                   onClick={() => {
@@ -2383,7 +2377,7 @@ export const PuzzleGame = () => {
                   variant="ghost"
                   size="sm"
                   className="h-9 w-9 p-0 text-base hover:bg-primary/20"
-                title="Zoom in"
+                title={`Zoom in (${cameraZoomPercent}%)`}
                 disabled={!canZoomIn}
               >
                 +
