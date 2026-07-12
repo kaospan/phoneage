@@ -279,11 +279,12 @@ export const PuzzleGame = () => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
 
-  // Two-finger gesture state: pinch-zoom + swipe-to-minimap
+  // Two-finger gesture state: pinch-zoom + two-finger pan
   const pinchDistanceRef = useRef<number | null>(null);
   const twoFingerGestureRef = useRef<{
     startDist: number; startMidX: number; startMidY: number;
-    lastDist: number; intent: 'pinch' | 'swipe' | null; swipeFired: boolean;
+    lastDist: number; lastMidX: number; lastMidY: number;
+    intent: 'pinch' | 'pan' | null;
   } | null>(null);
   const [isMiniMapVisible, setIsMiniMapVisible] = useState(false);
   const miniMapDismissTimerRef = useRef<number | null>(null);
@@ -1654,7 +1655,7 @@ export const PuzzleGame = () => {
       setIsDragging(false);
     };
 
-    // Touch handlers for mobile dragging, pinch zoom, and swipe-to-minimap
+    // Touch handlers: 1-finger drag pans, 2-finger pinch/spread zooms, 2-finger drag pans
     const handleTouchStart = (e: React.TouchEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (e.touches.length >= 2) {
@@ -1665,7 +1666,7 @@ export const PuzzleGame = () => {
         pinchDistanceRef.current = dist;
         twoFingerGestureRef.current = {
           startDist: dist, startMidX: midX, startMidY: midY,
-          lastDist: dist, intent: null, swipeFired: false,
+          lastDist: dist, lastMidX: midX, lastMidY: midY, intent: null,
         };
         return;
       }
@@ -1689,28 +1690,31 @@ export const PuzzleGame = () => {
           const distDelta = Math.abs(newDist - gesture.startDist);
           const midDelta = Math.hypot(midX - gesture.startMidX, midY - gesture.startMidY);
           if (distDelta > 10) gesture.intent = 'pinch';
-          else if (midDelta > 20) gesture.intent = 'swipe';
+          else if (midDelta > 12) gesture.intent = 'pan';
         }
         if (gesture.intent === 'pinch') {
           const delta = newDist - gesture.lastDist;
           if (Math.abs(delta) >= PINCH_ZOOM_STEP_DISTANCE_PX) {
+            // spread (delta > 0) = fingers apart = zoom in (higher index, larger board)
+            // pinch (delta < 0) = fingers together = zoom out
             setCameraZoomIndex((idx) =>
               delta > 0
-                ? Math.max(0, idx - 1)
-                : Math.min(CAMERA_ZOOM_LEVELS.length - 1, idx + 1)
+                ? Math.min(CAMERA_ZOOM_LEVELS.length - 1, idx + 1)
+                : Math.max(0, idx - 1)
             );
             gesture.lastDist = newDist;
           }
-        } else if (gesture.intent === 'swipe' && !gesture.swipeFired) {
-          gesture.swipeFired = true;
-          setIsMiniMapVisible((v) => {
-            if (!v) {
-              if (miniMapDismissTimerRef.current != null) window.clearTimeout(miniMapDismissTimerRef.current);
-              miniMapDismissTimerRef.current = window.setTimeout(() => setIsMiniMapVisible(false), 3000);
-            }
-            return !v;
-          });
+        } else if (gesture.intent === 'pan') {
+          const sensitivity = 0.01;
+          const dx = midX - gesture.lastMidX;
+          const dy = midY - gesture.lastMidY;
+          setCameraOffset((prev) => ({
+            x: prev.x - dx * sensitivity,
+            z: prev.z + dy * sensitivity,
+          }));
         }
+        gesture.lastMidX = midX;
+        gesture.lastMidY = midY;
         pinchDistanceRef.current = newDist;
         return;
       }
@@ -2330,6 +2334,26 @@ export const PuzzleGame = () => {
               </Button>
 
               {campaignDialog}
+
+              <Button
+                onClick={() => {
+                  setIsMiniMapVisible((v) => {
+                    if (miniMapDismissTimerRef.current != null) window.clearTimeout(miniMapDismissTimerRef.current);
+                    if (!v) miniMapDismissTimerRef.current = window.setTimeout(() => setIsMiniMapVisible(false), 3000);
+                    return !v;
+                  });
+                }}
+                variant="ghost"
+                size="sm"
+                className={[
+                  "h-9 w-9 p-0 hover:bg-primary/20",
+                  isMiniMapVisible ? "text-primary bg-primary/10" : "",
+                ].join(" ")}
+                title="Toggle level overview"
+                aria-pressed={isMiniMapVisible}
+              >
+                <MapIcon className="h-4 w-4" />
+              </Button>
 
               {!isFullscreenMode && <HowToPlayDialog disabled={shouldRotateGate} />}
 
