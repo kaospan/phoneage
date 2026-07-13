@@ -2864,6 +2864,7 @@ export const PuzzleGame = () => {
             onTouchMove={(e) => e.stopPropagation()}
             onTouchEnd={(e) => { e.stopPropagation(); if (isMiniMapVisible) setIsMiniMapVisible(false); }}
             onPointerUp={() => { if (isMiniMapVisible) setIsMiniMapVisible(false); }}
+            style={isMobilePortrait ? { transform: 'rotate(-90deg)', transformOrigin: 'center center' } : undefined}
           >
             <div className="text-[8px] font-bold tracking-widest text-white/40 text-center mb-1 uppercase leading-none">Map</div>
             <div style={{ position: 'relative', width: '100%' }}>
