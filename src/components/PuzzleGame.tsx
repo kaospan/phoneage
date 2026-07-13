@@ -1007,8 +1007,14 @@ export const PuzzleGame = () => {
         return;
       }
 
+      // Portrait: CSS rotate(-90deg) maps portrait-UP → canvas-RIGHT → game-EAST, so remap (px,py) → (-py, px)
+      if (isMobilePortrait) {
+        enqueueInput({ type: "move", dx: -dy, dy: dx });
+        return;
+      }
+
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode, isMobilePortrait]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -1779,10 +1785,17 @@ export const PuzzleGame = () => {
           const sensitivity = 0.1;
           const dx = midX - gesture.lastMidX;
           const dy = midY - gesture.lastMidY;
-          setCameraOffset((prev) => ({
-            x: prev.x - dx * sensitivity,
-            z: prev.z - dy * sensitivity,
-          }));
+          if (isMobilePortrait) {
+            setCameraOffset((prev) => ({
+              x: prev.x + dy * sensitivity,
+              z: prev.z - dx * sensitivity,
+            }));
+          } else {
+            setCameraOffset((prev) => ({
+              x: prev.x - dx * sensitivity,
+              z: prev.z - dy * sensitivity,
+            }));
+          }
         }
         gesture.lastMidX = midX;
         gesture.lastMidY = midY;
@@ -2703,10 +2716,22 @@ export const PuzzleGame = () => {
             touchAction: shouldRotateGate ? 'auto' : 'none',
           }}
         >
-          <div className={[
-            "relative h-full w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
-            desktopShellActive ? "ring-1 ring-amber-300/10" : "",
-          ].join(' ')}>
+          <div
+            className={[
+              "overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
+              isMobilePortrait ? "absolute" : "relative h-full w-full rounded-[30px]",
+              desktopShellActive ? "ring-1 ring-amber-300/10" : "",
+            ].join(' ')}
+            style={isMobilePortrait ? {
+              width: gestureSurfaceSize.h > 0 ? `${gestureSurfaceSize.h}px` : '100svh',
+              height: gestureSurfaceSize.w > 0 ? `${gestureSurfaceSize.w}px` : '100svw',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%) rotate(-90deg)',
+              transformOrigin: 'center center',
+              borderRadius: '0px',
+            } : {}}
+          >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,215,160,0.15),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_18%,rgba(0,0,0,0.18)_100%)]" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_100%)]" />
 
