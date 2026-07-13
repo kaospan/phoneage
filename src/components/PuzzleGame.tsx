@@ -217,7 +217,8 @@ export const PuzzleGame = () => {
   const [isPortrait, setIsPortrait] = useState(false);
   const [hasMeasuredOrientation, setHasMeasuredOrientation] = useState(false);
   const shouldRotateGate = false;
-  const showRotateHint = isMobile && isPortrait;
+  const isMobilePortrait = isMobile && isPortrait;
+  const showRotateHint = false; // portrait handled via software rotation
   const isMobileLandscape = isMobile && hasMeasuredOrientation && !isPortrait;
 
   const [isFullscreenMode, setIsFullscreenMode] = useState(() => {
@@ -231,6 +232,7 @@ export const PuzzleGame = () => {
   const prevZoomIndexRef = useRef<number | null>(null);
   const autoMobileFullscreenAppliedRef = useRef(false);
   const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const [gestureSurfaceSize, setGestureSurfaceSize] = useState({ w: 0, h: 0 });
   const [userZoomTouched, setUserZoomTouched] = useState(false);
   const [fitRevision, setFitRevision] = useState(0);
   const initialCampaignProgressRef = useRef<CampaignProgressState | null>(null);
@@ -1002,8 +1004,14 @@ export const PuzzleGame = () => {
         return;
       }
 
+      // Portrait software rotation: CSS rotate(90deg) CW → remap (dx,dy) → (dy, -dx)
+      if (isMobilePortrait) {
+        enqueueInput({ type: "move", dx: dy, dy: -dx });
+        return;
+      }
+
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode, isMobilePortrait]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -1756,11 +1764,18 @@ export const PuzzleGame = () => {
           const sensitivity = 0.2;
           const dx = midX - gesture.lastMidX;
           const dy = midY - gesture.lastMidY;
-          // Natural map drag: drag right = see left (x-), drag down = see above (z-)
-          setCameraOffset((prev) => ({
-            x: prev.x - dx * sensitivity,
-            z: prev.z - dy * sensitivity,
-          }));
+          // Portrait: axes are swapped due to CSS rotate(90deg)
+          if (isMobilePortrait) {
+            setCameraOffset((prev) => ({
+              x: prev.x + dy * sensitivity,
+              z: prev.z - dx * sensitivity,
+            }));
+          } else {
+            setCameraOffset((prev) => ({
+              x: prev.x - dx * sensitivity,
+              z: prev.z - dy * sensitivity,
+            }));
+          }
         }
         gesture.lastMidX = midX;
         gesture.lastMidY = midY;
@@ -1772,12 +1787,18 @@ export const PuzzleGame = () => {
         const deltaX = touch.clientX - dragStart.x;
         const deltaY = touch.clientY - dragStart.y;
         const sensitivity = 0.2;
-        // Natural map drag: drag up → reveals below (z-), drag down → reveals above (z+... wait no)
-        // Drag down = finger moves down = deltaY > 0 → z decreases = camera looks up = sees above ✓
-        setCameraOffset({
-          x: dragOffsetStart.x - deltaX * sensitivity,
-          z: dragOffsetStart.z - deltaY * sensitivity,
-        });
+        // Portrait: axes swapped due to CSS rotate(90deg)
+        if (isMobilePortrait) {
+          setCameraOffset({
+            x: dragOffsetStart.x + deltaY * sensitivity,
+            z: dragOffsetStart.z - deltaX * sensitivity,
+          });
+        } else {
+          setCameraOffset({
+            x: dragOffsetStart.x - deltaX * sensitivity,
+            z: dragOffsetStart.z - deltaY * sensitivity,
+          });
+        }
       }
     };
 
@@ -1808,6 +1829,17 @@ export const PuzzleGame = () => {
         setIsDragging(false);
       }
     }, [viewMode]);
+
+    useLayoutEffect(() => {
+      const el = gestureSurfaceRef.current;
+      if (!el) return;
+      const ro = new ResizeObserver(entries => {
+        const r = entries[0]?.contentRect;
+        if (r) setGestureSurfaceSize({ w: r.width, h: r.height });
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, []);
 
   const levelBackground = resolvedLevelImageUrl;
   const activeThemeKey = currentLevel?.theme ?? "default";
@@ -2672,10 +2704,22 @@ export const PuzzleGame = () => {
             touchAction: shouldRotateGate ? 'auto' : 'none',
           }}
         >
-          <div className={[
-            "relative h-full w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
-            desktopShellActive ? "ring-1 ring-amber-300/10" : "",
-          ].join(' ')}>
+          <div
+            className={[
+              "overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
+              isMobilePortrait ? "absolute" : "relative h-full w-full rounded-[30px]",
+              desktopShellActive ? "ring-1 ring-amber-300/10" : "",
+            ].join(' ')}
+            style={isMobilePortrait ? {
+              width: gestureSurfaceSize.h > 0 ? `${gestureSurfaceSize.h}px` : '100svh',
+              height: gestureSurfaceSize.w > 0 ? `${gestureSurfaceSize.w}px` : '100svw',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%) rotate(90deg)',
+              transformOrigin: 'center center',
+              borderRadius: '0px',
+            } : {}}
+          >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,215,160,0.15),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_18%,rgba(0,0,0,0.18)_100%)]" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_100%)]" />
 
