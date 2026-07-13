@@ -279,13 +279,14 @@ export const PuzzleGame = () => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragOffsetStart, setDragOffsetStart] = useState({ x: 0, z: 0 });
 
-  // Two-finger gesture state: pinch-zoom + two-finger pan
+  // Two/three-finger gesture state: pinch-zoom + multi-finger pan
   const pinchDistanceRef = useRef<number | null>(null);
   const twoFingerGestureRef = useRef<{
     startDist: number; startMidX: number; startMidY: number;
     lastDist: number; lastMidX: number; lastMidY: number;
     intent: 'pinch' | 'pan' | null;
   } | null>(null);
+  const multiTouchActiveRef = useRef(false);
   const [isMiniMapVisible, setIsMiniMapVisible] = useState(false);
   const [isMiniMapGestureActive, setIsMiniMapGestureActive] = useState(false);
   const miniMapDismissTimerRef = useRef<number | null>(null);
@@ -571,7 +572,6 @@ export const PuzzleGame = () => {
   useLayoutEffect(() => {
     if (!hasStartedGame) return;
     if (isBuilding) return;
-    if (selectedArrow) return;
 
     const el = gestureSurfaceRef.current;
     if (!el) return;
@@ -588,8 +588,8 @@ export const PuzzleGame = () => {
     hasStartedGame,
     isBuilding,
     isFullscreenMode,
-    selectedArrow,
     viewMode,
+    // selectedArrow intentionally omitted: camera should stay stable across arrow select/deselect
   ]);
 
   useEffect(() => {
@@ -1644,6 +1644,22 @@ export const PuzzleGame = () => {
     return { leftFrac, topFrac, wFrac, hFrac };
   }, [renderGrid, viewMode, cameraZoomFactor, cameraOffset, localPlayerPos]);
 
+  // Highest zoom index where the full map width still fits — prevents pointless extra zoom-out
+  const fitToWidthZoomIndex = useMemo(() => {
+    const cols = renderGrid[0]?.length ?? 0;
+    if (cols === 0 || viewMode === 'fps' || viewMode === 'sprite') return 0;
+    const is2D = viewMode === '2d';
+    const fovDeg = is2D ? 42 : 50;
+    const baseH = is2D ? 24 : 18;
+    const fovRad = fovDeg * Math.PI / 180;
+    const estAspect = window.innerWidth / Math.max(1, window.innerHeight * 0.55);
+    for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
+      const vw = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i] * estAspect;
+      if (vw >= cols) return i;
+    }
+    return 0;
+  }, [renderGrid, viewMode]);
+
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
@@ -1660,12 +1676,10 @@ export const PuzzleGame = () => {
       if (isDragging) {
         const deltaX = e.clientX - dragStart.x;
         const deltaY = e.clientY - dragStart.y;
-
-        // Scale the movement - adjust sensitivity here
-        const sensitivity = 0.01;
+        const sensitivity = 0.025;
         setCameraOffset({
           x: dragOffsetStart.x - deltaX * sensitivity,
-          z: dragOffsetStart.z + deltaY * sensitivity
+          z: dragOffsetStart.z - deltaY * sensitivity,
         });
       }
     };
