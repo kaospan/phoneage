@@ -1007,14 +1007,8 @@ export const PuzzleGame = () => {
         return;
       }
 
-      // Portrait software rotation: CSS rotate(90deg) CW → portrait UP = game EAST, so remap (px,py) → (-py, px)
-      if (isMobilePortrait) {
-        enqueueInput({ type: "move", dx: -dy, dy: dx });
-        return;
-      }
-
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode, isMobilePortrait]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -1630,7 +1624,7 @@ export const PuzzleGame = () => {
   const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex] ?? CAMERA_BASELINE_ZOOM_FACTOR;
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
 
-  // Highest zoom index where the full map fits — in portrait fits both dimensions; in landscape fits width
+  // Highest zoom index where the full map fits — portrait uses native portrait canvas (no rotation)
   const fitToWidthZoomIndex = useMemo(() => {
     const cols = renderGrid[0]?.length ?? 0;
     const rows = renderGrid.length;
@@ -1640,10 +1634,11 @@ export const PuzzleGame = () => {
     const baseH = is2D ? 24 : 18;
     const fovRad = fovDeg * Math.PI / 180;
     if (isMobilePortrait) {
-      // Landscape canvas: width = gestureSurfaceSize.h, height = gestureSurfaceSize.w
+      // Portrait canvas: width = gesture surface width (narrow), height = gesture surface height (tall)
+      // aspect = gsW / gsH < 1 — portrait shaped, matches 11-col × 20-row grid naturally
       const gsW = gestureSurfaceSize.w > 0 ? gestureSurfaceSize.w : window.innerWidth;
       const gsH = gestureSurfaceSize.h > 0 ? gestureSurfaceSize.h : window.innerHeight * 0.75;
-      const aspect = gsH / Math.max(1, gsW); // landscape canvas width/height
+      const aspect = gsW / Math.max(1, gsH); // portrait canvas aspect (< 1)
       for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
         const vh = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i];
         const vw = vh * aspect;
@@ -1784,18 +1779,10 @@ export const PuzzleGame = () => {
           const sensitivity = 0.2;
           const dx = midX - gesture.lastMidX;
           const dy = midY - gesture.lastMidY;
-          // Portrait: axes are swapped due to CSS rotate(90deg)
-          if (isMobilePortrait) {
-            setCameraOffset((prev) => ({
-              x: prev.x + dy * sensitivity,
-              z: prev.z - dx * sensitivity,
-            }));
-          } else {
-            setCameraOffset((prev) => ({
-              x: prev.x - dx * sensitivity,
-              z: prev.z - dy * sensitivity,
-            }));
-          }
+          setCameraOffset((prev) => ({
+            x: prev.x - dx * sensitivity,
+            z: prev.z - dy * sensitivity,
+          }));
         }
         gesture.lastMidX = midX;
         gesture.lastMidY = midY;
@@ -1807,18 +1794,10 @@ export const PuzzleGame = () => {
         const deltaX = touch.clientX - dragStart.x;
         const deltaY = touch.clientY - dragStart.y;
         const sensitivity = 0.2;
-        // Portrait: axes swapped due to CSS rotate(90deg)
-        if (isMobilePortrait) {
-          setCameraOffset({
-            x: dragOffsetStart.x + deltaY * sensitivity,
-            z: dragOffsetStart.z - deltaX * sensitivity,
-          });
-        } else {
-          setCameraOffset({
-            x: dragOffsetStart.x - deltaX * sensitivity,
-            z: dragOffsetStart.z - deltaY * sensitivity,
-          });
-        }
+        setCameraOffset({
+          x: dragOffsetStart.x - deltaX * sensitivity,
+          z: dragOffsetStart.z - deltaY * sensitivity,
+        });
       }
     };
 
@@ -2724,22 +2703,10 @@ export const PuzzleGame = () => {
             touchAction: shouldRotateGate ? 'auto' : 'none',
           }}
         >
-          <div
-            className={[
-              "overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
-              isMobilePortrait ? "absolute" : "relative h-full w-full rounded-[30px]",
-              desktopShellActive ? "ring-1 ring-amber-300/10" : "",
-            ].join(' ')}
-            style={isMobilePortrait ? {
-              width: gestureSurfaceSize.h > 0 ? `${gestureSurfaceSize.h}px` : '100svh',
-              height: gestureSurfaceSize.w > 0 ? `${gestureSurfaceSize.w}px` : '100svw',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%) rotate(-90deg)',
-              transformOrigin: 'center center',
-              borderRadius: '0px',
-            } : {}}
-          >
+          <div className={[
+            "relative h-full w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
+            desktopShellActive ? "ring-1 ring-amber-300/10" : "",
+          ].join(' ')}>
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,215,160,0.15),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_18%,rgba(0,0,0,0.18)_100%)]" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_100%)]" />
 
