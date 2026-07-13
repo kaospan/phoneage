@@ -594,9 +594,12 @@ export const PuzzleGame = () => {
     // selectedArrow intentionally omitted: camera should stay stable across arrow select/deselect
   ]);
 
+  const portraitFitZoomRef = useRef(0);
+  const isMobilePortraitRef = useRef(false);
+
   useEffect(() => {
-    // New level: start from the shared 100% baseline.
-    setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
+    // New level: in portrait show the whole map; otherwise start at 100% baseline.
+    setCameraZoomIndex(isMobilePortraitRef.current ? portraitFitZoomRef.current : DEFAULT_CAMERA_ZOOM_INDEX);
     setUserZoomTouched(false);
   }, [currentLevelIndex]);
 
@@ -1627,21 +1630,38 @@ export const PuzzleGame = () => {
   const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex] ?? CAMERA_BASELINE_ZOOM_FACTOR;
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
 
-  // Highest zoom index where the full map width still fits — prevents pointless extra zoom-out
+  // Highest zoom index where the full map fits — in portrait fits both dimensions; in landscape fits width
   const fitToWidthZoomIndex = useMemo(() => {
     const cols = renderGrid[0]?.length ?? 0;
+    const rows = renderGrid.length;
     if (cols === 0 || viewMode === 'fps' || viewMode === 'sprite') return 0;
     const is2D = viewMode === '2d';
     const fovDeg = is2D ? 42 : 50;
     const baseH = is2D ? 24 : 18;
     const fovRad = fovDeg * Math.PI / 180;
+    if (isMobilePortrait) {
+      // Landscape canvas: width = gestureSurfaceSize.h, height = gestureSurfaceSize.w
+      const gsW = gestureSurfaceSize.w > 0 ? gestureSurfaceSize.w : window.innerWidth;
+      const gsH = gestureSurfaceSize.h > 0 ? gestureSurfaceSize.h : window.innerHeight * 0.75;
+      const aspect = gsH / Math.max(1, gsW); // landscape canvas width/height
+      for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
+        const vh = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i];
+        const vw = vh * aspect;
+        if (vw >= cols && vh >= rows) return i;
+      }
+      return 0;
+    }
     const estAspect = window.innerWidth / Math.max(1, window.innerHeight * 0.55);
     for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
       const vw = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i] * estAspect;
       if (vw >= cols) return i;
     }
     return 0;
-  }, [renderGrid, viewMode]);
+  }, [renderGrid, viewMode, isMobilePortrait, gestureSurfaceSize]);
+
+  // Keep refs up-to-date for use in effects that shouldn't re-run when these change
+  portraitFitZoomRef.current = fitToWidthZoomIndex;
+  isMobilePortraitRef.current = isMobilePortrait;
 
     const canZoomIn = cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
     const canZoomOut = cameraZoomIndex > fitToWidthZoomIndex;
@@ -2715,7 +2735,7 @@ export const PuzzleGame = () => {
               height: gestureSurfaceSize.w > 0 ? `${gestureSurfaceSize.w}px` : '100svw',
               top: '50%',
               left: '50%',
-              transform: 'translate(-50%, -50%) rotate(90deg)',
+              transform: 'translate(-50%, -50%) rotate(-90deg)',
               transformOrigin: 'center center',
               borderRadius: '0px',
             } : {}}
