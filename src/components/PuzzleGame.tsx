@@ -107,7 +107,7 @@ interface SimulationState {
 // Camera zoom values (multipliers). Lower = closer / larger board. Higher = farther / smaller board.
 // The old 152% close view used zoomFactor 0.66; that is now the semantic 100% baseline.
 const CAMERA_BASELINE_ZOOM_FACTOR = 0.66;
-const CAMERA_ZOOM_PERCENT_LEVELS = Array.from({ length: 19 }, (_, index) => 60 + index * 5);
+const CAMERA_ZOOM_PERCENT_LEVELS = Array.from({ length: 23 }, (_, index) => 40 + index * 5);
 const CAMERA_ZOOM_LEVELS = CAMERA_ZOOM_PERCENT_LEVELS.map((percent) => CAMERA_BASELINE_ZOOM_FACTOR / (percent / 100));
 const DEFAULT_CAMERA_ZOOM_INDEX = CAMERA_ZOOM_PERCENT_LEVELS.indexOf(100);
 const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = DEFAULT_CAMERA_ZOOM_INDEX;
@@ -287,6 +287,7 @@ export const PuzzleGame = () => {
     intent: 'pinch' | 'pan' | null;
   } | null>(null);
   const [isMiniMapVisible, setIsMiniMapVisible] = useState(false);
+  const [isMiniMapGestureActive, setIsMiniMapGestureActive] = useState(false);
   const miniMapDismissTimerRef = useRef<number | null>(null);
 
   // Player highlight flash state for control transfer feedback
@@ -1621,6 +1622,28 @@ export const PuzzleGame = () => {
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
 
+  // Compute approximate viewport rectangle for mini-map viewport indicator
+  const miniMapViewport = useMemo(() => {
+    const cols = renderGrid[0]?.length ?? 0;
+    const rows = renderGrid.length;
+    if (cols === 0 || rows === 0 || viewMode === 'fps' || viewMode === 'sprite') return null;
+    const is2D = viewMode === '2d';
+    const fovDeg = is2D ? 42 : 50;
+    const baseH = is2D ? 24 : 18;
+    const fovRad = fovDeg * Math.PI / 180;
+    const visibleH = 2 * Math.tan(fovRad / 2) * baseH * cameraZoomFactor;
+    // Estimate container aspect ratio: in portrait the board is roughly 0.55× screen height
+    const estAspect = window.innerWidth / Math.max(1, window.innerHeight * 0.55);
+    const visibleW = visibleH * estAspect;
+    const cx = localPlayerPos.x + cameraOffset.x;
+    const cy = localPlayerPos.y + cameraOffset.z;
+    const wFrac = Math.min(1, visibleW / cols);
+    const hFrac = Math.min(1, visibleH / rows);
+    const leftFrac = Math.max(0, Math.min(1 - wFrac, (cx - visibleW / 2) / cols));
+    const topFrac = Math.max(0, Math.min(1 - hFrac, (cy - visibleH / 2) / rows));
+    return { leftFrac, topFrac, wFrac, hFrac };
+  }, [renderGrid, viewMode, cameraZoomFactor, cameraOffset, localPlayerPos]);
+
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
@@ -1660,6 +1683,7 @@ export const PuzzleGame = () => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (e.touches.length >= 2) {
         setIsDragging(false);
+        setIsMiniMapGestureActive(true);
         const dist = distanceBetweenTouches(e.touches[0], e.touches[1]);
         const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -1733,6 +1757,7 @@ export const PuzzleGame = () => {
 
     const handleTouchEnd = () => {
       setIsDragging(false);
+      setIsMiniMapGestureActive(false);
       twoFingerGestureRef.current = null;
       pinchDistanceRef.current = null;
     };
@@ -2347,10 +2372,10 @@ export const PuzzleGame = () => {
                 size="sm"
                 className={[
                   "h-9 w-9 p-0 hover:bg-primary/20",
-                  isMiniMapVisible ? "text-primary bg-primary/10" : "",
+                  (isMiniMapVisible || isMiniMapGestureActive) ? "text-primary bg-primary/10" : "",
                 ].join(" ")}
                 title="Toggle level overview"
-                aria-pressed={isMiniMapVisible}
+                aria-pressed={isMiniMapVisible || isMiniMapGestureActive}
               >
                 <MapIcon className="h-4 w-4" />
               </Button>
@@ -2735,24 +2760,21 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        {isMiniMapVisible && renderGrid.length > 0 && (
+        {(isMiniMapVisible || isMiniMapGestureActive) && renderGrid.length > 0 && (
           <div
-            className="absolute inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-            onPointerUp={() => setIsMiniMapVisible(false)}
+            className="absolute bottom-14 right-2 z-[80] w-[32vw] max-w-[150px] rounded-xl bg-gray-900/95 border border-white/25 shadow-2xl p-1.5"
             onTouchStart={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => { e.stopPropagation(); setIsMiniMapVisible(false); }}
+            onTouchEnd={(e) => { e.stopPropagation(); if (isMiniMapVisible) setIsMiniMapVisible(false); }}
+            onPointerUp={() => { if (isMiniMapVisible) setIsMiniMapVisible(false); }}
           >
-            <div
-              className="max-w-[82vw] max-h-[75vh] p-3 rounded-2xl bg-gray-900/95 border border-white/20 shadow-2xl overflow-auto"
-              onPointerUp={(e) => e.stopPropagation()}
-            >
-              <div className="text-[10px] font-bold tracking-widest text-white/50 text-center mb-2 uppercase">Map Overview</div>
+            <div className="text-[8px] font-bold tracking-widest text-white/40 text-center mb-1 uppercase leading-none">Map</div>
+            <div style={{ position: 'relative', width: '100%' }}>
               <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: `repeat(${renderGrid[0]?.length ?? 1}, 1fr)`,
-                  gap: '1px',
+                  gap: '0.5px',
                   width: '100%',
                 }}
               >
@@ -2767,7 +2789,21 @@ export const PuzzleGame = () => {
                   })
                 )}
               </div>
-              <div className="text-[9px] text-white/40 text-center mt-2">Tap to close · auto-closes in 3s</div>
+              {miniMapViewport && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${miniMapViewport.leftFrac * 100}%`,
+                    top: `${miniMapViewport.topFrac * 100}%`,
+                    width: `${miniMapViewport.wFrac * 100}%`,
+                    height: `${miniMapViewport.hFrac * 100}%`,
+                    border: '1.5px solid rgba(255,255,255,0.75)',
+                    borderRadius: '2px',
+                    boxShadow: '0 0 4px rgba(255,255,255,0.25)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
             </div>
           </div>
         )}
