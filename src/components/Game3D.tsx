@@ -1847,8 +1847,11 @@ const CameraController = ({
     const panOffsetZ = cameraOffset?.z || 0;
     const edgeMarginX = viewWidth * 0.3;
     const edgeMarginZ = viewHeight * 0.3;
-    const followStrengthX = smoothstep(0.68, 0.9, contentBounds.width / viewWidth);
-    const followStrengthZ = smoothstep(0.68, 0.9, contentBounds.height / viewHeight);
+    // Widen transition zone so camera fully centres before player-follow kicks in, reducing jitter
+    const mapRatioX = contentBounds.width / viewWidth;
+    const mapRatioZ = contentBounds.height / viewHeight;
+    const followStrengthX = smoothstep(0.5, 0.72, mapRatioX);
+    const followStrengthZ = smoothstep(0.5, 0.72, mapRatioZ);
 
     const followTargetX =
       contentBounds.width <= viewWidth
@@ -1874,10 +1877,11 @@ const CameraController = ({
 
     followLookTargetRef.current.set(targetX, 0, targetZ);
 
-    // Critically damped smoothing = ease-in/out without frame-rate jitter.
-    // Important: keep camera position and look target derived from the SAME smoothed center
-    // to prevent tiny yaw jitter (rotation back and forth) while the player moves.
-    const smoothTime = is2D ? 0.18 : 0.24;
+    // Critically damped smoothing — increase time when zoomed out so the view is stable
+    const mapFits = mapRatioX <= 1.05 && mapRatioZ <= 1.05;
+    const smoothTime = is2D
+      ? (mapFits ? 0.55 : 0.18)
+      : (mapFits ? 0.65 : 0.24);
     if (followLookCurrentRef.current.lengthSq() === 0) {
       // Initialize on first frame to avoid a long catch-up from (0,0,0).
       followLookCurrentRef.current.copy(followLookTargetRef.current);

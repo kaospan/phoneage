@@ -1616,10 +1616,27 @@ export const PuzzleGame = () => {
     const prevLevel = () => {
       if (currentLevelIndex > 0) goToLevelIndex(currentLevelIndex - 1);
     };
-    const canZoomIn = cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
-    const canZoomOut = cameraZoomIndex > 0;
   const cameraZoomFactor = CAMERA_ZOOM_LEVELS[cameraZoomIndex] ?? CAMERA_BASELINE_ZOOM_FACTOR;
   const cameraZoomPercent = CAMERA_ZOOM_PERCENT_LEVELS[cameraZoomIndex] ?? 100;
+
+  // Highest zoom index where the full map width still fits — prevents pointless extra zoom-out
+  const fitToWidthZoomIndex = useMemo(() => {
+    const cols = renderGrid[0]?.length ?? 0;
+    if (cols === 0 || viewMode === 'fps' || viewMode === 'sprite') return 0;
+    const is2D = viewMode === '2d';
+    const fovDeg = is2D ? 42 : 50;
+    const baseH = is2D ? 24 : 18;
+    const fovRad = fovDeg * Math.PI / 180;
+    const estAspect = window.innerWidth / Math.max(1, window.innerHeight * 0.55);
+    for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
+      const vw = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i] * estAspect;
+      if (vw >= cols) return i;
+    }
+    return 0;
+  }, [renderGrid, viewMode]);
+
+    const canZoomIn = cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
+    const canZoomOut = cameraZoomIndex > fitToWidthZoomIndex;
     const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
 
   // Compute approximate viewport rectangle for mini-map viewport indicator
@@ -1643,22 +1660,6 @@ export const PuzzleGame = () => {
     const topFrac = Math.max(0, Math.min(1 - hFrac, (cy - visibleH / 2) / rows));
     return { leftFrac, topFrac, wFrac, hFrac };
   }, [renderGrid, viewMode, cameraZoomFactor, cameraOffset, localPlayerPos]);
-
-  // Highest zoom index where the full map width still fits — prevents pointless extra zoom-out
-  const fitToWidthZoomIndex = useMemo(() => {
-    const cols = renderGrid[0]?.length ?? 0;
-    if (cols === 0 || viewMode === 'fps' || viewMode === 'sprite') return 0;
-    const is2D = viewMode === '2d';
-    const fovDeg = is2D ? 42 : 50;
-    const baseH = is2D ? 24 : 18;
-    const fovRad = fovDeg * Math.PI / 180;
-    const estAspect = window.innerWidth / Math.max(1, window.innerHeight * 0.55);
-    for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
-      const vw = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i] * estAspect;
-      if (vw >= cols) return i;
-    }
-    return 0;
-  }, [renderGrid, viewMode]);
 
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -1692,23 +1693,28 @@ export const PuzzleGame = () => {
       setIsDragging(false);
     };
 
-    // Touch handlers: 1-finger drag pans, 2-finger pinch/spread zooms, 2-finger drag pans
+    // Touch handlers: 1-finger drag pans; 2-finger pinch=zoom-out/spread=zoom-in or pan; 3-finger pan
     const handleTouchStart = (e: React.TouchEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite') return;
       if (e.touches.length >= 2) {
+        multiTouchActiveRef.current = true;
         setIsDragging(false);
         setIsMiniMapGestureActive(true);
-        const dist = distanceBetweenTouches(e.touches[0], e.touches[1]);
-        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const t0 = e.touches[0], t1 = e.touches[1], t2 = e.touches[2];
+        const dist = distanceBetweenTouches(t0, t1);
+        const midX = t2 ? (t0.clientX + t1.clientX + t2.clientX) / 3 : (t0.clientX + t1.clientX) / 2;
+        const midY = t2 ? (t0.clientY + t1.clientY + t2.clientY) / 3 : (t0.clientY + t1.clientY) / 2;
         pinchDistanceRef.current = dist;
         twoFingerGestureRef.current = {
           startDist: dist, startMidX: midX, startMidY: midY,
-          lastDist: dist, lastMidX: midX, lastMidY: midY, intent: null,
+          lastDist: dist, lastMidX: midX, lastMidY: midY,
+          // 3+ fingers → immediately pan, no pinch classification needed
+          intent: e.touches.length >= 3 ? 'pan' : null,
         };
         return;
       }
-      if (e.touches.length === 1 && e.target === e.currentTarget) {
+      // One-finger: only start drag if no multi-touch gesture just ended
+      if (e.touches.length === 1 && e.target === e.currentTarget && !multiTouchActiveRef.current) {
         const touch = e.touches[0];
         setIsDragging(true);
         setDragStart({ x: touch.clientX, y: touch.clientY });
@@ -1721,9 +1727,14 @@ export const PuzzleGame = () => {
       if (e.touches.length >= 2) {
         const gesture = twoFingerGestureRef.current;
         if (!gesture) return;
-        const newDist = distanceBetweenTouches(e.touches[0], e.touches[1]);
-        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const t0 = e.touches[0], t1 = e.touches[1], t2 = e.touches[2];
+        const newDist = distanceBetweenTouches(t0, t1);
+        const midX = t2 ? (t0.clientX + t1.clientX + t2.clientX) / 3 : (t0.clientX + t1.clientX) / 2;
+        const midY = t2 ? (t0.clientY + t1.clientY + t2.clientY) / 3 : (t0.clientY + t1.clientY) / 2;
+
+        // Force pan on 3+ fingers
+        if (e.touches.length >= 3 && gesture.intent !== 'pan') gesture.intent = 'pan';
+
         if (gesture.intent === null) {
           const distDelta = Math.abs(newDist - gesture.startDist);
           const midDelta = Math.hypot(midX - gesture.startMidX, midY - gesture.startMidY);
@@ -1733,22 +1744,22 @@ export const PuzzleGame = () => {
         if (gesture.intent === 'pinch') {
           const delta = newDist - gesture.lastDist;
           if (Math.abs(delta) >= PINCH_ZOOM_STEP_DISTANCE_PX) {
-            // spread (delta > 0) = fingers apart = zoom in (higher index, larger board)
-            // pinch (delta < 0) = fingers together = zoom out
+            // spread (delta > 0) = zoom in; pinch (delta < 0) = zoom out (clamped to fit-width)
             setCameraZoomIndex((idx) =>
               delta > 0
                 ? Math.min(CAMERA_ZOOM_LEVELS.length - 1, idx + 1)
-                : Math.max(0, idx - 1)
+                : Math.max(fitToWidthZoomIndex, idx - 1)
             );
             gesture.lastDist = newDist;
           }
         } else if (gesture.intent === 'pan') {
-          const sensitivity = 0.01;
+          const sensitivity = 0.025;
           const dx = midX - gesture.lastMidX;
           const dy = midY - gesture.lastMidY;
+          // Natural map drag: drag right = see left (x-), drag down = see above (z-)
           setCameraOffset((prev) => ({
             x: prev.x - dx * sensitivity,
-            z: prev.z + dy * sensitivity,
+            z: prev.z - dy * sensitivity,
           }));
         }
         gesture.lastMidX = midX;
@@ -1760,20 +1771,29 @@ export const PuzzleGame = () => {
         const touch = e.touches[0];
         const deltaX = touch.clientX - dragStart.x;
         const deltaY = touch.clientY - dragStart.y;
-
-        const sensitivity = 0.01;
+        const sensitivity = 0.025;
+        // Natural map drag: drag up → reveals below (z-), drag down → reveals above (z+... wait no)
+        // Drag down = finger moves down = deltaY > 0 → z decreases = camera looks up = sees above ✓
         setCameraOffset({
           x: dragOffsetStart.x - deltaX * sensitivity,
-          z: dragOffsetStart.z + deltaY * sensitivity
+          z: dragOffsetStart.z - deltaY * sensitivity,
         });
       }
     };
 
-    const handleTouchEnd = () => {
-      setIsDragging(false);
-      setIsMiniMapGestureActive(false);
-      twoFingerGestureRef.current = null;
-      pinchDistanceRef.current = null;
+    const handleTouchEnd = (e: React.TouchEvent) => {
+      if (e.touches.length === 0) {
+        multiTouchActiveRef.current = false;
+        setIsDragging(false);
+        setIsMiniMapGestureActive(false);
+        twoFingerGestureRef.current = null;
+        pinchDistanceRef.current = null;
+      } else if (e.touches.length < 2) {
+        twoFingerGestureRef.current = null;
+        pinchDistanceRef.current = null;
+        setIsMiniMapGestureActive(false);
+        setIsDragging(false);
+      }
     };
 
     // Double-click or double-tap to reset camera
@@ -2397,7 +2417,7 @@ export const PuzzleGame = () => {
                 <Button
                   onClick={() => {
                     setUserZoomTouched(true);
-                    setCameraZoomIndex((i) => Math.max(0, i - 1));
+                    setCameraZoomIndex((i) => Math.max(fitToWidthZoomIndex, i - 1));
                   }}
                   variant="ghost"
                   size="sm"
@@ -2563,7 +2583,7 @@ export const PuzzleGame = () => {
                   <Button
                     onClick={() => {
                       setUserZoomTouched(true);
-                      setCameraZoomIndex((i) => Math.max(0, i - 1));
+                      setCameraZoomIndex((i) => Math.max(fitToWidthZoomIndex, i - 1));
                     }}
                     variant="ghost"
                     size="sm"
