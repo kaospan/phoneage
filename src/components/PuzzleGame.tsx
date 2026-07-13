@@ -1640,11 +1640,11 @@ export const PuzzleGame = () => {
     const baseH = is2D ? 24 : 18;
     const fovRad = fovDeg * Math.PI / 180;
     if (isMobilePortrait) {
-      // Portrait canvas: width = gesture surface width (narrow), height = gesture surface height (tall)
-      // aspect = gsW / gsH < 1 — portrait shaped, matches 11-col × 20-row grid naturally
+      // CSS rotate(-90deg): landscape canvas (wide) shows 20 cols horizontally, 11 rows vertically
+      // Inner board dims: width = gsH (tall), height = gsW (narrow) → aspect = gsH/gsW > 1
       const gsW = gestureSurfaceSize.w > 0 ? gestureSurfaceSize.w : window.innerWidth;
-      const gsH = gestureSurfaceSize.h > 0 ? gestureSurfaceSize.h : window.innerHeight * 0.75;
-      const aspect = gsW / Math.max(1, gsH); // portrait canvas aspect (< 1)
+      const gsH = gestureSurfaceSize.h > 0 ? gestureSurfaceSize.h : window.innerHeight * 0.8;
+      const aspect = gsH / Math.max(1, gsW); // landscape canvas aspect (> 1, wide)
       for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
         const vh = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i];
         const vw = vh * aspect;
@@ -1807,10 +1807,17 @@ export const PuzzleGame = () => {
         const deltaX = touch.clientX - dragStart.x;
         const deltaY = touch.clientY - dragStart.y;
         const sensitivity = 0.1;
-        setCameraOffset({
-          x: dragOffsetStart.x - deltaX * sensitivity,
-          z: dragOffsetStart.z - deltaY * sensitivity,
-        });
+        if (isMobilePortrait) {
+          setCameraOffset({
+            x: dragOffsetStart.x + deltaY * sensitivity,
+            z: dragOffsetStart.z - deltaX * sensitivity,
+          });
+        } else {
+          setCameraOffset({
+            x: dragOffsetStart.x - deltaX * sensitivity,
+            z: dragOffsetStart.z - deltaY * sensitivity,
+          });
+        }
       }
     };
 
