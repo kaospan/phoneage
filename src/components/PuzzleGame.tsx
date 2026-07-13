@@ -1004,9 +1004,9 @@ export const PuzzleGame = () => {
         return;
       }
 
-      // Portrait software rotation: CSS rotate(90deg) CW → remap (dx,dy) → (dy, -dx)
+      // Portrait software rotation: CSS rotate(90deg) CW → portrait UP = game EAST, so remap (px,py) → (-py, px)
       if (isMobilePortrait) {
-        enqueueInput({ type: "move", dx: dy, dy: -dx });
+        enqueueInput({ type: "move", dx: -dy, dy: dx });
         return;
       }
 
