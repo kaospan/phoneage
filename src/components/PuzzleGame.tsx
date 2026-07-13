@@ -1643,7 +1643,7 @@ export const PuzzleGame = () => {
       // CSS rotate(-90deg): landscape canvas (wide) shows 20 cols horizontally, 11 rows vertically
       // Inner board dims: width = gsH (tall), height = gsW (narrow) → aspect = gsH/gsW > 1
       const gsW = gestureSurfaceSize.w > 0 ? gestureSurfaceSize.w : window.innerWidth;
-      const gsH = gestureSurfaceSize.h > 0 ? gestureSurfaceSize.h : window.innerHeight * 0.8;
+      const gsH = gestureSurfaceSize.h > 0 ? gestureSurfaceSize.h : window.innerHeight;
       const aspect = gsH / Math.max(1, gsW); // landscape canvas aspect (> 1, wide)
       for (let i = CAMERA_ZOOM_LEVELS.length - 1; i >= 0; i--) {
         const vh = 2 * Math.tan(fovRad / 2) * baseH * CAMERA_ZOOM_LEVELS[i];
