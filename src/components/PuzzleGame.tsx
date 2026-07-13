@@ -1677,7 +1677,7 @@ export const PuzzleGame = () => {
       if (isDragging) {
         const deltaX = e.clientX - dragStart.x;
         const deltaY = e.clientY - dragStart.y;
-        const sensitivity = 0.025;
+        const sensitivity = 0.2;
         setCameraOffset({
           x: dragOffsetStart.x - deltaX * sensitivity,
           z: dragOffsetStart.z - deltaY * sensitivity,
@@ -1753,7 +1753,7 @@ export const PuzzleGame = () => {
             gesture.lastDist = newDist;
           }
         } else if (gesture.intent === 'pan') {
-          const sensitivity = 0.025;
+          const sensitivity = 0.2;
           const dx = midX - gesture.lastMidX;
           const dy = midY - gesture.lastMidY;
           // Natural map drag: drag right = see left (x-), drag down = see above (z-)
@@ -1771,7 +1771,7 @@ export const PuzzleGame = () => {
         const touch = e.touches[0];
         const deltaX = touch.clientX - dragStart.x;
         const deltaY = touch.clientY - dragStart.y;
-        const sensitivity = 0.025;
+        const sensitivity = 0.2;
         // Natural map drag: drag up → reveals below (z-), drag down → reveals above (z+... wait no)
         // Drag down = finger moves down = deltaY > 0 → z decreases = camera looks up = sees above ✓
         setCameraOffset({
