@@ -27,6 +27,7 @@ interface Game3DProps {
   onCancelSelection?: () => void;
   onPlayerClick?: () => void;
   playerFlashCount?: number;
+  rotateUpright?: boolean;
 }
 
 type PlayerFacing = 'up' | 'right' | 'down' | 'left';
@@ -1591,7 +1592,7 @@ const InstancedMeshSet = ({
 };
 
 // Animated sky background - floats across entire scene
-const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; gridHeight: number }) => {
+const AnimatedSkyBackground = ({ gridWidth, gridHeight, rotateUpright }: { gridWidth: number; gridHeight: number; rotateUpright?: boolean }) => {
   const cloudGroupRef = useRef<THREE.Group>(null);
   const cloudRefs = useRef<THREE.Group[]>([]);
   const backgroundGroupRef = useRef<THREE.Group>(null);
@@ -1674,9 +1675,9 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
 
   return (
     <group ref={backgroundGroupRef}>
-      {/* Deep sky background plane - far below the grid */}
+      {/* Deep sky background plane - extends well beyond the grid to fill the canvas */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]}>
-        <planeGeometry args={[gridWidth + 40, gridHeight + 40]} />
+        <planeGeometry args={[gridWidth + 80, gridHeight + 80]} />
         <meshStandardMaterial
           color="#000000"
           emissive="#000000"
@@ -1685,8 +1686,8 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
         />
       </mesh>
 
-      {/* Stars scattered across the sky - fixed positions relative to camera */}
-      {Array.from({ length: 30 }).map((_, i) => {
+      {/* Stars and clouds hidden in portrait mode (CSS rotation makes them visible at top/bottom) */}
+      {!rotateUpright && Array.from({ length: 30 }).map((_, i) => {
         const angle = (i / 30) * Math.PI * 2;
         const radius = 15 + (i % 3) * 5;
         const x = Math.cos(angle) * radius;
@@ -1701,10 +1702,12 @@ const AnimatedSkyBackground = ({ gridWidth, gridHeight }: { gridWidth: number; g
         );
       })}
 
-      {/* Animated clouds */}
-      <group ref={cloudGroupRef}>
-        {clouds}
-      </group>
+      {/* Animated clouds - hidden in portrait mode */}
+      {!rotateUpright && (
+        <group ref={cloudGroupRef}>
+          {clouds}
+        </group>
+      )}
     </group>
   );
 };
@@ -1922,7 +1925,8 @@ export const Game3D = ({
   onArrowClick,
   onCancelSelection,
   onPlayerClick,
-  playerFlashCount = 0
+  playerFlashCount = 0,
+  rotateUpright = false,
 }: Game3DProps) => {
   const gridHeight = grid.length;
   const gridWidth = grid[0]?.length || 0;
@@ -2315,7 +2319,7 @@ export const Game3D = ({
         <directionalLight position={[-6, 6, 14]} intensity={0.45} color="#9dffcc" />
 
         {/* Animated moonlit sky background */}
-        <AnimatedSkyBackground gridWidth={gridWidth} gridHeight={gridHeight} />
+        <AnimatedSkyBackground gridWidth={gridWidth} gridHeight={gridHeight} rotateUpright={rotateUpright} />
 
         {/* Grid (Instanced) */}
         <InstancedMeshSet

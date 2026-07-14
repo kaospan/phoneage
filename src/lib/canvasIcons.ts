@@ -813,3 +813,140 @@ export function createKeyIconDataUrl(size: number, opts?: KeyIconOptions): strin
   const canvas = createKeyIconCanvas(size, opts);
   return canvas ? canvas.toDataURL("image/png") : null;
 }
+
+export type LockIconOptions = {
+  /** Body fill color */
+  body?: string;
+  /** Shackle (arch) color */
+  shackle?: string;
+  /** Keyhole color */
+  keyhole?: string;
+  /** Outline stroke */
+  outline?: string;
+  /** Soft glow behind the icon */
+  glow?: string;
+};
+
+function getLockDefaults(opts?: LockIconOptions): Required<LockIconOptions> {
+  return {
+    body: opts?.body ?? "rgba(185,28,28,0.95)",
+    shackle: opts?.shackle ?? "rgba(120,60,60,0.95)",
+    keyhole: opts?.keyhole ?? "rgba(255,255,255,0.85)",
+    outline: opts?.outline ?? "rgba(15,23,42,0.65)",
+    glow: opts?.glow ?? "rgba(220,38,38,0.20)",
+  };
+}
+
+export function drawLockTopDown(ctx: CanvasRenderingContext2D, size: number, opts?: LockIconOptions) {
+  const { body, shackle, keyhole, outline, glow } = getLockDefaults(opts);
+
+  ctx.clearRect(0, 0, size, size);
+
+  const cx = size / 2;
+  const s = size;
+
+  // Glow
+  if (glow && glow !== "transparent") {
+    const grad = ctx.createRadialGradient(cx, cx, s * 0.05, cx, cx, s * 0.5);
+    grad.addColorStop(0, glow);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cx, s * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Shackle (U-shape arch)
+  const shackleW = s * 0.19;
+  const shackleR = s * 0.16;
+  const shackleTopY = s * 0.14;
+  const shackleMidY = s * 0.42;
+
+  ctx.save();
+  ctx.lineWidth = shackleW;
+  ctx.strokeStyle = shackle;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  const archX1 = cx - shackleR;
+  const archX2 = cx + shackleR;
+  ctx.moveTo(archX1, shackleMidY);
+  ctx.lineTo(archX1, shackleTopY + shackleR);
+  ctx.arcTo(archX1, shackleTopY, cx, shackleTopY, shackleR);
+  ctx.arcTo(archX2, shackleTopY, archX2, shackleTopY + shackleR, shackleR);
+  ctx.lineTo(archX2, shackleMidY);
+  ctx.stroke();
+  ctx.restore();
+
+  // Lock body (rounded rectangle, lower 55% of icon)
+  const bodyX = s * 0.15;
+  const bodyY = s * 0.38;
+  const bodyW = s * 0.70;
+  const bodyH = s * 0.50;
+  const bodyR = s * 0.09;
+
+  ctx.save();
+  const bodyGrad = ctx.createLinearGradient(bodyX, bodyY, bodyX, bodyY + bodyH);
+  bodyGrad.addColorStop(0, body);
+  bodyGrad.addColorStop(1, "rgba(0,0,0,0.35)");
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(bodyX + bodyR, bodyY);
+  ctx.lineTo(bodyX + bodyW - bodyR, bodyY);
+  ctx.arcTo(bodyX + bodyW, bodyY, bodyX + bodyW, bodyY + bodyR, bodyR);
+  ctx.lineTo(bodyX + bodyW, bodyY + bodyH - bodyR);
+  ctx.arcTo(bodyX + bodyW, bodyY + bodyH, bodyX + bodyW - bodyR, bodyY + bodyH, bodyR);
+  ctx.lineTo(bodyX + bodyR, bodyY + bodyH);
+  ctx.arcTo(bodyX, bodyY + bodyH, bodyX, bodyY + bodyH - bodyR, bodyR);
+  ctx.lineTo(bodyX, bodyY + bodyR);
+  ctx.arcTo(bodyX, bodyY, bodyX + bodyR, bodyY, bodyR);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = Math.max(1, s * 0.035);
+  ctx.stroke();
+  ctx.restore();
+
+  // Keyhole circle + slot
+  const khCx = cx;
+  const khCy = bodyY + bodyH * 0.42;
+  const khR = s * 0.09;
+  ctx.fillStyle = keyhole;
+  ctx.beginPath();
+  ctx.arc(khCx, khCy, khR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = keyhole;
+  ctx.beginPath();
+  ctx.moveTo(khCx - s * 0.04, khCy + khR * 0.5);
+  ctx.lineTo(khCx + s * 0.04, khCy + khR * 0.5);
+  ctx.lineTo(khCx + s * 0.028, khCy + khR * 2.1);
+  ctx.lineTo(khCx - s * 0.028, khCy + khR * 2.1);
+  ctx.closePath();
+  ctx.fill();
+
+  // Shine highlight on body
+  ctx.fillStyle = "rgba(255,255,255,0.13)";
+  ctx.beginPath();
+  ctx.moveTo(bodyX + bodyR * 1.5, bodyY + s * 0.02);
+  ctx.lineTo(bodyX + bodyW * 0.55, bodyY + s * 0.02);
+  ctx.lineTo(bodyX + bodyW * 0.55, bodyY + bodyH * 0.28);
+  ctx.lineTo(bodyX + bodyR * 1.5, bodyY + bodyH * 0.28);
+  ctx.closePath();
+  ctx.fill();
+}
+
+export function createLockIconCanvas(size: number, opts?: LockIconOptions): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  drawLockTopDown(ctx, size, opts);
+  return canvas;
+}
+
+export function createLockIconDataUrl(size: number, opts?: LockIconOptions): string | null {
+  const canvas = createLockIconCanvas(size, opts);
+  return canvas ? canvas.toDataURL("image/png") : null;
+}

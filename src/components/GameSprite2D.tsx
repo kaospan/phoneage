@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
-import { createBreakableRockTileDataUrl, createClockIconDataUrl, createKeyIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
+import { createBreakableRockTileDataUrl, createClockIconDataUrl, createKeyIconDataUrl, createLockIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
 import { buildGoalCaveKeySet } from "@/game/caves";
 import { referenceSpriteUrls } from "@/data/assetCatalog";
@@ -166,8 +166,18 @@ const renderPlayerSprite = (rotate?: boolean) => (
   <img
     src={playerSpriteUrl}
     alt="Hero"
-    className="pointer-events-none absolute bottom-[6%] left-1/2 h-[88%] w-[88%] max-w-none -translate-x-1/2 object-contain object-bottom"
-    style={{ imageRendering: "pixelated", transform: rotate ? 'rotate(90deg)' : undefined }}
+    className="pointer-events-none absolute bottom-[6%] left-1/2 h-[88%] w-[88%] max-w-none object-contain object-bottom"
+    style={{ imageRendering: "pixelated", transform: rotate ? 'translateX(-50%) rotate(90deg)' : 'translateX(-50%)' }}
+  />
+);
+
+const renderSpawnMarkerSprite = (rotate?: boolean) => (
+  <img
+    src={playerSpriteUrl}
+    alt=""
+    aria-hidden
+    className="pointer-events-none absolute bottom-[10%] left-1/2 h-[62%] w-[62%] max-w-none object-contain object-bottom opacity-40"
+    style={{ imageRendering: "pixelated", transform: rotate ? 'translateX(-50%) rotate(90deg)' : 'translateX(-50%)' }}
   />
 );
 
@@ -602,6 +612,23 @@ export function GameSprite2D({
     return createClockIconDataUrl(32, { glow: "rgba(239,68,68,0.18)" });
   }, []);
 
+  const redLockFallbackUrl = useMemo(() => {
+    return createLockIconDataUrl(32, {
+      body: "rgba(185,28,28,0.97)",
+      shackle: "rgba(120,20,20,0.95)",
+      glow: "rgba(220,38,38,0.22)",
+    });
+  }, []);
+
+  const greenLockFallbackUrl = useMemo(() => {
+    return createLockIconDataUrl(32, {
+      body: "rgba(21,128,61,0.97)",
+      shackle: "rgba(16,80,40,0.95)",
+      keyhole: "rgba(255,255,255,0.85)",
+      glow: "rgba(34,197,94,0.22)",
+    });
+  }, []);
+
   const breakableRockFallbackUrl = useMemo(() => {
     return createBreakableRockTileDataUrl(64);
   }, []);
@@ -737,6 +764,8 @@ export function GameSprite2D({
                   (canUseRefSprite && refSprite) ? `url(${refSprite})` :
                   effectiveTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
                   effectiveTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
+                  effectiveTileType === 16 && redLockFallbackUrl ? `url(${redLockFallbackUrl})` :
+                  effectiveTileType === 17 && greenLockFallbackUrl ? `url(${greenLockFallbackUrl})` :
                   effectiveTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
                   effectiveTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
                   undefined;
@@ -744,10 +773,12 @@ export function GameSprite2D({
                 ? (atlasSprite ? `url(${atlasSprite})` : undefined)
                 : fallbackTileBackgroundImage;
               const backgroundImage = shouldPaintStaticTile ? staticTileBackgroundImage : undefined;
-              // In portrait (rotateUpright), cave tiles get a counter-rotated child div instead.
-              const isCaveCell = effectiveTileType === 3 || effectiveTileType === 18;
-              const useCaveChild = rotateUpright && isCaveCell && Boolean(backgroundImage);
-              const cellBackgroundImage = useCaveChild ? undefined : backgroundImage;
+              // In portrait (rotateUpright), sprite tiles get a counter-rotated child div instead.
+              // Caves, locks, and hourglass all need upright rotation; arrows are intentionally NOT rotated.
+              const needsUprightSprite = effectiveTileType === 3 || effectiveTileType === 18 ||
+                effectiveTileType === 16 || effectiveTileType === 17 || effectiveTileType === 20;
+              const useRotatedChild = rotateUpright && needsUprightSprite && Boolean(backgroundImage);
+              const cellBackgroundImage = useRotatedChild ? undefined : backgroundImage;
               const arrowVector =
                 effectiveIsArrow && !isPlayer && shouldPaintStaticTile && !backgroundImage
                   ? renderArrowVector(effectiveTileType)
@@ -809,7 +840,7 @@ export function GameSprite2D({
                       }}
                     />
                   )}
-                  {useCaveChild && (
+                  {useRotatedChild && (
                     <div
                       className="pointer-events-none absolute inset-0"
                       style={{
@@ -823,6 +854,9 @@ export function GameSprite2D({
                   )}
                   {isPlayer && !isPlayerAtScreenshotStart && !suppressPlayerOverlay && (
                     renderPlayerSprite(rotateUpright)
+                  )}
+                  {!isPlayer && effectiveTileType === 18 && playerStart && x === playerStart.x && y === playerStart.y && (
+                    renderSpawnMarkerSprite(rotateUpright)
                   )}
                   {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

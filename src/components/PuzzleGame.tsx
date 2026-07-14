@@ -229,6 +229,14 @@ export const PuzzleGame = () => {
       return false;
     }
   });
+  const [showThumbstick, setShowThumbstick] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("stone-age-show-thumbstick") === "1";
+    } catch {
+      return false;
+    }
+  });
   const prevZoomIndexRef = useRef<number | null>(null);
   const autoMobileFullscreenAppliedRef = useRef(false);
   const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
@@ -1936,6 +1944,15 @@ export const PuzzleGame = () => {
     }
   }, [isFullscreenMode]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("stone-age-show-thumbstick", showThumbstick ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [showThumbstick]);
+
     useEffect(() => {
       const doc = typeof document !== "undefined" ? document : null;
       if (!doc) return;
@@ -2073,8 +2090,8 @@ export const PuzzleGame = () => {
           disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart}
           targetRef={gestureSurfaceRef}
         />
-        {isMobile && (
-          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart} />
+        {isMobile && showThumbstick && (
+          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart} opacity={0.55} />
         )}
 
         {desktopShellActive && (
@@ -2516,6 +2533,22 @@ export const PuzzleGame = () => {
                 {VIEW_MODE_LABELS[viewMode]}
               </Button>
 
+                {isMobile && (
+                  <Button
+                    onClick={() => setShowThumbstick((v) => !v)}
+                    variant="ghost"
+                    size="sm"
+                    className={[
+                      "h-9 w-9 p-0 text-base hover:bg-primary/20",
+                      showThumbstick ? "text-primary bg-primary/10" : "",
+                    ].join(" ")}
+                    title={showThumbstick ? "Hide thumbstick" : "Show thumbstick"}
+                    aria-pressed={showThumbstick}
+                  >
+                    🕹
+                  </Button>
+                )}
+
                 <Button
                   onClick={() => void toggleFullscreenMode()}
                   variant="ghost"
@@ -2819,6 +2852,7 @@ export const PuzzleGame = () => {
                 zoomFactor={cameraZoomFactor}
                 viewMode={viewMode}
                 theme={currentLevel.theme}
+                rotateUpright={isMobilePortrait}
                 players={renderPlayers}
                 localPlayerId={localPlayer?.id}
                 onPlayerClick={flashPlayerHighlight}

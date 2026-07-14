@@ -3,9 +3,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 interface ThumbstickProps {
     onMove: (dx: number, dy: number) => void;
     disabled?: boolean;
+    opacity?: number;
 }
 
-export const Thumbstick = ({ onMove, disabled }: ThumbstickProps) => {
+export const Thumbstick = ({ onMove, disabled, opacity = 1 }: ThumbstickProps) => {
     const [active, setActive] = useState(false);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const baseRef = useRef<HTMLDivElement>(null);
@@ -165,7 +166,7 @@ export const Thumbstick = ({ onMove, disabled }: ThumbstickProps) => {
     return (
         <div
             className="fixed left-4 z-50"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1rem)', opacity }}
         >
             <div
                 ref={baseRef}
