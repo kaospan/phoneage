@@ -781,8 +781,8 @@ export function GameSprite2D({
                     isSelector ? "ring-2 ring-emerald-300" : "",
                   ].join(" ")}
                   style={{
-                    backgroundColor: backgroundImage ? undefined : fallback,
-                    backgroundImage,
+                    backgroundColor: cellBackgroundImage ? undefined : fallback,
+                    backgroundImage: cellBackgroundImage,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                     imageRendering: "pixelated",
@@ -809,8 +809,20 @@ export function GameSprite2D({
                       }}
                     />
                   )}
+                  {useCaveChild && (
+                    <div
+                      className="pointer-events-none absolute inset-0"
+                      style={{
+                        backgroundImage,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        imageRendering: 'pixelated',
+                        transform: 'rotate(90deg)',
+                      }}
+                    />
+                  )}
                   {isPlayer && !isPlayerAtScreenshotStart && !suppressPlayerOverlay && (
-                    renderPlayerSprite()
+                    renderPlayerSprite(rotateUpright)
                   )}
                   {arrowVector && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
