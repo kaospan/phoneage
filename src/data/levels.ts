@@ -604,7 +604,12 @@ const buildVariationLevels = (baseLevels: Level[]): Level[] => {
 const autoLevels = buildAutoLevels();
 const variationLevels = buildVariationLevels(autoLevels);
 
-export const allLevels = [...autoLevels, ...variationLevels];
+// Promoted defaults are already applied above for ids covered by stageImageSets (1-100, via
+// manualById inside buildAutoLevels). Variation levels (101-200+) are generated fresh from
+// flipped copies of the base levels and never consult promoted-levels.json, so apply the
+// promoted overrides once more here to let promoted entries (e.g. cleared/void levels) win
+// for ids outside the auto-built range too.
+export const allLevels = applyPromotedLevelDefaults([...autoLevels, ...variationLevels]);
 
 console.log('📦 levels.ts loaded, total levels:', allLevels.length);
 
