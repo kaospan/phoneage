@@ -116,6 +116,7 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
       if (willBreakRock) {
         const newGrid = grid.map(r => [...r]);
         newGrid[playerPos.y][playerPos.x] = 5; // becomes void
+        baseGrid[playerPos.y][playerPos.x] = 5; // prevent glide animation from restoring rock
         outcome.newGrid = newGrid;
         outcome.brokeRock = true;
       }
@@ -152,6 +153,7 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
   if (willBreakRock) {
     const newGrid = outcome.newGrid ?? grid.map(r => [...r]);
     newGrid[playerPos.y][playerPos.x] = 5; // becomes void
+    baseGrid[playerPos.y][playerPos.x] = 5; // prevent glide animation from restoring rock
     outcome.newGrid = newGrid;
     outcome.brokeRock = true;
   }
