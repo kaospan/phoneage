@@ -19177,8 +19177,7 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 61,
-    "locked": true
+    "timeLimitSeconds": 61
   },
   {
     "id": 75,
@@ -19436,8 +19435,7 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 367,
-    "locked": true
+    "timeLimitSeconds": 367
   },
   {
     "id": 76,
@@ -19694,8 +19692,7 @@
       "y": 2
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 180,
-    "locked": true
+    "timeLimitSeconds": 180
   },
   {
     "id": 77,
@@ -19953,8 +19950,7 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 374,
-    "locked": true
+    "timeLimitSeconds": 374
   },
   {
     "id": 78,
@@ -20212,8 +20208,7 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 436,
-    "locked": true
+    "timeLimitSeconds": 436
   },
   {
     "id": 79,
@@ -20482,8 +20477,7 @@
       "15,7": 50,
       "15,4": 50,
       "5,6": 50
-    },
-    "locked": true
+    }
   },
   {
     "id": 80,
@@ -20741,8 +20735,7 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 243,
-    "locked": true
+    "timeLimitSeconds": 243
   },
   {
     "id": 81,
@@ -21011,8 +21004,7 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 561,
-    "locked": true
+    "timeLimitSeconds": 561
   },
   {
     "id": 82,
@@ -21270,8 +21262,7 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 136,
-    "locked": true
+    "timeLimitSeconds": 136
   },
   {
     "id": 83,
@@ -21529,8 +21520,7 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 311,
-    "locked": true
+    "timeLimitSeconds": 311
   },
   {
     "id": 84,
@@ -21788,8 +21778,7 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 374,
-    "locked": true
+    "timeLimitSeconds": 374
   },
   {
     "id": 85,
@@ -22047,8 +22036,7 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 867,
-    "locked": true
+    "timeLimitSeconds": 867
   },
   {
     "id": 86,
@@ -22306,8 +22294,7 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 837,
-    "locked": true
+    "timeLimitSeconds": 837
   },
   {
     "id": 87,
@@ -22565,8 +22552,7 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 37,
-    "locked": true
+    "timeLimitSeconds": 37
   },
   {
     "id": 88,
@@ -22824,8 +22810,7 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 567,
-    "locked": true
+    "timeLimitSeconds": 567
   },
   {
     "id": 89,
@@ -23083,8 +23068,7 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 424,
-    "locked": true
+    "timeLimitSeconds": 424
   },
   {
     "id": 100,
