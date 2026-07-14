@@ -43,6 +43,8 @@ jobs:
           VITE_BASE: /${{ github.event.repository.name }}/
           # Ensure each deploy has a unique build id so clients refresh after a publish.
           VITE_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Upload artifact
