@@ -1195,6 +1195,35 @@ export const PuzzleGame = () => {
 
         if (player.isGliding) return;
 
+        // Standing on a teleport pad: it auto-advances to the next pad in the cycle after a
+        // short delay, unless the player breaks out by queuing a directional move first.
+        if (player.teleportCycleTicksLeft > 0) {
+          const pendingQueue = inputQueueRef.current.get(id);
+          const nextQueued = pendingQueue && pendingQueue.length > 0 ? pendingQueue[0] : null;
+          if (nextQueued && nextQueued.type === 'move') {
+            // Breaking out — cancel the pending cycle and let the normal move handling below
+            // process this same queued input this tick.
+            player.teleportCycleTicksLeft = 0;
+          } else {
+            player.teleportCycleTicksLeft -= 1;
+            if (player.teleportCycleTicksLeft <= 0) {
+              const dest = getNextTeleport(sim.grid, player.pos);
+              if (dest) {
+                player.facing = facingFromDelta(dest.x - player.pos.x, dest.y - player.pos.y, player.facing);
+                player.pos = { ...dest };
+                playersDirty = true;
+                player.teleportCycleTicksLeft = TELEPORT_CYCLE_DELAY_TICKS;
+                if (player.isLocal) {
+                  pushHudMessage("Teleporting again in 2s — move to break free!", 1800);
+                }
+              } else {
+                player.teleportCycleTicksLeft = 0;
+              }
+            }
+            return;
+          }
+        }
+
         const queue = inputQueueRef.current.get(id);
         if (!queue || queue.length === 0) return;
 
