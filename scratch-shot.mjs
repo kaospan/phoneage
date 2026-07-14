@@ -18,7 +18,7 @@ await page.addInitScript(() => {
 await page.goto(url, { waitUntil: 'load' });
 await page.waitForTimeout(2000);
 
-await page.getByText('START', { exact: true }).click();
+await page.getByRole('button', { name: /start/i }).click();
 await page.waitForTimeout(2000);
 await page.screenshot({ path: `${outDir}/2_after_start.png` });
 
