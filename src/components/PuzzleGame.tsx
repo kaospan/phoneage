@@ -603,6 +603,13 @@ export const PuzzleGame = () => {
     setUserZoomTouched(false);
   }, [currentLevelIndex]);
 
+  // isPortrait starts false and flips after mount — re-apply fit zoom when it settles.
+  useEffect(() => {
+    if (isMobilePortrait && !userZoomTouched) {
+      setCameraZoomIndex(portraitFitZoomRef.current);
+    }
+  }, [isMobilePortrait, userZoomTouched]);
+
     const isPlaceholderGrid = useCallback((levelGrid?: number[][]) => {
       if (!levelGrid || levelGrid.length === 0) return true;
       if (levelGrid.length === 1 && levelGrid[0]?.length === 1) return true;
@@ -1634,7 +1641,8 @@ export const PuzzleGame = () => {
   const fitToWidthZoomIndex = useMemo(() => {
     const cols = renderGrid[0]?.length ?? 0;
     const rows = renderGrid.length;
-    if (cols === 0 || viewMode === 'fps' || viewMode === 'sprite') return 0;
+    if (cols === 0 || viewMode === 'fps') return 0;
+    if (viewMode === 'sprite') return isMobilePortrait ? DEFAULT_CAMERA_ZOOM_INDEX : 0;
     const is2D = viewMode === '2d';
     const fovDeg = is2D ? 42 : 50;
     const baseH = is2D ? 24 : 18;
@@ -2726,15 +2734,16 @@ export const PuzzleGame = () => {
           <div
             className={[
               "overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
-              isMobilePortrait ? "absolute" : "relative h-full w-full rounded-[30px]",
+              isMobilePortrait ? "" : "relative h-full w-full rounded-[30px]",
               desktopShellActive ? "ring-1 ring-amber-300/10" : "",
             ].join(' ')}
             style={isMobilePortrait ? {
-              width: gestureSurfaceSize.h > 0 ? `${gestureSurfaceSize.h}px` : '100svh',
-              height: gestureSurfaceSize.w > 0 ? `${gestureSurfaceSize.w}px` : '100svw',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%) rotate(-90deg)',
+              position: 'fixed',
+              width: '100svh',
+              height: '100svw',
+              top: 'calc((100svh - 100svw) / 2)',
+              left: 'calc((100svw - 100svh) / 2)',
+              transform: 'rotate(-90deg)',
               transformOrigin: 'center center',
               borderRadius: '0px',
             } : {}}

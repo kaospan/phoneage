@@ -22,6 +22,7 @@ interface GameSprite2DProps {
   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
   zoomFactor?: number;
   fullBleed?: boolean;
+  rotateUpright?: boolean;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
@@ -161,12 +162,12 @@ const renderArrowVector = (tileType: number) => {
   );
 };
 
-const renderPlayerSprite = () => (
+const renderPlayerSprite = (rotate?: boolean) => (
   <img
     src={playerSpriteUrl}
     alt="Hero"
     className="pointer-events-none absolute bottom-[6%] left-1/2 h-[88%] w-[88%] max-w-none -translate-x-1/2 object-contain object-bottom"
-    style={{ imageRendering: "pixelated" }}
+    style={{ imageRendering: "pixelated", transform: rotate ? 'rotate(90deg)' : undefined }}
   />
 );
 
@@ -181,6 +182,7 @@ export function GameSprite2D({
   players,
   zoomFactor = 1,
   fullBleed = false,
+  rotateUpright = false,
   onArrowClick,
   onCancelSelection,
 }: GameSprite2DProps) {
@@ -551,16 +553,12 @@ export function GameSprite2D({
     const node = containerRef.current;
     if (!node) return;
 
-    const updateSize = () => {
-      const rect = node.getBoundingClientRect();
-      setAvailableSize({
-        width: Math.max(0, Math.floor(rect.width)),
-        height: Math.max(0, Math.floor(rect.height)),
-      });
-    };
-
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
+    // Use layout dimensions (before CSS transforms) so a rotated parent doesn't corrupt the measurement.
+    setAvailableSize({ width: Math.max(0, node.offsetWidth), height: Math.max(0, node.offsetHeight) });
+    const observer = new ResizeObserver(entries => {
+      const r = entries[0]?.contentRect;
+      if (r) setAvailableSize({ width: Math.max(0, Math.floor(r.width)), height: Math.max(0, Math.floor(r.height)) });
+    });
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
@@ -746,6 +744,10 @@ export function GameSprite2D({
                 ? (atlasSprite ? `url(${atlasSprite})` : undefined)
                 : fallbackTileBackgroundImage;
               const backgroundImage = shouldPaintStaticTile ? staticTileBackgroundImage : undefined;
+              // In portrait (rotateUpright), cave tiles get a counter-rotated child div instead.
+              const isCaveCell = effectiveTileType === 3 || effectiveTileType === 18;
+              const useCaveChild = rotateUpright && isCaveCell && Boolean(backgroundImage);
+              const cellBackgroundImage = useCaveChild ? undefined : backgroundImage;
               const arrowVector =
                 effectiveIsArrow && !isPlayer && shouldPaintStaticTile && !backgroundImage
                   ? renderArrowVector(effectiveTileType)
