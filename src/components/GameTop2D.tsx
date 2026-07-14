@@ -39,31 +39,65 @@ const VoidTile = () => (
   <div className="w-full h-full" style={{ background: "#060508" }} />
 );
 
-/** Clean stone floor — warm cream with refined 2×2 tile pattern */
+/** Sandy dirt-path floor — amber/orange with scattered pebbles and grain marks */
 const FloorTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`fg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#DDD0B4" />
-        <stop offset="50%" stopColor="#C9B99A" />
-        <stop offset="100%" stopColor="#B8A688" />
+        <stop offset="0%" stopColor="#D49A3C" />
+        <stop offset="50%" stopColor="#B87C24" />
+        <stop offset="100%" stopColor="#96601A" />
       </linearGradient>
+      {/* Warm top-light bloom */}
+      <radialGradient id={`fgl${uid}`} cx="28%" cy="28%" r="55%">
+        <stop offset="0%" stopColor="rgba(255,215,100,0.16)" />
+        <stop offset="100%" stopColor="rgba(255,215,100,0)" />
+      </radialGradient>
     </defs>
+    {/* Sandy dirt base */}
     <rect width="100" height="100" fill={`url(#fg${uid})`} />
-    {/* Grout shadow lines */}
-    <line x1="50" y1="1" x2="50" y2="99" stroke="rgba(80,58,35,0.22)" strokeWidth="2" />
-    <line x1="1" y1="50" x2="99" y2="50" stroke="rgba(80,58,35,0.22)" strokeWidth="2" />
-    {/* Each quadrant tile: top-left highlight, bottom-right subtle shadow */}
-    <rect x="3" y="3" width="44" height="44" fill="rgba(255,255,255,0.10)" rx="2" />
-    <rect x="53" y="3" width="44" height="44" fill="rgba(255,255,255,0.07)" rx="2" />
-    <rect x="3" y="53" width="44" height="44" fill="rgba(255,255,255,0.07)" rx="2" />
-    <rect x="53" y="53" width="44" height="44" fill="rgba(0,0,0,0.04)" rx="2" />
-    {/* Faint stone grain marks */}
-    <path d="M10,18 Q18,15 24,19" fill="none" stroke="rgba(100,75,45,0.10)" strokeWidth="1.2" strokeLinecap="round" />
-    <path d="M60,28 Q68,24 74,28" fill="none" stroke="rgba(100,75,45,0.09)" strokeWidth="1" strokeLinecap="round" />
-    <path d="M12,72 Q20,68 26,72" fill="none" stroke="rgba(100,75,45,0.09)" strokeWidth="1" strokeLinecap="round" />
-    <path d="M65,68 Q72,65 77,69" fill="none" stroke="rgba(100,75,45,0.08)" strokeWidth="1" strokeLinecap="round" />
-    <rect width="100" height="100" fill="none" stroke="rgba(80,58,35,0.14)" strokeWidth="1" />
+    {/* Top-light sheen */}
+    <rect width="100" height="100" fill={`url(#fgl${uid})`} />
+    {/* Pebbles — each: outer shadow circle, main pebble, tiny shine */}
+    <circle cx="18" cy="15" r="4.8" fill="rgba(70,35,5,0.20)" />
+    <circle cx="18" cy="15" r="4.0" fill="rgba(155,96,28,0.55)" />
+    <circle cx="17" cy="14" r="1.3" fill="rgba(255,215,120,0.32)" />
+
+    <circle cx="74" cy="22" r="3.8" fill="rgba(70,35,5,0.18)" />
+    <circle cx="74" cy="22" r="3.1" fill="rgba(148,88,22,0.50)" />
+    <circle cx="73.2" cy="21.2" r="1.0" fill="rgba(255,215,120,0.28)" />
+
+    <circle cx="38" cy="56" r="5.2" fill="rgba(70,35,5,0.20)" />
+    <circle cx="38" cy="56" r="4.3" fill="rgba(152,92,24,0.52)" />
+    <circle cx="37" cy="55" r="1.5" fill="rgba(255,215,120,0.30)" />
+
+    <circle cx="84" cy="62" r="4.0" fill="rgba(70,35,5,0.18)" />
+    <circle cx="84" cy="62" r="3.3" fill="rgba(145,85,20,0.50)" />
+    <circle cx="83.2" cy="61.2" r="1.0" fill="rgba(255,215,120,0.26)" />
+
+    <circle cx="58" cy="84" r="4.4" fill="rgba(70,35,5,0.20)" />
+    <circle cx="58" cy="84" r="3.6" fill="rgba(150,90,22,0.52)" />
+    <circle cx="57" cy="83" r="1.2" fill="rgba(255,215,120,0.28)" />
+
+    <circle cx="12" cy="74" r="3.2" fill="rgba(70,35,5,0.16)" />
+    <circle cx="12" cy="74" r="2.6" fill="rgba(140,80,18,0.46)" />
+
+    <circle cx="88" cy="86" r="3.6" fill="rgba(70,35,5,0.16)" />
+    <circle cx="88" cy="86" r="2.9" fill="rgba(142,82,18,0.46)" />
+
+    <circle cx="50" cy="30" r="2.8" fill="rgba(70,35,5,0.15)" />
+    <circle cx="50" cy="30" r="2.2" fill="rgba(136,78,16,0.42)" />
+
+    <circle cx="28" cy="88" r="2.5" fill="rgba(70,35,5,0.14)" />
+    <circle cx="28" cy="88" r="2.0" fill="rgba(134,76,16,0.40)" />
+    {/* Fine dirt-grain arc marks */}
+    <path d="M30,38 Q38,34 44,38" fill="none" stroke="rgba(65,32,4,0.16)" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M62,50 Q68,46 74,50" fill="none" stroke="rgba(65,32,4,0.13)" strokeWidth="1.0" strokeLinecap="round" />
+    <path d="M6,50 Q12,47 18,50"  fill="none" stroke="rgba(65,32,4,0.12)" strokeWidth="1.0" strokeLinecap="round" />
+    <path d="M70,76 Q76,73 82,76" fill="none" stroke="rgba(65,32,4,0.12)" strokeWidth="0.9" strokeLinecap="round" />
+    <path d="M24,92 Q29,89 34,92" fill="none" stroke="rgba(65,32,4,0.11)" strokeWidth="0.9" strokeLinecap="round" />
+    {/* Edge border */}
+    <rect width="100" height="100" fill="none" stroke="rgba(65,32,4,0.20)" strokeWidth="1.5" />
   </svg>
 );
 
@@ -384,35 +418,34 @@ const ArrowBgTile = ({ uid }: { uid: string }) => (
 
 // ─── Player / spawn sprites using dinotoon ────────────────────────────────────
 
-/** Player dino using dinotoon.png — mix-blend-mode:screen drops the black bg */
-const PlayerSprite = ({ rotate }: { rotate?: boolean }) => (
-  <img
-    src={dinotoonUrl}
-    alt="Hero"
-    className="pointer-events-none absolute bottom-[4%] left-1/2 h-[90%] w-[90%] max-w-none object-contain object-bottom"
-    style={{
-      imageRendering: "auto",
-      mixBlendMode: "screen",
-      transform: rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)",
-    }}
-  />
-);
-
-/** Dimmed spawn-marker dino */
-const SpawnMarker = ({ rotate }: { rotate?: boolean }) => (
-  <img
-    src={dinotoonUrl}
-    alt=""
-    aria-hidden
-    className="pointer-events-none absolute bottom-[8%] left-1/2 h-[64%] w-[64%] max-w-none object-contain object-bottom"
-    style={{
-      imageRendering: "auto",
-      mixBlendMode: "screen",
-      opacity: 0.38,
-      transform: rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)",
-    }}
-  />
-);
+/** Player dino — dark oval shadow behind the image so screen-blend keeps strong green */
+const PlayerSprite = ({ rotate }: { rotate?: boolean }) => {
+  const t = rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)";
+  return (
+    <>
+      {/* Dark neutral oval: gives screen-blend a dark base so dino stays saturated */}
+      <div
+        className="pointer-events-none absolute bottom-[4%] left-1/2 h-[90%] w-[90%]"
+        style={{
+          transform: t,
+          background:
+            "radial-gradient(ellipse at 50% 58%, rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.30) 42%, rgba(0,0,0,0) 68%)",
+        }}
+      />
+      <img
+        src={dinotoonUrl}
+        alt="Hero"
+        className="pointer-events-none absolute bottom-[4%] left-1/2 h-[90%] w-[90%] max-w-none object-contain object-bottom"
+        style={{
+          imageRendering: "auto",
+          mixBlendMode: "screen",
+          filter: "saturate(1.5) contrast(1.08)",
+          transform: t,
+        }}
+      />
+    </>
+  );
+};
 
 // ─── Icon tile (keys, locks, hourglass, teleport) ─────────────────────────────
 
@@ -575,12 +608,6 @@ export function GameTop2D({
                   ? 0
                   : displayTileType;
               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
-              const isSpawnMarker =
-                !isPlayer &&
-                effectiveTileType === 18 &&
-                playerStart &&
-                x === playerStart.x &&
-                y === playerStart.y;
 
               const needsUprightIcon =
                 effectiveTileType === 3  ||
@@ -635,7 +662,6 @@ export function GameTop2D({
                     </div>
                   )}
 
-                  {isSpawnMarker && <SpawnMarker rotate={rotateUpright} />}
                   {isPlayer && <PlayerSprite rotate={rotateUpright} />}
                 </div>
               );
