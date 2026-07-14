@@ -24,9 +24,10 @@
         "report:qa": "node scripts/level-qa-report.mjs",
         "seed:hint": "node -e \"console.log('In the app console: const seed = exportLocalStorageSeed(); copy(JSON.stringify(seed,null,2))  -> save as solver-seed.json to make report:solutions match your overrides.')\"",
         "ws:server": "node server/ws-server.mjs",
-        "asset-writer": "node server/asset-writer.mjs",
+        "asset-writer": "node --env-file=.env server/asset-writer.mjs",
         "dev:all": "concurrently -k -n \"front,ws\" -c \"cyan,magenta\" \"npm run dev\" \"npm run ws:server\"",
-        "db:seed": "node scripts/seed-levels-to-db.mjs"
+        "db:seed": "node --env-file=.env scripts/seed-levels-to-db.mjs",
+        "asset-writer:dev": "node --env-file=.env server/asset-writer.mjs"
     },
     "dependencies": {
         "@hookform/resolvers": "^3.10.0",
