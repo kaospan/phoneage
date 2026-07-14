@@ -1316,6 +1316,12 @@ export const PuzzleGame = () => {
             );
             player.pos = { ...outcome.newPlayerPos };
             playersDirty = true;
+            if (sim.grid[player.pos.y]?.[player.pos.x] === TELEPORT_CELL) {
+              player.teleportCycleTicksLeft = TELEPORT_CYCLE_DELAY_TICKS;
+              if (player.isLocal) {
+                pushHudMessage("Teleporting in 2s — move to break free!", 1800);
+              }
+            }
           }
           if (outcome.collectedKey && player.isLocal) {
             pushHudMessage(`${outcome.collectedKey.toUpperCase()} key collected`);
