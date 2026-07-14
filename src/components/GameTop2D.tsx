@@ -448,7 +448,7 @@ const PlayerSprite = ({ rotate }: { rotate?: boolean }) => {
     <>
       {/* Dark neutral oval: gives screen-blend a dark base so dino stays saturated */}
       <div
-        className="pointer-events-none absolute bottom-[4%] left-1/2 h-[90%] w-[90%]"
+        className="pointer-events-none absolute bottom-[3%] left-1/2 h-[140%] w-[140%]"
         style={{
           transform: t,
           background:
@@ -458,7 +458,7 @@ const PlayerSprite = ({ rotate }: { rotate?: boolean }) => {
       <img
         src={dinotoonUrl}
         alt="Hero"
-        className="pointer-events-none absolute bottom-[4%] left-1/2 h-[90%] w-[90%] max-w-none object-contain object-bottom"
+        className="pointer-events-none absolute bottom-[3%] left-1/2 h-[140%] w-[140%] max-w-none object-contain object-bottom"
         style={{
           imageRendering: "auto",
           mixBlendMode: "screen",
