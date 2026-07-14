@@ -3023,7 +3023,12 @@ export const PuzzleGame = () => {
           </div>
         )}
         {hudMessage && !isComplete && !isTimeUp && (
-          <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 -translate-x-1/2 px-4">
+          <div
+            className="pointer-events-none absolute left-1/2 z-40 -translate-x-1/2 px-4"
+            style={{
+              bottom: isMobilePortrait ? `calc(env(safe-area-inset-bottom) + ${BOTTOM_HUD_CLEARANCE_PX}px + 0.75rem)` : '0.75rem',
+            }}
+          >
             <div className="rounded-full border border-white/10 bg-black/55 px-4 py-2 text-sm font-medium text-stone-100 shadow-xl backdrop-blur-md">
               {hudMessage}
             </div>
