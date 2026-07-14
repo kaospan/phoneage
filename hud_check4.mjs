@@ -18,16 +18,7 @@ if (await startBtn.count() > 0) {
   await page.waitForTimeout(1500);
 }
 
-// Cycle the view-mode button until it reads "TOP" (button shows CURRENT mode label)
-for (let i = 0; i < 6; i++) {
-  const label = await page.locator('button:has-text("SPR"), button:has-text("TOP"), button:has-text("3D"), button:has-text("FPS"), button:has-text("2D")').first().innerText().catch(() => '');
-  console.log('current view label:', label);
-  if (label.trim() === 'TOP') break;
-  await page.locator('button:has-text("SPR"), button:has-text("TOP"), button:has-text("3D"), button:has-text("FPS"), button:has-text("2D")').first().click();
-  await page.waitForTimeout(600);
-}
-
-// Zoom out several times to see more of the board (skip if disabled)
+// Default view mode should already be SPR (sprite) — confirm and zoom out to see the cave.
 const zoomOutBtn = page.getByTitle(/Zoom out/);
 for (let i = 0; i < 6; i++) {
   if (await zoomOutBtn.count() > 0) {
@@ -39,6 +30,6 @@ for (let i = 0; i < 6; i++) {
 }
 
 await page.waitForTimeout(500);
-await page.screenshot({ path: 'C:/Users/alonk/AppData/Local/Temp/claude/d--phoneage-phoneage/1dc39d0b-262c-4ea4-a80e-12c0ce8a103e/scratchpad/hud_portrait_top.png' });
+await page.screenshot({ path: 'C:/Users/alonk/AppData/Local/Temp/claude/d--phoneage-phoneage/1dc39d0b-262c-4ea4-a80e-12c0ce8a103e/scratchpad/hud_portrait_sprite.png' });
 
 await browser.close();
