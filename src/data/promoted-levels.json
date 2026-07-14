@@ -255,7 +255,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 95
+    "timeLimitSeconds": 95,
+    "locked": true
   },
   {
     "id": 2,
@@ -513,7 +514,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 118
+    "timeLimitSeconds": 118,
+    "locked": true
   },
   {
     "id": 3,
@@ -771,7 +773,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 87
+    "timeLimitSeconds": 87,
+    "locked": true
   },
   {
     "id": 4,
@@ -1029,7 +1032,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 49
+    "timeLimitSeconds": 49,
+    "locked": true
   },
   {
     "id": 5,
@@ -1286,7 +1290,8 @@
       "y": 8
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 125
+    "timeLimitSeconds": 125,
+    "locked": true
   },
   {
     "id": 6,
@@ -1543,7 +1548,8 @@
       "y": 2
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 124
+    "timeLimitSeconds": 124,
+    "locked": true
   },
   {
     "id": 7,
@@ -1801,7 +1807,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 100
+    "timeLimitSeconds": 100,
+    "locked": true
   },
   {
     "id": 8,
@@ -2058,7 +2065,8 @@
       "y": 6
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 80
+    "timeLimitSeconds": 80,
+    "locked": true
   },
   {
     "id": 9,
@@ -2316,7 +2324,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 130
+    "timeLimitSeconds": 130,
+    "locked": true
   },
   {
     "id": 10,
@@ -2574,7 +2583,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 100
+    "timeLimitSeconds": 100,
+    "locked": true
   },
   {
     "id": 11,
@@ -2831,7 +2841,8 @@
       "y": 4
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 142
+    "timeLimitSeconds": 142,
+    "locked": true
   },
   {
     "id": 12,
@@ -3089,7 +3100,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 125
+    "timeLimitSeconds": 125,
+    "locked": true
   },
   {
     "id": 13,
@@ -3347,7 +3359,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 250
+    "timeLimitSeconds": 250,
+    "locked": true
   },
   {
     "id": 14,
@@ -3608,7 +3621,8 @@
     "timeLimitSeconds": 149,
     "hourglassBonusByCell": {
       "18,9": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 15,
@@ -3866,7 +3880,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 74
+    "timeLimitSeconds": 74,
+    "locked": true
   },
   {
     "id": 16,
@@ -4124,7 +4139,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 194
+    "timeLimitSeconds": 194,
+    "locked": true
   },
   {
     "id": 17,
@@ -4386,7 +4402,8 @@
     "hourglassBonusByCell": {
       "5,8": 50,
       "6,8": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 18,
@@ -4644,7 +4661,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 150
+    "timeLimitSeconds": 150,
+    "locked": true
   },
   {
     "id": 19,
@@ -4902,7 +4920,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 156
+    "timeLimitSeconds": 156,
+    "locked": true
   },
   {
     "id": 20,
@@ -5160,7 +5179,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 480
+    "timeLimitSeconds": 480,
+    "locked": true
   },
   {
     "id": 21,
@@ -5418,7 +5438,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 149
+    "timeLimitSeconds": 149,
+    "locked": true
   },
   {
     "id": 22,
@@ -5676,7 +5697,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 124
+    "timeLimitSeconds": 124,
+    "locked": true
   },
   {
     "id": 23,
@@ -5934,7 +5956,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 36
+    "timeLimitSeconds": 36,
+    "locked": true
   },
   {
     "id": 24,
@@ -6192,7 +6215,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 150
+    "timeLimitSeconds": 150,
+    "locked": true
   },
   {
     "id": 25,
@@ -6450,7 +6474,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 111
+    "timeLimitSeconds": 111,
+    "locked": true
   },
   {
     "id": 26,
@@ -6708,7 +6733,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 293
+    "timeLimitSeconds": 293,
+    "locked": true
   },
   {
     "id": 27,
@@ -6966,7 +6992,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 230
+    "timeLimitSeconds": 230,
+    "locked": true
   },
   {
     "id": 28,
@@ -7224,7 +7251,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 311
+    "timeLimitSeconds": 311,
+    "locked": true
   },
   {
     "id": 29,
@@ -7482,7 +7510,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 236
+    "timeLimitSeconds": 236,
+    "locked": true
   },
   {
     "id": 30,
@@ -7740,7 +7769,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 87
+    "timeLimitSeconds": 87,
+    "locked": true
   },
   {
     "id": 31,
@@ -7998,7 +8028,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 149
+    "timeLimitSeconds": 149,
+    "locked": true
   },
   {
     "id": 32,
@@ -8256,7 +8287,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 249
+    "timeLimitSeconds": 249,
+    "locked": true
   },
   {
     "id": 33,
@@ -8514,7 +8546,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 62
+    "timeLimitSeconds": 62,
+    "locked": true
   },
   {
     "id": 34,
@@ -8772,7 +8805,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 25
+    "timeLimitSeconds": 25,
+    "locked": true
   },
   {
     "id": 35,
@@ -9035,7 +9069,8 @@
       "16,0": 50,
       "19,1": 50,
       "19,2": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 36,
@@ -9293,7 +9328,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 255
+    "timeLimitSeconds": 255,
+    "locked": true
   },
   {
     "id": 37,
@@ -9554,7 +9590,8 @@
     "timeLimitSeconds": 126,
     "hourglassBonusByCell": {
       "1,2": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 38,
@@ -9812,7 +9849,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 255
+    "timeLimitSeconds": 255,
+    "locked": true
   },
   {
     "id": 39,
@@ -10070,7 +10108,8 @@
     },
     "provenance": "user-edited",
     "theme": "slate",
-    "timeLimitSeconds": 250
+    "timeLimitSeconds": 250,
+    "locked": true
   },
   {
     "id": 40,
@@ -10328,7 +10367,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 105
+    "timeLimitSeconds": 105,
+    "locked": true
   },
   {
     "id": 41,
@@ -10585,7 +10625,8 @@
       "y": 5
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 156
+    "timeLimitSeconds": 156,
+    "locked": true
   },
   {
     "id": 42,
@@ -10846,7 +10887,8 @@
     "timeLimitSeconds": 106,
     "hourglassBonusByCell": {
       "12,10": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 43,
@@ -11104,7 +11146,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 311
+    "timeLimitSeconds": 311,
+    "locked": true
   },
   {
     "id": 44,
@@ -11362,7 +11405,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 124
+    "timeLimitSeconds": 124,
+    "locked": true
   },
   {
     "id": 45,
@@ -11620,7 +11664,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 106
+    "timeLimitSeconds": 106,
+    "locked": true
   },
   {
     "id": 46,
@@ -11878,7 +11923,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 118
+    "timeLimitSeconds": 118,
+    "locked": true
   },
   {
     "id": 47,
@@ -12136,7 +12182,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 124
+    "timeLimitSeconds": 124,
+    "locked": true
   },
   {
     "id": 48,
@@ -12394,7 +12441,8 @@
     },
     "provenance": "user-edited",
     "theme": "snow",
-    "timeLimitSeconds": 162
+    "timeLimitSeconds": 162,
+    "locked": true
   },
   {
     "id": 49,
@@ -12652,7 +12700,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 193
+    "timeLimitSeconds": 193,
+    "locked": true
   },
   {
     "id": 50,
@@ -12910,7 +12959,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 126
+    "timeLimitSeconds": 126,
+    "locked": true
   },
   {
     "id": 51,
@@ -13168,7 +13218,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 312
+    "timeLimitSeconds": 312,
+    "locked": true
   },
   {
     "id": 52,
@@ -13426,7 +13477,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 186
+    "timeLimitSeconds": 186,
+    "locked": true
   },
   {
     "id": 53,
@@ -13684,7 +13736,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 243
+    "timeLimitSeconds": 243,
+    "locked": true
   },
   {
     "id": 54,
@@ -13942,7 +13995,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 249
+    "timeLimitSeconds": 249,
+    "locked": true
   },
   {
     "id": 55,
@@ -14200,7 +14254,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 124
+    "timeLimitSeconds": 124,
+    "locked": true
   },
   {
     "id": 56,
@@ -14458,7 +14513,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 199
+    "timeLimitSeconds": 199,
+    "locked": true
   },
   {
     "id": 57,
@@ -14716,7 +14772,8 @@
     },
     "provenance": "user-edited",
     "theme": "snow",
-    "timeLimitSeconds": 174
+    "timeLimitSeconds": 174,
+    "locked": true
   },
   {
     "id": 58,
@@ -14974,7 +15031,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 342
+    "timeLimitSeconds": 342,
+    "locked": true
   },
   {
     "id": 59,
@@ -15232,7 +15290,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 312
+    "timeLimitSeconds": 312,
+    "locked": true
   },
   {
     "id": 60,
@@ -15490,7 +15549,8 @@
     },
     "provenance": "user-edited",
     "theme": "gray",
-    "timeLimitSeconds": 310
+    "timeLimitSeconds": 310,
+    "locked": true
   },
   {
     "id": 61,
@@ -15748,7 +15808,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 292
+    "timeLimitSeconds": 292,
+    "locked": true
   },
   {
     "id": 62,
@@ -16006,7 +16067,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 331
+    "timeLimitSeconds": 331,
+    "locked": true
   },
   {
     "id": 63,
@@ -16264,7 +16326,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 267
+    "timeLimitSeconds": 267,
+    "locked": true
   },
   {
     "id": 64,
@@ -16522,7 +16585,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 75
+    "timeLimitSeconds": 75,
+    "locked": true
   },
   {
     "id": 65,
@@ -16780,7 +16844,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 337
+    "timeLimitSeconds": 337,
+    "locked": true
   },
   {
     "id": 66,
@@ -17038,7 +17103,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 337
+    "timeLimitSeconds": 337,
+    "locked": true
   },
   {
     "id": 67,
@@ -17299,7 +17365,8 @@
     "timeLimitSeconds": 231,
     "hourglassBonusByCell": {
       "2,5": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 68,
@@ -17557,7 +17624,8 @@
     },
     "provenance": "user-edited",
     "theme": "snow",
-    "timeLimitSeconds": 111
+    "timeLimitSeconds": 111,
+    "locked": true
   },
   {
     "id": 69,
@@ -17814,7 +17882,8 @@
       "y": 0
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 255
+    "timeLimitSeconds": 255,
+    "locked": true
   },
   {
     "id": 70,
@@ -18072,7 +18141,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 287
+    "timeLimitSeconds": 287,
+    "locked": true
   },
   {
     "id": 71,
@@ -18330,7 +18400,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 262
+    "timeLimitSeconds": 262,
+    "locked": true
   },
   {
     "id": 72,
@@ -18588,7 +18659,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 349
+    "timeLimitSeconds": 349,
+    "locked": true
   },
   {
     "id": 73,
@@ -18846,7 +18918,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 230
+    "timeLimitSeconds": 230,
+    "locked": true
   },
   {
     "id": 74,
@@ -19104,7 +19177,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 61
+    "timeLimitSeconds": 61,
+    "locked": true
   },
   {
     "id": 75,
@@ -19362,7 +19436,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 367
+    "timeLimitSeconds": 367,
+    "locked": true
   },
   {
     "id": 76,
@@ -19619,7 +19694,8 @@
       "y": 2
     },
     "provenance": "user-edited",
-    "timeLimitSeconds": 180
+    "timeLimitSeconds": 180,
+    "locked": true
   },
   {
     "id": 77,
@@ -19877,7 +19953,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 374
+    "timeLimitSeconds": 374,
+    "locked": true
   },
   {
     "id": 78,
@@ -20135,7 +20212,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 436
+    "timeLimitSeconds": 436,
+    "locked": true
   },
   {
     "id": 79,
@@ -20404,7 +20482,8 @@
       "15,7": 50,
       "15,4": 50,
       "5,6": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 80,
@@ -20662,7 +20741,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 243
+    "timeLimitSeconds": 243,
+    "locked": true
   },
   {
     "id": 81,
@@ -20931,7 +21011,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 561
+    "timeLimitSeconds": 561,
+    "locked": true
   },
   {
     "id": 82,
@@ -21189,7 +21270,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 136
+    "timeLimitSeconds": 136,
+    "locked": true
   },
   {
     "id": 83,
@@ -21447,7 +21529,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 311
+    "timeLimitSeconds": 311,
+    "locked": true
   },
   {
     "id": 84,
@@ -21705,7 +21788,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 374
+    "timeLimitSeconds": 374,
+    "locked": true
   },
   {
     "id": 85,
@@ -21963,7 +22047,8 @@
     },
     "provenance": "user-edited",
     "theme": "default",
-    "timeLimitSeconds": 867
+    "timeLimitSeconds": 867,
+    "locked": true
   },
   {
     "id": 86,
@@ -22221,7 +22306,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 837
+    "timeLimitSeconds": 837,
+    "locked": true
   },
   {
     "id": 87,
@@ -22479,7 +22565,8 @@
     },
     "provenance": "user-edited",
     "theme": "forest",
-    "timeLimitSeconds": 37
+    "timeLimitSeconds": 37,
+    "locked": true
   },
   {
     "id": 88,
@@ -22737,7 +22824,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 567
+    "timeLimitSeconds": 567,
+    "locked": true
   },
   {
     "id": 89,
@@ -22995,7 +23083,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 424
+    "timeLimitSeconds": 424,
+    "locked": true
   },
   {
     "id": 100,

@@ -175,13 +175,20 @@ const server = http.createServer(async (req, res) => {
       // treat as empty
     }
 
+    const force = parsed.query.force === '1' || parsed.query.force === 'true';
     const idx = existing.findIndex((e) => e && typeof e === 'object' && Number(e.id) === id);
     if (idx !== -1 && !overwrite) {
       send(res, 409, { ok: false, error: `Refusing to overwrite existing default for level ${id}` });
       return;
     }
+    if (idx !== -1 && existing[idx].locked && !force) {
+      send(res, 423, { ok: false, error: `Level ${id} is locked. Pass ?force=1 to override.` });
+      return;
+    }
 
+    const prevLocked = idx !== -1 ? existing[idx].locked : undefined;
     const nextEntry = { id, ...body };
+    if (prevLocked) nextEntry.locked = true;
     if (idx === -1) existing.push(nextEntry);
     else existing[idx] = nextEntry;
 
