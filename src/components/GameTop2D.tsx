@@ -130,8 +130,8 @@ const BreakableRockTile = ({ uid }: { uid: string }) => (
 );
 
 /** Cave entrance — dramatic dark archway with glowing depth */
-const CaveTile = ({ uid, isStart = false }: { uid: string; isStart?: boolean }) => (
-  <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
+const CaveTile = ({ uid, isStart = false, rotate }: { uid: string; isStart?: boolean; rotate?: boolean }) => (
+  <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block", transform: rotate ? "rotate(90deg)" : undefined }}>
     <defs>
       <linearGradient id={`cvf${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#524030" />
@@ -548,8 +548,8 @@ export function GameTop2D({
                   case 6:  return <BreakableRockTile uid={uid} />;
                   case 1:  return <FireTile uid={uid} />;
                   case 4:  return <WaterTile uid={uid} />;
-                  case 3:  return <CaveTile uid={uid} isStart={false} />;
-                  case 18: return <CaveTile uid={uid} isStart />;
+                  case 3:  return <CaveTile uid={uid} isStart={false} rotate={rotateUpright} />;
+                  case 18: return <CaveTile uid={uid} isStart rotate={rotateUpright} />;
                   case 14: return <IconTile uid={uid} iconUrl={redKeyUrl}    bgColor="rgba(200,30,30,0.20)"   rotate={rotateUpright && needsUprightIcon} />;
                   case 15: return <IconTile uid={uid} iconUrl={greenKeyUrl}  bgColor="rgba(20,160,70,0.20)"   rotate={rotateUpright && needsUprightIcon} />;
                   case 16: return <IconTile uid={uid} iconUrl={redLockUrl}   bgColor="rgba(130,10,10,0.88)"   rotate={rotateUpright && needsUprightIcon} />;
