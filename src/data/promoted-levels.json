@@ -23253,7 +23253,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 312
+    "timeLimitSeconds": 312,
+    "locked": true
   },
   {
     "id": 91,
@@ -23511,7 +23512,8 @@
     },
     "provenance": "user-edited",
     "theme": "neon",
-    "timeLimitSeconds": 50
+    "timeLimitSeconds": 50,
+    "locked": true
   },
   {
     "id": 92,
@@ -23773,7 +23775,8 @@
     "hourglassBonusByCell": {
       "13,2": 50,
       "9,8": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 93,
@@ -24031,7 +24034,8 @@
     },
     "provenance": "user-edited",
     "theme": "snow",
-    "timeLimitSeconds": 580
+    "timeLimitSeconds": 580,
+    "locked": true
   },
   {
     "id": 94,
@@ -24289,7 +24293,8 @@
     },
     "provenance": "user-edited",
     "theme": "ocean",
-    "timeLimitSeconds": 124
+    "timeLimitSeconds": 124,
+    "locked": true
   },
   {
     "id": 95,
@@ -24547,7 +24552,8 @@
     },
     "provenance": "user-edited",
     "theme": "sunset",
-    "timeLimitSeconds": 893
+    "timeLimitSeconds": 893,
+    "locked": true
   },
   {
     "id": 96,
@@ -24805,7 +24811,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 106
+    "timeLimitSeconds": 106,
+    "locked": true
   },
   {
     "id": 97,
@@ -25063,7 +25070,8 @@
     },
     "provenance": "user-edited",
     "theme": "crystal",
-    "timeLimitSeconds": 1061
+    "timeLimitSeconds": 1061,
+    "locked": true
   },
   {
     "id": 98,
@@ -25321,7 +25329,8 @@
     },
     "provenance": "user-edited",
     "theme": "lava",
-    "timeLimitSeconds": 1242
+    "timeLimitSeconds": 1242,
+    "locked": true
   },
   {
     "id": 99,
@@ -25584,7 +25593,8 @@
       "1,10": 50,
       "0,10": 50,
       "6,1": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 100,
@@ -25849,7 +25859,8 @@
       "12,0": 50,
       "14,0": 50,
       "6,3": 50
-    }
+    },
+    "locked": true
   },
   {
     "id": 101,
