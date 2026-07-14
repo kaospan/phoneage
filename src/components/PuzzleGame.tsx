@@ -2041,6 +2041,128 @@ export const PuzzleGame = () => {
       />
     );
 
+    const secondaryHudButtons = (
+      <>
+        <Button
+          onClick={resetLevel}
+          variant="outline"
+          size="sm"
+          disabled={isComplete || localPlayer?.isGliding}
+          className="h-9 w-9 p-0 text-base font-semibold hover:bg-primary/20"
+          title="Restart level (R)"
+        >
+          ↻
+        </Button>
+
+        {campaignDialog}
+
+        <Button
+          onClick={() => {
+            setIsMiniMapVisible((v) => {
+              if (miniMapDismissTimerRef.current != null) window.clearTimeout(miniMapDismissTimerRef.current);
+              if (!v) miniMapDismissTimerRef.current = window.setTimeout(() => setIsMiniMapVisible(false), 3000);
+              return !v;
+            });
+          }}
+          variant="ghost"
+          size="sm"
+          className={[
+            "h-9 w-9 p-0 hover:bg-primary/20",
+            (isMiniMapVisible || isMiniMapGestureActive) ? "text-primary bg-primary/10" : "",
+          ].join(" ")}
+          title="Toggle level overview"
+          aria-pressed={isMiniMapVisible || isMiniMapGestureActive}
+        >
+          <MapIcon className="h-4 w-4" />
+        </Button>
+
+        <Button
+          onClick={() => {
+            setUserZoomTouched(true);
+            setCameraZoomIndex((i) => Math.max(fitToWidthZoomIndex, i - 1));
+          }}
+          variant="ghost"
+          size="sm"
+          className="h-9 w-9 p-0 text-base hover:bg-primary/20"
+          title={`Zoom out (${cameraZoomPercent}%)`}
+          disabled={!canZoomOut}
+        >
+          −
+        </Button>
+
+        <Button
+          onClick={() => {
+            setUserZoomTouched(true);
+            setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
+          }}
+          variant="ghost"
+          size="sm"
+          className="h-9 w-9 p-0 text-base hover:bg-primary/20"
+          title={`Zoom in (${cameraZoomPercent}%)`}
+          disabled={!canZoomIn}
+        >
+          +
+        </Button>
+
+        <Button
+          onClick={() => {
+            setViewMode(nextViewMode);
+            setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
+            setUserZoomTouched(false);
+            setCameraOffset({ x: 0, z: 0 });
+          }}
+          variant="ghost"
+          size="sm"
+          className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
+          title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
+        >
+          {VIEW_MODE_LABELS[viewMode]}
+        </Button>
+
+        {isMobile && (
+          <Button
+            onClick={() => setShowThumbstick((v) => !v)}
+            variant="ghost"
+            size="sm"
+            className={[
+              "h-9 w-9 p-0 text-base hover:bg-primary/20",
+              showThumbstick ? "text-primary bg-primary/10" : "",
+            ].join(" ")}
+            title={showThumbstick ? "Hide thumbstick" : "Show thumbstick"}
+            aria-pressed={showThumbstick}
+          >
+            🕹
+          </Button>
+        )}
+
+        <Button
+          onClick={() => void toggleFullscreenMode()}
+          variant="ghost"
+          size="sm"
+          className="h-9 px-2 text-base font-bold hover:bg-primary/20"
+          title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
+          aria-pressed={isFullscreenMode}
+        >
+          ⛶
+        </Button>
+
+        {!isFullscreenMode && (cameraOffset.x !== 0 || cameraOffset.z !== 0) && (
+          <Button
+            onClick={() => {
+              setCameraOffset({ x: 0, z: 0 });
+              pushHudMessage("View reset");
+            }}
+            variant="ghost"
+            size="sm"
+            className="h-9 px-2 text-xs hover:bg-primary/20"
+            title="Reset camera view (double-click game area)"
+          >
+            ⟲
+          </Button>
+        )}
+      </>
+    );
+
     if (!hasStartedGame) {
       return (
         <div className="relative flex h-[100svh] w-full items-center justify-center overflow-hidden bg-[#080b08] px-5 py-6">
@@ -2373,8 +2495,13 @@ export const PuzzleGame = () => {
             className="relative z-50 flex w-full items-start justify-between px-2"
             style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)' }}
           >
-            {/* Left HUD cluster */}
-            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-2 py-1.5 max-w-[calc(50vw-12px)] overflow-x-auto">
+            {/* Left HUD cluster (full-width in mobile portrait, since secondary controls move to the bottom HUD bar) */}
+            <div
+              className={[
+                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-2 py-1.5 overflow-x-auto",
+                isMobilePortrait ? "max-w-[calc(100vw-16px)]" : "max-w-[calc(50vw-12px)]",
+              ].join(" ")}
+            >
               <Button
                 onClick={() => {
                   if (currentLevelIndex > 0 && goToLevelIndex(currentLevelIndex - 1)) pushHudMessage("Previous level");
@@ -2464,126 +2591,12 @@ export const PuzzleGame = () => {
               </Button>
             </div>
 
-            {/* Right HUD cluster */}
-            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-[calc(50vw-8px)] overflow-x-auto">
-              <Button
-                onClick={resetLevel}
-                variant="outline"
-                size="sm"
-                disabled={isComplete || localPlayer?.isGliding}
-                className="h-9 w-9 p-0 text-base font-semibold hover:bg-primary/20"
-                title="Restart level (R)"
-              >
-                ↻
-              </Button>
-
-              {campaignDialog}
-
-              <Button
-                onClick={() => {
-                  setIsMiniMapVisible((v) => {
-                    if (miniMapDismissTimerRef.current != null) window.clearTimeout(miniMapDismissTimerRef.current);
-                    if (!v) miniMapDismissTimerRef.current = window.setTimeout(() => setIsMiniMapVisible(false), 3000);
-                    return !v;
-                  });
-                }}
-                variant="ghost"
-                size="sm"
-                className={[
-                  "h-9 w-9 p-0 hover:bg-primary/20",
-                  (isMiniMapVisible || isMiniMapGestureActive) ? "text-primary bg-primary/10" : "",
-                ].join(" ")}
-                title="Toggle level overview"
-                aria-pressed={isMiniMapVisible || isMiniMapGestureActive}
-              >
-                <MapIcon className="h-4 w-4" />
-              </Button>
-
-                <Button
-                  onClick={() => {
-                    setUserZoomTouched(true);
-                    setCameraZoomIndex((i) => Math.max(fitToWidthZoomIndex, i - 1));
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 w-9 p-0 text-base hover:bg-primary/20"
-                title={`Zoom out (${cameraZoomPercent}%)`}
-                disabled={!canZoomOut}
-              >
-                −
-              </Button>
-
-                <Button
-                  onClick={() => {
-                    setUserZoomTouched(true);
-                    setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1));
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 w-9 p-0 text-base hover:bg-primary/20"
-                title={`Zoom in (${cameraZoomPercent}%)`}
-                disabled={!canZoomIn}
-              >
-                +
-              </Button>
-
-                <Button
-                  onClick={() => {
-                    setViewMode(nextViewMode);
-                    setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
-                    setUserZoomTouched(false);
-                    setCameraOffset({ x: 0, z: 0 });
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
-                title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
-              >
-                {VIEW_MODE_LABELS[viewMode]}
-              </Button>
-
-                {isMobile && (
-                  <Button
-                    onClick={() => setShowThumbstick((v) => !v)}
-                    variant="ghost"
-                    size="sm"
-                    className={[
-                      "h-9 w-9 p-0 text-base hover:bg-primary/20",
-                      showThumbstick ? "text-primary bg-primary/10" : "",
-                    ].join(" ")}
-                    title={showThumbstick ? "Hide thumbstick" : "Show thumbstick"}
-                    aria-pressed={showThumbstick}
-                  >
-                    🕹
-                  </Button>
-                )}
-
-                <Button
-                  onClick={() => void toggleFullscreenMode()}
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 px-2 text-base font-bold hover:bg-primary/20"
-                title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
-                aria-pressed={isFullscreenMode}
-              >
-                ⛶
-              </Button>
-
-              {!isFullscreenMode && (cameraOffset.x !== 0 || cameraOffset.z !== 0) && (
-                <Button
-                  onClick={() => {
-                    setCameraOffset({ x: 0, z: 0 });
-                    pushHudMessage("View reset");
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 px-2 text-xs hover:bg-primary/20"
-                  title="Reset camera view (double-click game area)"
-                >
-                  ⟲
-                </Button>
-              )}
-            </div>
+            {/* Right HUD cluster — hidden in mobile portrait, where these controls live in the bottom HUD bar instead */}
+            {!isMobilePortrait && (
+              <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-[calc(50vw-8px)] overflow-x-auto">
+                {secondaryHudButtons}
+              </div>
+            )}
           </div>
         ) : (
           <div
@@ -2740,6 +2753,16 @@ export const PuzzleGame = () => {
                   </Button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        {useSplitHud && isMobilePortrait && (
+          <div
+            className="fixed inset-x-2 z-50 flex justify-center"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.25rem)' }}
+          >
+            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-full overflow-x-auto">
+              {secondaryHudButtons}
             </div>
           </div>
         )}
