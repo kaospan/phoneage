@@ -124,6 +124,8 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
 };
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
+/** Height reserved for the secondary bottom HUD bar shown in mobile portrait, so overlapping controls (e.g. the thumbstick) can clear it. */
+const BOTTOM_HUD_CLEARANCE_PX = 60;
 
 const distanceBetweenTouches = (t1: Touch, t2: Touch) =>
   Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -2093,7 +2095,12 @@ export const PuzzleGame = () => {
           targetRef={gestureSurfaceRef}
         />
         {isMobile && showThumbstick && (
-          <Thumbstick onMove={queueMove} disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart} opacity={0.55} />
+          <Thumbstick
+            onMove={queueMove}
+            disabled={isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart}
+            opacity={0.55}
+            liftPx={isMobilePortrait ? BOTTOM_HUD_CLEARANCE_PX : 0}
+          />
         )}
 
         {desktopShellActive && (

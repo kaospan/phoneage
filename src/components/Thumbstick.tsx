@@ -4,9 +4,11 @@ interface ThumbstickProps {
     onMove: (dx: number, dy: number) => void;
     disabled?: boolean;
     opacity?: number;
+    /** Extra px to lift the stick above its default resting spot (e.g. to clear a bottom HUD bar). */
+    liftPx?: number;
 }
 
-export const Thumbstick = ({ onMove, disabled, opacity = 1 }: ThumbstickProps) => {
+export const Thumbstick = ({ onMove, disabled, opacity = 1, liftPx = 0 }: ThumbstickProps) => {
     const [active, setActive] = useState(false);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const baseRef = useRef<HTMLDivElement>(null);
@@ -166,7 +168,7 @@ export const Thumbstick = ({ onMove, disabled, opacity = 1 }: ThumbstickProps) =
     return (
         <div
             className="fixed left-4 z-50"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1rem)', opacity }}
+            style={{ bottom: `calc(env(safe-area-inset-bottom) + 1rem + ${liftPx}px)`, opacity }}
         >
             <div
                 ref={baseRef}
