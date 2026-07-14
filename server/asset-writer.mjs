@@ -5,6 +5,41 @@ import url from 'node:url';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 
+// ── Supabase integration ──────────────────────────────────────────────────────
+// Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment (.env or shell).
+// The service-role key bypasses RLS so the server can write freely.
+const SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/$/, '') ?? null;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
+
+/**
+ * Upsert a single level row into Supabase.
+ * Silently skips if env vars are not set (local dev without DB is still fine).
+ */
+async function upsertLevelToDb(entry) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return { ok: false, reason: 'no Supabase env vars — skipping DB write' };
+  }
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/levels`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify({ ...entry, updated_at: new Date().toISOString() }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      return { ok: false, status: resp.status, error: txt };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err?.message ?? String(err) };
+  }
+}
+
 const send = (res, status, obj) => {
   const body = JSON.stringify(obj);
   res.writeHead(status, {
@@ -153,6 +188,22 @@ const server = http.createServer(async (req, res) => {
     existing.sort((a, b) => Number(a.id) - Number(b.id));
     await fs.mkdir(path.dirname(outPath), { recursive: true });
     await fs.writeFile(outPath, `${JSON.stringify(existing, null, 2)}\n`, 'utf8');
+
+    // Mirror to Supabase — runs concurrently, does not block the response.
+    const dbEntry = {
+      id,
+      grid,
+      player_start: playerStart,
+      cave_pos: cavePos,
+      theme: body.theme ?? null,
+      time_limit_seconds: body.timeLimitSeconds ?? null,
+      hourglass_bonus_by_cell: body.hourglassBonusByCell ?? null,
+      provenance: body.provenance ?? null,
+    };
+    upsertLevelToDb(dbEntry).then((dbResult) => {
+      if (!dbResult.ok) console.warn(`[supabase] level ${id}: ${dbResult.reason ?? dbResult.error}`);
+      else console.log(`[supabase] level ${id} upserted`);
+    });
 
     send(res, 200, { ok: true, path: outPath, levelId: id });
   } catch (err) {
