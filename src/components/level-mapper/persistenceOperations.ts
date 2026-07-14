@@ -251,6 +251,11 @@ export const loadLevelImageScale = (levelId: number): LevelImageScale | null => 
                 ? yRaw / Math.max(1e-6, OVERLAY_IMAGE_SCALE_Y_BASE)
                 : normalizeOverlayUserScaleY(yRaw, storedBaseY);
 
+        // Entries saved before v6 (the factory-defaults era) with y close to the old
+        // uncalibrated default (≤93.5%) are treated as never explicitly set. Return null
+        // so the caller falls back to the factory calibration (1.0 = 100%).
+        if (v < 6 && y <= 0.935) return null;
+
         return {
             x,
             y,

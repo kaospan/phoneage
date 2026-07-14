@@ -110,6 +110,32 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         // Don't switch tabs - stay on capture tab
     };
 
+    // Expose a console helper for exporting current calibrations as a factory-defaults snippet.
+    useEffect(() => {
+        const w = window as Window & typeof globalThis & { __mapperExportCalibrations?: () => void };
+        w.__mapperExportCalibrations = () => {
+            const entries: Record<number, { imageScaleX: number; imageScaleY: number }> = {};
+            for (let id = 1; id <= 200; id++) {
+                const raw = localStorage.getItem(`level_mapper_image_scale_${id}`);
+                if (raw) {
+                    try {
+                        const p = JSON.parse(raw) as { x?: number; y?: number; v?: number; baseY?: number };
+                        if (p && typeof p.y === 'number' && Math.abs(p.y - 1) > 0.005) {
+                            entries[id] = { imageScaleX: p.x ?? 1, imageScaleY: p.y };
+                        }
+                    } catch { /* ignore */ }
+                }
+            }
+            const lines = Object.entries(entries).map(([id, cal]) =>
+                `  ${id}: { imageScaleX: ${cal.imageScaleX}, imageScaleY: ${cal.imageScaleY} },`
+            ).join('\n');
+            const snippet = `// Paste into MAPPER_FACTORY_CALIBRATIONS in src/data/mapperFactoryDefaults.ts:\n${lines || '  // (no non-default calibrations found)'}`;
+            console.log(snippet);
+            try { navigator.clipboard.writeText(snippet); console.log('✅ Copied to clipboard'); } catch { /* ignore */ }
+        };
+        return () => { delete w.__mapperExportCalibrations; };
+    }, []);
+
     // Per-image measurement: estimate the cell size (px) and how many cell-widths fit across/down.
     // This is intentionally fast and only needs floor-tile regularity, not full tile classification.
     useEffect(() => {
