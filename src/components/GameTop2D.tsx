@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isArrowCell } from "@/game/arrows";
 import { buildGoalCaveKeySet } from "@/game/caves";
-import playerSpriteUrl from "@/assets/dino.png";
+import dinotoonUrl from "@/assets/dinotoon.png";
 import {
   createKeyIconDataUrl,
   createLockIconDataUrl,
@@ -33,182 +33,232 @@ interface GameTop2DProps {
 
 const SPRITE_ZOOM_BASELINE_FACTOR = 0.66;
 
-// ─── SVG Tile Components ────────────────────────────────────────────────────
+// ─── Tile Components ─────────────────────────────────────────────────────────
 
 const VoidTile = () => (
-  <div className="w-full h-full" style={{ background: "#000" }} />
+  <div className="w-full h-full" style={{ background: "#060508" }} />
 );
 
+/** Clean stone floor — warm cream with refined 2×2 tile pattern */
 const FloorTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`fg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#D2C4A6" />
-        <stop offset="100%" stopColor="#BBA88A" />
+        <stop offset="0%" stopColor="#DDD0B4" />
+        <stop offset="50%" stopColor="#C9B99A" />
+        <stop offset="100%" stopColor="#B8A688" />
       </linearGradient>
     </defs>
     <rect width="100" height="100" fill={`url(#fg${uid})`} />
-    {/* 2×2 sub-tile grout lines */}
-    <line x1="50" y1="1" x2="50" y2="99" stroke="rgba(90,68,45,0.18)" strokeWidth="1.5" />
-    <line x1="1" y1="50" x2="99" y2="50" stroke="rgba(90,68,45,0.18)" strokeWidth="1.5" />
-    {/* Subtle highlights per quadrant */}
-    <rect x="2" y="2" width="46" height="46" fill="rgba(255,255,255,0.08)" rx="1" />
-    <rect x="52" y="52" width="46" height="46" fill="rgba(0,0,0,0.04)" rx="1" />
-    <rect width="100" height="100" fill="none" stroke="rgba(90,68,45,0.12)" strokeWidth="1" />
+    {/* Grout shadow lines */}
+    <line x1="50" y1="1" x2="50" y2="99" stroke="rgba(80,58,35,0.22)" strokeWidth="2" />
+    <line x1="1" y1="50" x2="99" y2="50" stroke="rgba(80,58,35,0.22)" strokeWidth="2" />
+    {/* Each quadrant tile: top-left highlight, bottom-right subtle shadow */}
+    <rect x="3" y="3" width="44" height="44" fill="rgba(255,255,255,0.10)" rx="2" />
+    <rect x="53" y="3" width="44" height="44" fill="rgba(255,255,255,0.07)" rx="2" />
+    <rect x="3" y="53" width="44" height="44" fill="rgba(255,255,255,0.07)" rx="2" />
+    <rect x="53" y="53" width="44" height="44" fill="rgba(0,0,0,0.04)" rx="2" />
+    {/* Faint stone grain marks */}
+    <path d="M10,18 Q18,15 24,19" fill="none" stroke="rgba(100,75,45,0.10)" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M60,28 Q68,24 74,28" fill="none" stroke="rgba(100,75,45,0.09)" strokeWidth="1" strokeLinecap="round" />
+    <path d="M12,72 Q20,68 26,72" fill="none" stroke="rgba(100,75,45,0.09)" strokeWidth="1" strokeLinecap="round" />
+    <path d="M65,68 Q72,65 77,69" fill="none" stroke="rgba(100,75,45,0.08)" strokeWidth="1" strokeLinecap="round" />
+    <rect width="100" height="100" fill="none" stroke="rgba(80,58,35,0.14)" strokeWidth="1" />
   </svg>
 );
 
+/** Solid stone wall — cool dark slate with clear multi-block look */
 const StoneTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
-      <linearGradient id={`sg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#6A5342" />
-        <stop offset="100%" stopColor="#3C2B1C" />
+      <linearGradient id={`sg${uid}`} x1="0%" y1="10%" x2="100%" y2="90%">
+        <stop offset="0%" stopColor="#5E5048" />
+        <stop offset="45%" stopColor="#46392D" />
+        <stop offset="100%" stopColor="#2E2018" />
       </linearGradient>
     </defs>
     <rect width="100" height="100" fill={`url(#sg${uid})`} />
-    {/* Bevel: top+left highlight */}
-    <polygon points="0,0 100,0 88,11 12,11" fill="rgba(255,255,255,0.13)" />
-    <polygon points="0,0 11,12 11,88 0,100" fill="rgba(255,255,255,0.09)" />
-    {/* Bevel: bottom+right shadow */}
-    <polygon points="100,100 0,100 12,89 88,89" fill="rgba(0,0,0,0.30)" />
-    <polygon points="100,100 100,0 89,12 89,88" fill="rgba(0,0,0,0.22)" />
-    {/* Stone texture patches */}
-    <path d="M22,32 Q33,22 42,30 Q46,36 36,40 Q24,41 22,32Z" fill="rgba(255,255,255,0.07)" />
-    <path d="M58,55 Q70,47 77,57 Q79,65 67,68 Q56,67 58,55Z" fill="rgba(0,0,0,0.11)" />
-    <path d="M28,65 Q38,59 44,66 Q46,73 38,75 Q29,74 28,65Z" fill="rgba(255,255,255,0.05)" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.38)" strokeWidth="1.5" />
+    {/* Top-left face highlight */}
+    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.14)" />
+    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.09)" />
+    {/* Bottom-right cast shadow */}
+    <polygon points="100,100 0,100 14,87 86,87" fill="rgba(0,0,0,0.34)" />
+    <polygon points="100,100 100,0 87,14 87,86" fill="rgba(0,0,0,0.24)" />
+    {/* Mortar lines suggesting two stones stacked */}
+    <line x1="14" y1="52" x2="86" y2="52" stroke="rgba(0,0,0,0.30)" strokeWidth="2" />
+    <line x1="14" y1="50" x2="86" y2="50" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+    {/* Stone grain: upper block */}
+    <path d="M20,25 Q32,18 42,26 Q46,31 34,35 Q22,36 20,25Z" fill="rgba(255,255,255,0.06)" />
+    <path d="M58,30 Q68,24 76,31 Q78,38 68,40 Q58,40 58,30Z" fill="rgba(0,0,0,0.09)" />
+    {/* Stone grain: lower block */}
+    <path d="M22,65 Q33,59 42,65 Q44,72 35,74 Q23,73 22,65Z" fill="rgba(255,255,255,0.05)" />
+    <path d="M55,68 Q66,63 74,68 Q76,75 66,77 Q55,77 55,68Z" fill="rgba(0,0,0,0.08)" />
+    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.42)" strokeWidth="1.5" />
   </svg>
 );
 
+/** Breakable rock — warmer, clearly cracked, distinct from solid stone */
 const BreakableRockTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`brg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#9B7A54" />
-        <stop offset="100%" stopColor="#6B4E2E" />
+        <stop offset="0%" stopColor="#A88050" />
+        <stop offset="50%" stopColor="#8A6238" />
+        <stop offset="100%" stopColor="#62421E" />
       </linearGradient>
     </defs>
     <rect width="100" height="100" fill={`url(#brg${uid})`} />
-    {/* Bevel highlights */}
-    <polygon points="0,0 100,0 88,11 12,11" fill="rgba(255,255,255,0.11)" />
-    <polygon points="0,0 11,12 11,88 0,100" fill="rgba(255,255,255,0.07)" />
-    <polygon points="100,100 0,100 12,89 88,89" fill="rgba(0,0,0,0.25)" />
-    <polygon points="100,100 100,0 89,12 89,88" fill="rgba(0,0,0,0.18)" />
-    {/* Crack lines radiating from center */}
-    <line x1="50" y1="50" x2="33" y2="14" stroke="rgba(20,10,4,0.88)" strokeWidth="2.2" strokeLinecap="round" />
-    <line x1="50" y1="50" x2="80" y2="22" stroke="rgba(20,10,4,0.82)" strokeWidth="1.6" strokeLinecap="round" />
-    <line x1="50" y1="50" x2="85" y2="66" stroke="rgba(20,10,4,0.90)" strokeWidth="2.0" strokeLinecap="round" />
-    <line x1="50" y1="50" x2="55" y2="88" stroke="rgba(20,10,4,0.80)" strokeWidth="1.6" strokeLinecap="round" />
-    <line x1="50" y1="50" x2="16" y2="78" stroke="rgba(20,10,4,0.85)" strokeWidth="1.9" strokeLinecap="round" />
-    <line x1="50" y1="50" x2="18" y2="36" stroke="rgba(20,10,4,0.75)" strokeWidth="1.3" strokeLinecap="round" />
-    {/* Crack edge highlights (lighter side) */}
-    <line x1="50" y1="50" x2="33" y2="14" stroke="rgba(255,230,180,0.22)" strokeWidth="0.8" strokeLinecap="round" />
-    <line x1="50" y1="50" x2="85" y2="66" stroke="rgba(255,230,180,0.18)" strokeWidth="0.7" strokeLinecap="round" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="1.5" />
+    {/* Bevel */}
+    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.12)" />
+    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.08)" />
+    <polygon points="100,100 0,100 14,87 86,87" fill="rgba(0,0,0,0.28)" />
+    <polygon points="100,100 100,0 87,14 87,86" fill="rgba(0,0,0,0.20)" />
+    {/* Impact centre — dark pit */}
+    <circle cx="50" cy="50" r="5" fill="rgba(0,0,0,0.35)" />
+    {/* Crack lines — zigzag for realism */}
+    <polyline points="50,50 45,38 38,28 30,14" fill="none" stroke="rgba(15,8,2,0.92)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points="50,50 62,44 75,30 86,18" fill="none" stroke="rgba(15,8,2,0.85)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points="50,50 60,58 74,64 88,70" fill="none" stroke="rgba(15,8,2,0.92)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points="50,50 52,66 56,78 54,92" fill="none" stroke="rgba(15,8,2,0.80)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points="50,50 36,58 22,70 14,82" fill="none" stroke="rgba(15,8,2,0.88)" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points="50,50 38,44 28,36 18,32" fill="none" stroke="rgba(15,8,2,0.75)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    {/* Crack bright edge — light catching the split */}
+    <polyline points="50,50 45,38 38,28 30,14" fill="none" stroke="rgba(255,220,150,0.25)" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points="50,50 60,58 74,64 88,70" fill="none" stroke="rgba(255,220,150,0.22)" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
+    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="1.5" />
   </svg>
 );
 
+/** Cave entrance — dramatic dark archway with glowing depth */
 const CaveTile = ({ uid, isStart = false }: { uid: string; isStart?: boolean }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`cvf${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#5A4835" />
-        <stop offset="100%" stopColor="#38281A" />
+        <stop offset="0%" stopColor="#524030" />
+        <stop offset="100%" stopColor="#302014" />
       </linearGradient>
-      <radialGradient id={`cvd${uid}`} cx="50%" cy="75%" r="65%">
-        <stop offset="0%" stopColor={isStart ? "#2C1E0E" : "#0A0705"} />
-        <stop offset="80%" stopColor="#000000" />
+      <radialGradient id={`cvd${uid}`} cx="50%" cy="60%" r="70%">
+        <stop offset="0%" stopColor={isStart ? "#1E1408" : "#08060A"} />
+        <stop offset="60%" stopColor={isStart ? "#0E0A06" : "#040308"} />
+        <stop offset="100%" stopColor="#000000" />
       </radialGradient>
-      {isStart && (
-        <radialGradient id={`cvgl${uid}`} cx="50%" cy="90%" r="55%">
-          <stop offset="0%" stopColor="rgba(200,160,60,0.18)" />
-          <stop offset="100%" stopColor="rgba(200,160,60,0)" />
-        </radialGradient>
-      )}
+      <radialGradient id={`cvglow${uid}`} cx="50%" cy="100%" r="60%">
+        <stop offset="0%" stopColor={isStart ? "rgba(220,170,60,0.22)" : "rgba(80,40,120,0.18)"} />
+        <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+      </radialGradient>
     </defs>
-    {/* Rocky frame */}
+    {/* Rocky outer frame */}
     <rect width="100" height="100" fill={`url(#cvf${uid})`} />
-    {/* Dark arch void */}
-    <path d="M17,100 L17,50 Q17,12 50,12 Q83,12 83,50 L83,100 Z" fill={`url(#cvd${uid})`} />
-    {/* Stone arch rim */}
-    <path d="M17,50 Q17,12 50,12 Q83,12 83,50" fill="none" stroke="#8B7055" strokeWidth="3.5" />
-    {/* Inner depth layer */}
-    <path d="M24,100 L24,52 Q24,24 50,24 Q76,24 76,52 L76,100 Z" fill="rgba(0,0,0,0.32)" />
-    {/* Frame texture */}
-    <path d="M5,28 Q13,22 19,28 Q21,35 14,37 Q5,36 5,28Z" fill="rgba(255,255,255,0.07)" />
-    <path d="M81,42 Q89,36 97,42 Q99,49 93,51 Q83,50 81,42Z" fill="rgba(255,255,255,0.06)" />
-    <path d="M5,58 Q12,52 18,57 Q20,64 13,66 Q5,65 5,58Z" fill="rgba(0,0,0,0.12)" />
-    <path d="M82,62 Q90,57 97,62 Q99,69 93,71 Q83,70 82,62Z" fill="rgba(0,0,0,0.10)" />
-    {/* Warm glow at entrance base (start cave only) */}
-    {isStart && <ellipse cx="50" cy="92" rx="24" ry="9" fill={`url(#cvgl${uid})`} />}
-    {/* Outer bevel */}
-    <polygon points="0,0 100,0 88,11 12,11" fill="rgba(255,255,255,0.08)" />
-    <polygon points="0,0 11,12 11,88 0,100" fill="rgba(255,255,255,0.06)" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.38)" strokeWidth="1.5" />
+    {/* Dark void archway */}
+    <path d="M16,100 L16,48 Q16,10 50,10 Q84,10 84,48 L84,100 Z" fill={`url(#cvd${uid})`} />
+    {/* Atmospheric glow at threshold */}
+    <ellipse cx="50" cy="95" rx="28" ry="12" fill={`url(#cvglow${uid})`} />
+    {/* Arch keystone rim */}
+    <path d="M16,48 Q16,10 50,10 Q84,10 84,48"
+          fill="none" stroke="rgba(160,130,90,0.70)" strokeWidth="3" />
+    {/* Inner receding arch (depth) */}
+    <path d="M23,100 L23,50 Q23,20 50,20 Q77,20 77,50 L77,100 Z" fill="rgba(0,0,0,0.28)" />
+    <path d="M23,50 Q23,20 50,20 Q77,20 77,50"
+          fill="none" stroke="rgba(80,60,40,0.50)" strokeWidth="1.5" />
+    {/* Keystone block at top of arch */}
+    <path d="M44,10 L50,4 L56,10 Z" fill="rgba(140,110,70,0.60)" />
+    {/* Rock texture on frame — left side */}
+    <path d="M4,24 Q11,18 17,24 Q19,32 12,34 Q3,33 4,24Z" fill="rgba(255,255,255,0.07)" />
+    <path d="M4,56 Q11,50 17,55 Q19,63 12,65 Q3,64 4,56Z" fill="rgba(0,0,0,0.12)" />
+    <path d="M4,78 Q10,73 15,77 Q16,84 10,85 Q3,85 4,78Z" fill="rgba(255,255,255,0.05)" />
+    {/* Rock texture on frame — right side */}
+    <path d="M83,36 Q90,30 97,36 Q99,44 92,46 Q83,45 83,36Z" fill="rgba(255,255,255,0.07)" />
+    <path d="M84,60 Q91,54 98,60 Q100,68 93,70 Q84,69 84,60Z" fill="rgba(0,0,0,0.10)" />
+    <path d="M84,80 Q90,75 96,79 Q98,86 92,88 Q84,87 84,80Z" fill="rgba(255,255,255,0.05)" />
+    {/* Top frame edge bevel */}
+    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.08)" />
+    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.06)" />
+    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.42)" strokeWidth="1.5" />
   </svg>
 );
 
+/** Fire tile — layered stylised flame with glow */
 const FireTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
-      <radialGradient id={`frg${uid}`} cx="50%" cy="88%" r="55%">
-        <stop offset="0%" stopColor="#FF4800" stopOpacity="0.5" />
+      <radialGradient id={`frg${uid}`} cx="50%" cy="90%" r="58%">
+        <stop offset="0%" stopColor="#FF5800" stopOpacity="0.6" />
+        <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id={`frc${uid}`} cx="50%" cy="80%" r="40%">
+        <stop offset="0%" stopColor="#FFA000" stopOpacity="0.3" />
         <stop offset="100%" stopColor="transparent" stopOpacity="0" />
       </radialGradient>
     </defs>
-    <rect width="100" height="100" fill="#150800" />
-    {/* Base glow */}
-    <ellipse cx="50" cy="88" rx="36" ry="13" fill={`url(#frg${uid})`} />
-    {/* Outer flame — deep red */}
-    <path d="M50,10 C36,27 24,44 29,64 C32,75 39,83 50,85 C61,83 68,75 71,64 C76,44 64,27 50,10Z"
-          fill="#C02000" />
-    {/* Mid flame — orange */}
-    <path d="M50,26 C40,38 35,54 38,68 C41,76 46,81 50,81 C54,81 59,76 62,68 C65,54 60,38 50,26Z"
-          fill="#E85500" />
-    {/* Inner flame — bright orange */}
-    <path d="M50,40 C44,50 42,63 45,72 C47,77 49,79 50,79 C51,79 53,77 55,72 C58,63 56,50 50,40Z"
-          fill="#FF7200" />
-    {/* Core — yellow */}
-    <path d="M50,53 C47,60 46,68 48,73 C49,76 50,76 50,76 C50,76 51,76 52,73 C54,68 53,60 50,53Z"
-          fill="#FFD000" />
-    {/* Ember specks */}
-    <circle cx="42" cy="48" r="2.2" fill="#FF8800" opacity="0.75" />
-    <circle cx="58" cy="42" r="1.8" fill="#FFBB00" opacity="0.65" />
-    <circle cx="38" cy="35" r="1.3" fill="#FF6000" opacity="0.5" />
+    <rect width="100" height="100" fill="#120700" />
+    {/* Wide base glow */}
+    <ellipse cx="50" cy="90" rx="40" ry="16" fill={`url(#frg${uid})`} />
+    {/* Warm inner core halo */}
+    <ellipse cx="50" cy="72" rx="22" ry="18" fill={`url(#frc${uid})`} />
+    {/* Outer flame — wide, deep crimson */}
+    <path d="M50,8 C33,26 20,46 26,67 C30,79 38,87 50,88 C62,87 70,79 74,67 C80,46 67,26 50,8Z"
+          fill="#B01800" />
+    {/* Second layer — orange */}
+    <path d="M50,22 C38,37 32,56 36,71 C39,80 45,84 50,84 C55,84 61,80 64,71 C68,56 62,37 50,22Z"
+          fill="#E04800" />
+    {/* Third layer — bright orange */}
+    <path d="M50,36 C43,48 40,62 43,73 C45,79 48,82 50,82 C52,82 55,79 57,73 C60,62 57,48 50,36Z"
+          fill="#FF6C00" />
+    {/* Inner hot core — amber */}
+    <path d="M50,50 C46,58 45,68 47,75 C48,78 49,79 50,79 C51,79 52,78 53,75 C55,68 54,58 50,50Z"
+          fill="#FFAC00" />
+    {/* White-hot tip */}
+    <path d="M50,62 C48,67 48,72 49,76 L50,77 L51,76 C52,72 52,67 50,62Z"
+          fill="rgba(255,240,160,0.80)" />
+    {/* Floating embers */}
+    <circle cx="40" cy="46" r="2.5" fill="#FF7000" opacity="0.80" />
+    <circle cx="60" cy="40" r="2.0" fill="#FFAA00" opacity="0.70" />
+    <circle cx="35" cy="32" r="1.4" fill="#FF5000" opacity="0.55" />
+    <circle cx="65" cy="55" r="1.2" fill="#FFD000" opacity="0.50" />
   </svg>
 );
 
+/** Water tile — deep blue with concentric ripples and highlights */
 const WaterTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`wg${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="#2196F3" />
-        <stop offset="100%" stopColor="#0A3D8A" />
+        <stop offset="0%" stopColor="#1E90E8" />
+        <stop offset="40%" stopColor="#1260C0" />
+        <stop offset="100%" stopColor="#082878" />
       </linearGradient>
+      <radialGradient id={`wc${uid}`} cx="40%" cy="35%" r="45%">
+        <stop offset="0%" stopColor="rgba(100,200,255,0.18)" />
+        <stop offset="100%" stopColor="rgba(100,200,255,0)" />
+      </radialGradient>
     </defs>
     <rect width="100" height="100" fill={`url(#wg${uid})`} />
-    {/* Ripple ellipses */}
-    <ellipse cx="50" cy="50" rx="32" ry="9" fill="none" stroke="rgba(255,255,255,0.24)" strokeWidth="1.5" />
-    <ellipse cx="50" cy="50" rx="20" ry="5.5" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.1" />
-    <ellipse cx="50" cy="66" rx="24" ry="6.5" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-    <ellipse cx="34" cy="36" rx="10" ry="3" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" />
+    {/* Caustic light patch */}
+    <ellipse cx="38" cy="34" rx="28" ry="18" fill={`url(#wc${uid})`} />
+    {/* Concentric ripple rings */}
+    <ellipse cx="50" cy="55" rx="35" ry="10" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" />
+    <ellipse cx="50" cy="55" rx="24" ry="6.5" fill="none" stroke="rgba(255,255,255,0.17)" strokeWidth="1.1" />
+    <ellipse cx="50" cy="55" rx="13" ry="3.5" fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="0.9" />
+    {/* Secondary ripple set */}
+    <ellipse cx="28" cy="36" rx="12" ry="3.5" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="0.9" />
     {/* Surface shine strokes */}
-    <path d="M16,26 Q24,21 32,26" fill="none" stroke="rgba(255,255,255,0.48)" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M62,37 Q70,32 78,37" fill="none" stroke="rgba(255,255,255,0.36)" strokeWidth="2" strokeLinecap="round" />
-    <path d="M22,55 Q29,51 36,55" fill="none" stroke="rgba(255,255,255,0.26)" strokeWidth="1.5" strokeLinecap="round" />
-    {/* Light refraction dots */}
-    <circle cx="44" cy="30" r="1.4" fill="rgba(255,255,255,0.32)" />
-    <circle cx="73" cy="57" r="1.1" fill="rgba(255,255,255,0.26)" />
-    <rect width="100" height="100" fill="none" stroke="rgba(10,60,140,0.55)" strokeWidth="1.5" />
+    <path d="M14,24 Q22,19 30,24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2.8" strokeLinecap="round" />
+    <path d="M64,32 Q72,27 80,32" fill="none" stroke="rgba(255,255,255,0.42)" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M20,48 Q27,44 34,48" fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M68,62 Q74,58 80,62" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.4" strokeLinecap="round" />
+    {/* Specular dots */}
+    <circle cx="42" cy="28" r="1.6" fill="rgba(255,255,255,0.38)" />
+    <circle cx="72" cy="44" r="1.3" fill="rgba(255,255,255,0.30)" />
+    <circle cx="24" cy="60" r="1.0" fill="rgba(255,255,255,0.22)" />
+    <rect width="100" height="100" fill="none" stroke="rgba(8,40,120,0.50)" strokeWidth="1.5" />
   </svg>
 );
 
-// ─── Arrow Vector (same design as GameSprite2D) ─────────────────────────────
+// ─── Arrow Vector ─────────────────────────────────────────────────────────────
 
 const renderArrowVector = (tileType: number) => {
   const shadow =
-    "drop-shadow(0 1px 1px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.72))";
+    "drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 5px rgba(0,0,0,0.75))";
   const common = {
     fill: "#f6c84f",
     strokeLinecap: "round" as const,
@@ -219,18 +269,10 @@ const renderArrowVector = (tileType: number) => {
     const rotations = { up: 0, right: 90, down: 180, left: 270 };
     return (
       <g transform={`rotate(${rotations[dir]} 16 16)`}>
-        <path
-          d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z"
-          stroke="rgba(16,18,12,0.92)"
-          strokeWidth="4.2"
-          {...common}
-        />
-        <path
-          d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z"
-          stroke="#fff8c8"
-          strokeWidth="1.7"
-          {...common}
-        />
+        <path d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z"
+              stroke="rgba(16,18,12,0.92)" strokeWidth="4.2" {...common} />
+        <path d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z"
+              stroke="#fff8c8" strokeWidth="1.7" {...common} />
       </g>
     );
   };
@@ -250,11 +292,11 @@ const renderArrowVector = (tileType: number) => {
     "M13 13 L13 8 L10 8 L16 2 L22 8 L19 8 L19 13 L24 13 L24 10 L30 16 L24 22 L24 19 L19 19 L19 24 L22 24 L16 30 L10 24 L13 24 L13 19 L8 19 L8 22 L2 16 L8 10 L8 13 Z";
 
   const shape =
-    tileType === 7 ? <OneArrow dir="up" /> :
-    tileType === 8 ? <OneArrow dir="right" /> :
-    tileType === 9 ? <OneArrow dir="down" /> :
-    tileType === 10 ? <OneArrow dir="left" /> :
-    tileType === 11 ? <GlyphPath d={doubleVerticalPath} /> :
+    tileType === 7  ? <OneArrow dir="up"    /> :
+    tileType === 8  ? <OneArrow dir="right" /> :
+    tileType === 9  ? <OneArrow dir="down"  /> :
+    tileType === 10 ? <OneArrow dir="left"  /> :
+    tileType === 11 ? <GlyphPath d={doubleVerticalPath}   /> :
     tileType === 12 ? <GlyphPath d={doubleHorizontalPath} /> :
     tileType === 13 ? <GlyphPath d={omniPath} /> :
     null;
@@ -262,70 +304,72 @@ const renderArrowVector = (tileType: number) => {
   if (!shape) return null;
 
   return (
-    <svg
-      viewBox="0 0 32 32"
-      className="h-[78%] w-[78%]"
-      aria-hidden
-      style={{ filter: shadow }}
-    >
+    <svg viewBox="0 0 32 32" className="h-[78%] w-[78%]" aria-hidden style={{ filter: shadow }}>
       {shape}
     </svg>
   );
 };
 
-// ─── Player / spawn sprites ──────────────────────────────────────────────────
-
-const PlayerSprite = ({ rotate }: { rotate?: boolean }) => (
-  <img
-    src={playerSpriteUrl}
-    alt="Hero"
-    className="pointer-events-none absolute bottom-[6%] left-1/2 h-[88%] w-[88%] max-w-none object-contain object-bottom"
-    style={{
-      imageRendering: "auto",
-      transform: rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)",
-    }}
-  />
-);
-
-const SpawnMarker = ({ rotate }: { rotate?: boolean }) => (
-  <img
-    src={playerSpriteUrl}
-    alt=""
-    aria-hidden
-    className="pointer-events-none absolute bottom-[10%] left-1/2 h-[62%] w-[62%] max-w-none object-contain object-bottom opacity-40"
-    style={{
-      imageRendering: "auto",
-      transform: rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)",
-    }}
-  />
-);
-
-// ─── Arrow background tile ───────────────────────────────────────────────────
+// ─── Arrow background — warm amber stone with deeper bevel ────────────────────
 
 const ArrowBgTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`abg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#C8A860" />
-        <stop offset="100%" stopColor="#8C6B30" />
+        <stop offset="0%" stopColor="#C8A455" />
+        <stop offset="50%" stopColor="#A87E30" />
+        <stop offset="100%" stopColor="#7A5618" />
       </linearGradient>
     </defs>
     <rect width="100" height="100" fill={`url(#abg${uid})`} />
-    {/* Subtle bevel */}
-    <polygon points="0,0 100,0 90,10 10,10" fill="rgba(255,255,255,0.10)" />
-    <polygon points="0,0 10,10 10,90 0,100" fill="rgba(255,255,255,0.07)" />
-    <polygon points="100,100 0,100 10,90 90,90" fill="rgba(0,0,0,0.20)" />
-    <polygon points="100,100 100,0 90,10 90,90" fill="rgba(0,0,0,0.14)" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="1.5" />
+    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.13)" />
+    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.09)" />
+    <polygon points="100,100 0,100 14,87 86,87" fill="rgba(0,0,0,0.28)" />
+    <polygon points="100,100 100,0 87,14 87,86" fill="rgba(0,0,0,0.20)" />
+    {/* Subtle etched cross-hatch */}
+    <line x1="14" y1="50" x2="86" y2="50" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
+    <line x1="50" y1="14" x2="50" y2="86" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
+    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="1.5" />
   </svg>
 );
 
-// ─── Icon overlay (keys, locks, hourglass, teleport) ────────────────────────
+// ─── Player / spawn sprites using dinotoon ────────────────────────────────────
+
+/** Player dino using dinotoon.png — mix-blend-mode:screen drops the black bg */
+const PlayerSprite = ({ rotate }: { rotate?: boolean }) => (
+  <img
+    src={dinotoonUrl}
+    alt="Hero"
+    className="pointer-events-none absolute bottom-[4%] left-1/2 h-[90%] w-[90%] max-w-none object-contain object-bottom"
+    style={{
+      imageRendering: "auto",
+      mixBlendMode: "screen",
+      transform: rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)",
+    }}
+  />
+);
+
+/** Dimmed spawn-marker dino */
+const SpawnMarker = ({ rotate }: { rotate?: boolean }) => (
+  <img
+    src={dinotoonUrl}
+    alt=""
+    aria-hidden
+    className="pointer-events-none absolute bottom-[8%] left-1/2 h-[64%] w-[64%] max-w-none object-contain object-bottom"
+    style={{
+      imageRendering: "auto",
+      mixBlendMode: "screen",
+      opacity: 0.38,
+      transform: rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)",
+    }}
+  />
+);
+
+// ─── Icon tile (keys, locks, hourglass, teleport) ─────────────────────────────
 
 const IconTile = ({
   iconUrl,
   bgColor,
-  uid,
   rotate,
 }: {
   iconUrl: string | null;
@@ -334,24 +378,21 @@ const IconTile = ({
   rotate?: boolean;
 }) => {
   if (!iconUrl) return <div className="w-full h-full" style={{ background: bgColor }} />;
-  const content = (
-    <img
-      src={iconUrl}
-      alt=""
-      aria-hidden
-      className="pointer-events-none"
-      style={{
-        width: "75%",
-        height: "75%",
-        objectFit: "contain",
-        imageRendering: "auto",
-        transform: rotate ? "rotate(90deg)" : undefined,
-      }}
-    />
-  );
   return (
     <div className="w-full h-full flex items-center justify-center" style={{ background: bgColor }}>
-      {content}
+      <img
+        src={iconUrl}
+        alt=""
+        aria-hidden
+        className="pointer-events-none"
+        style={{
+          width: "72%",
+          height: "72%",
+          objectFit: "contain",
+          imageRendering: "auto",
+          transform: rotate ? "rotate(90deg)" : undefined,
+        }}
+      />
     </div>
   );
 };
@@ -412,7 +453,7 @@ export function GameTop2D({
     return { width, height: Math.max(rows, Math.floor(width / aspect)) };
   }, [availableSize.height, availableSize.width, cols, fullBleed, rows, scale]);
 
-  // Icon data URLs at higher resolution for crisp non-pixelated display
+  // Icons at 128 px — crisp when downscaled
   const redKeyUrl = useMemo(
     () => (typeof window !== "undefined" ? createKeyIconDataUrl(128, { accent: "rgba(239,68,68,0.98)", glow: "rgba(239,68,68,0.18)" }) : null),
     [],
@@ -476,12 +517,10 @@ export function GameTop2D({
               const isCave = goalCaveKeys.has(`${x},${y}`);
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
               const tileType = isCave ? 3 : cell;
-              // Hide cave marker while player stands on spawn
               const displayTileType = isPlayer && tileType === 18 ? 0 : tileType;
               const isArrow = isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13;
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
-              // Hide arrow glyph while player stands on it
               const effectiveTileType =
                 isPlayer && displayTileType >= 7 && displayTileType <= 13
                   ? 0
@@ -494,9 +533,8 @@ export function GameTop2D({
                 x === playerStart.x &&
                 y === playerStart.y;
 
-              // Upright-rotation needed for icons in portrait mode
               const needsUprightIcon =
-                effectiveTileType === 3 ||
+                effectiveTileType === 3  ||
                 effectiveTileType === 18 ||
                 effectiveTileType === 16 ||
                 effectiveTileType === 17 ||
@@ -504,72 +542,22 @@ export function GameTop2D({
 
               const renderTileBg = () => {
                 switch (effectiveTileType) {
-                  case 5: return <VoidTile />;
-                  case 0: return <FloorTile uid={uid} />;
-                  case 2: return <StoneTile uid={uid} />;
-                  case 6: return <BreakableRockTile uid={uid} />;
-                  case 1: return <FireTile uid={uid} />;
-                  case 4: return <WaterTile uid={uid} />;
-                  case 3: return <CaveTile uid={uid} isStart={false} />;
+                  case 5:  return <VoidTile />;
+                  case 0:  return <FloorTile uid={uid} />;
+                  case 2:  return <StoneTile uid={uid} />;
+                  case 6:  return <BreakableRockTile uid={uid} />;
+                  case 1:  return <FireTile uid={uid} />;
+                  case 4:  return <WaterTile uid={uid} />;
+                  case 3:  return <CaveTile uid={uid} isStart={false} />;
                   case 18: return <CaveTile uid={uid} isStart />;
-                  case 14:
-                    return (
-                      <IconTile
-                        uid={uid}
-                        iconUrl={redKeyUrl}
-                        bgColor="rgba(220,40,40,0.22)"
-                        rotate={rotateUpright && needsUprightIcon}
-                      />
-                    );
-                  case 15:
-                    return (
-                      <IconTile
-                        uid={uid}
-                        iconUrl={greenKeyUrl}
-                        bgColor="rgba(30,180,80,0.22)"
-                        rotate={rotateUpright && needsUprightIcon}
-                      />
-                    );
-                  case 16:
-                    return (
-                      <IconTile
-                        uid={uid}
-                        iconUrl={redLockUrl}
-                        bgColor="rgba(140,15,15,0.82)"
-                        rotate={rotateUpright && needsUprightIcon}
-                      />
-                    );
-                  case 17:
-                    return (
-                      <IconTile
-                        uid={uid}
-                        iconUrl={greenLockUrl}
-                        bgColor="rgba(15,100,30,0.82)"
-                        rotate={rotateUpright && needsUprightIcon}
-                      />
-                    );
-                  case 19:
-                    return (
-                      <IconTile
-                        uid={uid}
-                        iconUrl={teleportUrl}
-                        bgColor="rgba(80,0,160,0.72)"
-                        rotate={false}
-                      />
-                    );
-                  case 20:
-                    return (
-                      <IconTile
-                        uid={uid}
-                        iconUrl={hourglassUrl}
-                        bgColor="rgba(120,80,0,0.45)"
-                        rotate={rotateUpright && needsUprightIcon}
-                      />
-                    );
+                  case 14: return <IconTile uid={uid} iconUrl={redKeyUrl}    bgColor="rgba(200,30,30,0.20)"   rotate={rotateUpright && needsUprightIcon} />;
+                  case 15: return <IconTile uid={uid} iconUrl={greenKeyUrl}  bgColor="rgba(20,160,70,0.20)"   rotate={rotateUpright && needsUprightIcon} />;
+                  case 16: return <IconTile uid={uid} iconUrl={redLockUrl}   bgColor="rgba(130,10,10,0.88)"   rotate={rotateUpright && needsUprightIcon} />;
+                  case 17: return <IconTile uid={uid} iconUrl={greenLockUrl} bgColor="rgba(10,90,25,0.88)"    rotate={rotateUpright && needsUprightIcon} />;
+                  case 19: return <IconTile uid={uid} iconUrl={teleportUrl}  bgColor="rgba(70,0,140,0.78)"    rotate={false} />;
+                  case 20: return <IconTile uid={uid} iconUrl={hourglassUrl} bgColor="rgba(100,65,0,0.50)"    rotate={rotateUpright && needsUprightIcon} />;
                   default:
-                    // Arrow tiles: amber background
                     if (effectiveIsArrow) return <ArrowBgTile uid={uid} />;
-                    // Fallback: floor
                     return <FloorTile uid={uid} />;
                 }
               };
@@ -590,25 +578,16 @@ export function GameTop2D({
                       : undefined
                   }
                 >
-                  {/* Tile background */}
                   {renderTileBg()}
 
-                  {/* Arrow glyph overlay (centered) */}
                   {effectiveIsArrow && !isPlayer && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       {renderArrowVector(effectiveTileType)}
                     </div>
                   )}
 
-                  {/* Spawn marker dino (dimmed) */}
-                  {isSpawnMarker && (
-                    <SpawnMarker rotate={rotateUpright} />
-                  )}
-
-                  {/* Player dino */}
-                  {isPlayer && (
-                    <PlayerSprite rotate={rotateUpright} />
-                  )}
+                  {isSpawnMarker && <SpawnMarker rotate={rotateUpright} />}
+                  {isPlayer && <PlayerSprite rotate={rotateUpright} />}
                 </div>
               );
             }),
