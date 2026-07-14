@@ -22,6 +22,7 @@ import {
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
+import { GameTop2D } from "./GameTop2D";
 import { ADMIN_MODE_UPDATED_EVENT, getAdminMode } from "@/lib/adminMode";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
@@ -112,13 +113,14 @@ const CAMERA_ZOOM_LEVELS = CAMERA_ZOOM_PERCENT_LEVELS.map((percent) => CAMERA_BA
 const DEFAULT_CAMERA_ZOOM_INDEX = CAMERA_ZOOM_PERCENT_LEVELS.indexOf(100);
 const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = DEFAULT_CAMERA_ZOOM_INDEX;
 const PINCH_ZOOM_STEP_DISTANCE_PX = 18;
-const VIEW_MODES = ["3d", "fps", "2d", "sprite"] as const;
+const VIEW_MODES = ["3d", "fps", "2d", "sprite", "top"] as const;
 type ViewMode = (typeof VIEW_MODES)[number];
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   "3d": "3D",
   fps: "FPS",
   "2d": "2D",
   sprite: "SPR",
+  top: "TOP",
 };
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
@@ -1650,7 +1652,7 @@ export const PuzzleGame = () => {
     const cols = renderGrid[0]?.length ?? 0;
     const rows = renderGrid.length;
     if (cols === 0 || viewMode === 'fps') return 0;
-    if (viewMode === 'sprite') return isMobilePortrait ? DEFAULT_CAMERA_ZOOM_INDEX : 0;
+    if (viewMode === 'sprite' || viewMode === 'top') return isMobilePortrait ? DEFAULT_CAMERA_ZOOM_INDEX : 0;
     const is2D = viewMode === '2d';
     const fovDeg = is2D ? 42 : 50;
     const baseH = is2D ? 24 : 18;
@@ -1688,7 +1690,7 @@ export const PuzzleGame = () => {
   const miniMapViewport = useMemo(() => {
     const cols = renderGrid[0]?.length ?? 0;
     const rows = renderGrid.length;
-    if (cols === 0 || rows === 0 || viewMode === 'fps' || viewMode === 'sprite') return null;
+    if (cols === 0 || rows === 0 || viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return null;
     const is2D = viewMode === '2d';
     const fovDeg = is2D ? 42 : 50;
     const baseH = is2D ? 24 : 18;
@@ -1708,7 +1710,7 @@ export const PuzzleGame = () => {
 
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
-      if (viewMode === 'fps' || viewMode === 'sprite') return;
+      if (viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return;
       // Only start dragging with left mouse button and not on UI elements
       if (e.button === 0 && e.target === e.currentTarget) {
         setIsDragging(true);
@@ -1718,7 +1720,7 @@ export const PuzzleGame = () => {
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-      if (viewMode === 'fps' || viewMode === 'sprite') return;
+      if (viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return;
       if (isDragging) {
         const deltaX = e.clientX - dragStart.x;
         const deltaY = e.clientY - dragStart.y;
@@ -1740,7 +1742,7 @@ export const PuzzleGame = () => {
 
     // Touch handlers: 1-finger drag pans; 2-finger pinch=zoom-out/spread=zoom-in or pan; 3-finger pan
     const handleTouchStart = (e: React.TouchEvent) => {
-      if (viewMode === 'fps' || viewMode === 'sprite') return;
+      if (viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return;
       if (e.touches.length >= 2) {
         multiTouchActiveRef.current = true;
         setIsDragging(false);
@@ -1768,7 +1770,7 @@ export const PuzzleGame = () => {
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
-      if (viewMode === 'fps' || viewMode === 'sprite') return;
+      if (viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return;
       if (e.touches.length >= 2) {
         const gesture = twoFingerGestureRef.current;
         if (!gesture) return;
@@ -1854,7 +1856,7 @@ export const PuzzleGame = () => {
 
     // Double-click or double-tap to reset camera
     const handleDoubleClick = () => {
-      if (viewMode === 'fps' || viewMode === 'sprite') return;
+      if (viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return;
       setCameraOffset({ x: 0, z: 0 });
       pushHudMessage("View reset");
     };
@@ -2005,7 +2007,7 @@ export const PuzzleGame = () => {
       }
     }, [cameraZoomIndex, isFullscreenMode]);
 
-    const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite";
+    const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite" || viewMode === "top";
     const desktopShellActive = !useSplitHud && !shouldRotateGate;
     const desktopTopInsetClass =
       leftShellPanelOpen && rightShellPanelOpen ? "xl:left-[22rem] xl:right-[22rem]" :
@@ -2759,7 +2761,7 @@ export const PuzzleGame = () => {
           onTouchEnd={handleTouchEnd}
           onDoubleClick={handleDoubleClick}
           style={{
-            cursor: viewMode === 'fps' || viewMode === 'sprite' ? 'default' : isDragging ? 'grabbing' : 'grab',
+            cursor: viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top' ? 'default' : isDragging ? 'grabbing' : 'grab',
             // Prevent the browser from stealing swipe gestures (mobile), even in SPR view.
             touchAction: shouldRotateGate ? 'auto' : 'none',
           }}
@@ -2799,7 +2801,48 @@ export const PuzzleGame = () => {
               </div>
             )}
 
-            {viewMode === "sprite" ? (
+            {viewMode === "top" ? (
+              <GameTop2D
+                grid={renderGrid}
+                cavePos={renderCavePos}
+                playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
+                selectedArrow={selectedArrow}
+                selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+                players={renderPlayers}
+                zoomFactor={cameraZoomFactor}
+                fullBleed={isFullscreenMode}
+                rotateUpright={isMobilePortrait}
+                onArrowClick={(x, y) => {
+                  if (localPlayer?.isGliding) return;
+                  const cell = renderGrid[y]?.[x];
+                  if (cell !== undefined && isArrowCell(cell)) {
+                    if (localPlayerPos.x === x && localPlayerPos.y === y) {
+                      pushHudMessage("Step off the arrow before selecting it.", 2200);
+                      return;
+                    }
+                    const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                    if (isSameArrow) {
+                      enqueueInput({ type: "deselect" });
+                      resetSelectorToPlayer();
+                      flashPlayerHighlight();
+                      pushHudMessage("Arrow deselected");
+                    } else {
+                      enqueueInput({ type: "select", x, y });
+                      setIsSelectorActive(false);
+                      setSelectorPos({ x, y });
+                      pushHudMessage("Arrow selected — use the controls to move it.", 2200);
+                    }
+                  }
+                }}
+                onCancelSelection={() => {
+                  if (selectedArrow) {
+                    enqueueInput({ type: "deselect" });
+                    resetSelectorToPlayer();
+                    pushHudMessage("Arrow deselected");
+                  }
+                }}
+              />
+            ) : viewMode === "sprite" ? (
               <GameSprite2D
                 grid={renderGrid}
                 atlasSourceGrid={activeLevel?.grid ?? currentLevel?.grid ?? renderGrid}
