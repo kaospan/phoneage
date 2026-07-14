@@ -3,15 +3,15 @@ import type { CellType, Position } from "./types";
 export const TELEPORT_CELL: CellType = 19;
 
 /**
- * Returns the paired teleport destination for a teleport pad at `at`.
+ * Returns the next teleport pad in the level's cycle after the one at `at`.
  *
- * Pairing is deterministic, based on reading order (row-major):
- * teleports[0] <-> teleports[1], teleports[2] <-> teleports[3], ...
+ * Teleports are not fixed pairs — stepping on any teleport pad advances to the
+ * *next* pad in reading order (row-major), wrapping back to the first after the
+ * last: 0 -> 1 -> 2 -> ... -> n-1 -> 0 -> ...
  *
- * If there are fewer than 2 teleports, if `at` isn't a teleport, or if `at`
- * is an unpaired last teleport (odd count), returns null.
+ * If there are fewer than 2 teleports, or `at` isn't a teleport, returns null.
  */
-export function getPairedTeleport(grid: CellType[][], at: Position): Position | null {
+export function getNextTeleport(grid: CellType[][], at: Position): Position | null {
   if (!grid?.length || !grid[0]?.length) return null;
   if (grid[at.y]?.[at.x] !== TELEPORT_CELL) return null;
 
@@ -26,19 +26,8 @@ export function getPairedTeleport(grid: CellType[][], at: Position): Position | 
 
   if (teleports.length < 2) return null;
 
-  let idx = -1;
-  for (let i = 0; i < teleports.length; i += 1) {
-    const t = teleports[i];
-    if (t.x === at.x && t.y === at.y) {
-      idx = i;
-      break;
-    }
-  }
+  const idx = teleports.findIndex((t) => t.x === at.x && t.y === at.y);
   if (idx < 0) return null;
 
-  const pairIdx = idx % 2 === 0 ? idx + 1 : idx - 1;
-  const dest = teleports[pairIdx];
-  if (!dest) return null;
-  return dest;
+  return teleports[(idx + 1) % teleports.length];
 }
-

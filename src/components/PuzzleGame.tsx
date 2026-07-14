@@ -29,6 +29,7 @@ import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
 import { buildGoalCaveKeySet, findGoalCaves } from "@/game/caves";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
+import { getNextTeleport, TELEPORT_CELL } from "@/game/teleport";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
 import { LEVEL_OVERRIDES_UPDATED_EVENT, saveLevelOverride } from "@/lib/levelOverrides";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
@@ -84,6 +85,8 @@ interface SimPlayer {
   glideArrowType: CellType | null;
   glideIndex: number;
   moves: number;
+  /** Ticks remaining before an unbroken teleport chain auto-advances to the next pad in the cycle. */
+  teleportCycleTicksLeft: number;
 }
 
 interface ArrowGlide {
@@ -124,6 +127,10 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
 };
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
+/** How long a player can stand on a teleport pad before it auto-advances to the next pad in the
+ *  cycle. Simulation runs at a fixed 60Hz tick (see the requestAnimationFrame loop below), so this
+ *  is expressed in ticks: 2000ms * 60 ticks/sec / 1000ms = 120 ticks. */
+const TELEPORT_CYCLE_DELAY_TICKS = 120;
 /** Height reserved for the secondary bottom HUD bar shown in mobile portrait, so overlapping controls (e.g. the thumbstick) can clear it. */
 const BOTTOM_HUD_CLEARANCE_PX = 60;
 
@@ -711,7 +718,8 @@ export const PuzzleGame = () => {
         glidePath: null,
         glideArrowType: null,
         glideIndex: 0,
-        moves: 0
+        moves: 0,
+        teleportCycleTicksLeft: 0
       };
 
       const players = new Map<PlayerId, SimPlayer>();
@@ -1080,7 +1088,8 @@ export const PuzzleGame = () => {
                 glidePath: null,
                 glideArrowType: null,
                 glideIndex: 0,
-                moves: 0
+                moves: 0,
+                teleportCycleTicksLeft: 0
               });
               setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
             }

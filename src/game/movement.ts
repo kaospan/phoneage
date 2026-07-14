@@ -1,7 +1,7 @@
 import { CellType, GameState, Position } from './types';
 import { isArrowCell, getArrowDirections } from './arrows';
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from './glide';
-import { getPairedTeleport, TELEPORT_CELL } from './teleport';
+import { TELEPORT_CELL } from './teleport';
 
 const isKeyCell = (cell: CellType) => cell === 14 || cell === 15;
 const isLockCell = (cell: CellType) => cell === 16 || cell === 17;
@@ -63,10 +63,8 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
         baseGrid[targetY][targetX] = 0;
         outcome.newGrid = newGrid;
       }
-      if (targetCell === TELEPORT_CELL) {
-        const dest = getPairedTeleport(outcome.newGrid ?? grid, { x: targetX, y: targetY });
-        if (dest) outcome.newPlayerPos = dest;
-      }
+      // Landing on a teleport pad stops the player there — the pending-cycle countdown and
+      // interrupt handling live in the tick loop (see PuzzleGame.tsx), not here.
       return outcome;
     }
     if (targetCell === 6) { // breakable rock first time
@@ -157,10 +155,8 @@ export function attemptPlayerMove(state: GameState, dx: number, dy: number): Pla
     outcome.newGrid = newGrid;
     outcome.brokeRock = true;
   }
-  if (targetCell === TELEPORT_CELL) {
-    const dest = getPairedTeleport(outcome.newGrid ?? grid, { x: targetX, y: targetY });
-    if (dest) outcome.newPlayerPos = dest;
-  }
+  // Landing on a teleport pad (targetCell === TELEPORT_CELL) stops the player there — the
+  // pending-cycle countdown and interrupt handling live in the tick loop (PuzzleGame.tsx).
   return outcome;
 }
 
