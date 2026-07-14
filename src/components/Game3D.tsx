@@ -21,7 +21,7 @@ interface Game3DProps {
   zoomFactor?: number;
   viewMode?: '2d' | '3d' | 'fps';
   theme?: ColorTheme;
-  players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
+  players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean; teleportWarpTicksLeft?: number }>;
   localPlayerId?: string;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
@@ -1229,11 +1229,13 @@ const StartCave = ({ position }: { position: [number, number, number] }) => {
   );
 };
 
-// Teleport pad (wormhole/vortex) - stepping on a pad teleports to its paired pad.
-const TeleportTile = ({ position }: { position: [number, number, number] }) => {
+// Teleport pad (wormhole/vortex) - stepping on a pad cycles to the next pad in reading order.
+const TeleportTile = ({ position, flashing }: { position: [number, number, number]; flashing?: boolean }) => {
   const vortexRef = useRef<THREE.Mesh | null>(null);
   const shimmerRef = useRef<THREE.Mesh | null>(null);
   const lightRef = useRef<THREE.PointLight | null>(null);
+  const flashRef = useRef<THREE.Mesh | null>(null);
+  const flashLightRef = useRef<THREE.PointLight | null>(null);
 
   const vortexTexture = useMemo(() => {
     const canvas = createVortexIconCanvas(256, {
@@ -1254,6 +1256,16 @@ const TeleportTile = ({ position }: { position: [number, number, number] }) => {
     if (vortexRef.current) vortexRef.current.rotation.z = t * 0.75;
     if (shimmerRef.current) shimmerRef.current.rotation.z = -t * 1.05;
     if (lightRef.current) lightRef.current.intensity = 0.38 + Math.sin(t * 2.4) * 0.06;
+
+    if (flashRef.current) {
+      // Fast strobe while a warp is committed (~1s window) so the pad reads as "actively firing".
+      const strobe = flashing ? 0.35 + Math.abs(Math.sin(t * 14)) * 0.65 : 0;
+      const mat = flashRef.current.material as THREE.MeshBasicMaterial;
+      mat.opacity = strobe;
+    }
+    if (flashLightRef.current) {
+      flashLightRef.current.intensity = flashing ? 1.6 + Math.abs(Math.sin(t * 14)) * 1.4 : 0;
+    }
   });
 
   return (
@@ -1276,7 +1288,14 @@ const TeleportTile = ({ position }: { position: [number, number, number] }) => {
         <meshBasicMaterial color="#eafff5" transparent opacity={0.10} depthWrite={false} toneMapped={false} />
       </mesh>
 
+      {/* Warp flash — bright white strobe overlay, only visible while a cycle is committed */}
+      <mesh ref={flashRef} position={[0, 0.016, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
+        <circleGeometry args={[0.44, 64]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0} depthWrite={false} toneMapped={false} />
+      </mesh>
+
       <pointLight ref={lightRef} position={[0, 0.28, 0]} intensity={0.38} color="#34d399" distance={2.6} />
+      <pointLight ref={flashLightRef} position={[0, 0.4, 0]} intensity={0} color="#ffffff" distance={3.2} />
     </group>
   );
 };
@@ -2096,6 +2115,16 @@ export const Game3D = ({
     return { floor, water, wallBase, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, bonusTime, edgeRailsH, edgeRailsV, arrows };
   }, [grid, offsetX, offsetZ]);
 
+  // Grid positions (as "x,y" keys) of teleport pads currently mid-warp — the origin pad a player
+  // is vanishing from stays at that player's (unmoved) position for the duration of the flash.
+  const flashingTeleportKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const p of players) {
+      if ((p.teleportWarpTicksLeft ?? 0) > 0) keys.add(`${p.pos.x},${p.pos.y}`);
+    }
+    return keys;
+  }, [players]);
+
   const contentBounds = useMemo(() => {
     let minGridX = Number.POSITIVE_INFINITY;
     let maxGridX = Number.NEGATIVE_INFINITY;
@@ -2452,9 +2481,14 @@ export const Game3D = ({
         ))}
 
         {/* Teleports */}
-        {tileData.teleports.map((position, index) => (
-          <TeleportTile key={`teleport-${index}-${position[0]}-${position[2]}`} position={position} />
-        ))}
+        {tileData.teleports.map((position, index) => {
+          const gridX = Math.round(position[0] - offsetX);
+          const gridY = Math.round(position[2] - offsetZ);
+          const flashing = flashingTeleportKeys.has(`${gridX},${gridY}`);
+          return (
+            <TeleportTile key={`teleport-${index}-${position[0]}-${position[2]}`} position={position} flashing={flashing} />
+          );
+        })}
 
         {/* Bonus Time (clock) */}
         {tileData.bonusTime.map((position, index) => (
@@ -2530,8 +2564,9 @@ export const Game3D = ({
           />
         ))}
 
-        {/* Players */}
+        {/* Players — hidden while mid-warp (vanished into the pad, about to reappear elsewhere) */}
         {players.map((player) => {
+          if ((player.teleportWarpTicksLeft ?? 0) > 0) return null;
           const cell = grid[player.pos.y]?.[player.pos.x];
           const isOnArrow = cell !== undefined && isArrowCell(cell);
           const height = isOnArrow ? 0.25 : 0;

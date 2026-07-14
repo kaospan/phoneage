@@ -87,6 +87,10 @@ interface SimPlayer {
   moves: number;
   /** Ticks remaining before an unbroken teleport chain auto-advances to the next pad in the cycle. */
   teleportCycleTicksLeft: number;
+  /** Ticks remaining in the committed warp flash (player hidden, origin pad flashing). 0 = not warping. */
+  teleportWarpTicksLeft: number;
+  teleportWarpFrom: Position | null;
+  teleportWarpTo: Position | null;
 }
 
 interface ArrowGlide {
@@ -131,6 +135,9 @@ const DEFAULT_BONUS_TIME_SECONDS = 50;
  *  cycle. Simulation runs at a fixed 60Hz tick (see the requestAnimationFrame loop below), so this
  *  is expressed in ticks: 2000ms * 60 ticks/sec / 1000ms = 120 ticks. */
 const TELEPORT_CYCLE_DELAY_TICKS = 120;
+/** Once a cycle commits, how long the origin pad flashes and the dino stays hidden before
+ *  reappearing on the destination pad: 1000ms * 60 ticks/sec / 1000ms = 60 ticks. */
+const TELEPORT_WARP_FLASH_TICKS = 60;
 /** Height reserved for the secondary bottom HUD bar shown in mobile portrait, so overlapping controls (e.g. the thumbstick) can clear it. */
 const BOTTOM_HUD_CLEARANCE_PX = 60;
 
@@ -719,7 +726,10 @@ export const PuzzleGame = () => {
         glideArrowType: null,
         glideIndex: 0,
         moves: 0,
-        teleportCycleTicksLeft: 0
+        teleportCycleTicksLeft: 0,
+        teleportWarpTicksLeft: 0,
+        teleportWarpFrom: null,
+        teleportWarpTo: null
       };
 
       const players = new Map<PlayerId, SimPlayer>();
@@ -1089,7 +1099,10 @@ export const PuzzleGame = () => {
                 glideArrowType: null,
                 glideIndex: 0,
                 moves: 0,
-                teleportCycleTicksLeft: 0
+                teleportCycleTicksLeft: 0,
+                teleportWarpTicksLeft: 0,
+                teleportWarpFrom: null,
+                teleportWarpTo: null
               });
               setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
             }
@@ -1193,6 +1206,27 @@ export const PuzzleGame = () => {
           return;
         }
 
+        // Committed warp in progress: the pad flashes and the dino is hidden for ~1s before
+        // reappearing on the next pad. Not interruptible — this phase is already locked in.
+        if (player.teleportWarpTicksLeft > 0) {
+          player.teleportWarpTicksLeft -= 1;
+          if (player.teleportWarpTicksLeft <= 0) {
+            const dest = player.teleportWarpTo;
+            if (dest) {
+              player.facing = facingFromDelta(dest.x - player.pos.x, dest.y - player.pos.y, player.facing);
+              player.pos = { ...dest };
+              player.teleportCycleTicksLeft = TELEPORT_CYCLE_DELAY_TICKS;
+              if (player.isLocal) {
+                pushHudMessage("Teleporting again in 2s — move to break free!", 1800);
+              }
+            }
+            player.teleportWarpFrom = null;
+            player.teleportWarpTo = null;
+          }
+          playersDirty = true;
+          return;
+        }
+
         if (player.isGliding) return;
 
         // Standing on a teleport pad: it auto-advances to the next pad in the cycle after a
@@ -1209,17 +1243,16 @@ export const PuzzleGame = () => {
             if (player.teleportCycleTicksLeft <= 0) {
               const dest = getNextTeleport(sim.grid, player.pos);
               if (dest) {
-                player.facing = facingFromDelta(dest.x - player.pos.x, dest.y - player.pos.y, player.facing);
-                player.pos = { ...dest };
-                playersDirty = true;
-                player.teleportCycleTicksLeft = TELEPORT_CYCLE_DELAY_TICKS;
-                if (player.isLocal) {
-                  pushHudMessage("Teleporting again in 2s — move to break free!", 1800);
-                }
-              } else {
-                player.teleportCycleTicksLeft = 0;
+                // Commit to the warp: hide the dino and flash the origin pad for ~1s before
+                // actually moving the player to the destination pad.
+                player.teleportWarpFrom = { ...player.pos };
+                player.teleportWarpTo = dest;
+                player.teleportWarpTicksLeft = TELEPORT_WARP_FLASH_TICKS;
               }
+              // If there's nowhere to cycle to (shouldn't normally happen), just stay put —
+              // the pad simply doesn't fire again until the player steps off and back on.
             }
+            playersDirty = true;
             return;
           }
         }

@@ -24,6 +24,7 @@ interface GameTop2DProps {
     facing: PlayerFacing;
     color: string;
     isLocal?: boolean;
+    teleportWarpTicksLeft?: number;
   }>;
   zoomFactor?: number;
   fullBleed?: boolean;
@@ -502,6 +503,17 @@ const IconTile = ({
   );
 };
 
+/** Bright pulsing overlay shown on a teleport pad while a player is mid-warp (hidden, in transit). */
+const TeleportFlashOverlay = () => (
+  <div
+    className="pointer-events-none absolute inset-0 animate-pulse"
+    style={{
+      background: "radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(210,255,240,0.55) 45%, rgba(52,211,153,0.15) 75%, transparent 100%)",
+      mixBlendMode: "screen",
+    }}
+  />
+);
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function GameTop2D({
@@ -623,6 +635,7 @@ export function GameTop2D({
               const uid = `${x}-${y}`;
               const isCave = goalCaveKeys.has(`${x},${y}`);
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
+              const isPlayerWarping = Boolean(localPlayer && (localPlayer.teleportWarpTicksLeft ?? 0) > 0);
               const tileType = isCave ? 3 : cell;
               const displayTileType = isPlayer && tileType === 18 ? 0 : tileType;
               const isArrow = isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13;
@@ -687,7 +700,8 @@ export function GameTop2D({
                     </div>
                   )}
 
-                  {isPlayer && <PlayerSprite rotate={rotateUpright} />}
+                  {isPlayer && isPlayerWarping && <TeleportFlashOverlay />}
+                  {isPlayer && !isPlayerWarping && <PlayerSprite rotate={rotateUpright} />}
                 </div>
               );
             }),

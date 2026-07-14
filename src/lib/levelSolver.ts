@@ -2,13 +2,14 @@ import { getAllLevels, isPlaceholderGrid } from "@/data/levels";
 import { getArrowDirections, isArrowCell } from "@/game/arrows";
 import { findGoalCaves } from "@/game/caves";
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from "@/game/glide";
-import { getPairedTeleport, TELEPORT_CELL } from "@/game/teleport";
+import { getNextTeleport, TELEPORT_CELL } from "@/game/teleport";
 import type { CellType, KeyInventory, Position } from "@/game/types";
 
 type DirKey = "U" | "R" | "D" | "L";
 type Action =
   | { t: "P"; d: DirKey }
-  | { t: "A"; x: number; y: number; d: DirKey };
+  | { t: "A"; x: number; y: number; d: DirKey }
+  | { t: "T" };
 
 export interface SolveOptions {
   maxMsPerLevel?: number;
@@ -191,10 +192,9 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
         next.grid[ty][tx] = 0;
         next.baseGrid[ty][tx] = 0;
       }
-      if (targetCell === TELEPORT_CELL) {
-        const dest = getPairedTeleport(next.grid, { x: tx, y: ty });
-        if (dest) next.playerPos = dest;
-      }
+      // Landing on a teleport pad just stops there — cycling to the next pad is a separate,
+      // explicit "T" action (see applyTeleportCycleAtomic) so the search can also explore
+      // stepping off in a direction instead, matching the in-game breakout window.
       return next;
     }
 
@@ -270,11 +270,26 @@ function applyPlayerMoveAtomic(prev: SolveState, dx: number, dy: number): SolveS
   if (willBreakRock) {
     next.grid[py][px] = 5;
   }
-  if (targetCell === TELEPORT_CELL) {
-    const dest = getPairedTeleport(next.grid, { x: tx, y: ty });
-    if (dest) next.playerPos = dest;
-  }
+  // Landing on a teleport pad just stops there — see applyTeleportCycleAtomic for the
+  // separate "wait out the cycle" transition.
   return next;
+}
+
+/** The "T" action: wait out the pending cycle on the teleport pad the player is currently
+ *  standing on, advancing to the next pad in reading order. Only legal when the player is
+ *  actually on a teleport tile and there's another pad to cycle to. */
+function applyTeleportCycleAtomic(prev: SolveState): SolveState | null {
+  const { grid, playerPos } = prev;
+  if (grid[playerPos.y]?.[playerPos.x] !== TELEPORT_CELL) return null;
+  const dest = getNextTeleport(grid, playerPos);
+  if (!dest) return null;
+  return {
+    grid: prev.grid,
+    baseGrid: prev.baseGrid,
+    playerPos: dest,
+    inventory: prev.inventory,
+    breakableRockStates: prev.breakableRockStates,
+  };
 }
 
 function applyRemoteArrowMoveAtomic(prev: SolveState, arrowPos: Position, dx: number, dy: number): SolveState | null {
@@ -313,6 +328,7 @@ function applyRemoteArrowMoveAtomic(prev: SolveState, arrowPos: Position, dx: nu
 
 function fmtAction(a: Action): string {
   if (a.t === "P") return `P:${a.d}`;
+  if (a.t === "T") return `T`;
   return `A(${a.x},${a.y}):${a.d}`;
 }
 
@@ -415,6 +431,41 @@ async function solveLevel(
         };
       }
       q.push({ k: nk, s: ns });
+    }
+
+    // Teleport cycle wait: if standing on a teleport pad, waiting out the ~2s window advances
+    // to the next pad in reading order (the in-game "breakout window" is modeled by the 4
+    // directional player-move options above already being explored as alternatives to this).
+    {
+      const ns = applyTeleportCycleAtomic(s);
+      if (ns) {
+        const nk = stateKey(ns);
+        if (!depth.has(nk)) {
+          const nd = d0 + 1;
+          depth.set(nk, nd);
+          prev.set(nk, { p: k, a: { t: "T" } });
+          if (isGoal(ns)) {
+            const actions: string[] = [];
+            let cur = nk;
+            while (cur !== startKey) {
+              const link = prev.get(cur);
+              if (!link) break;
+              actions.push(fmtAction(link.a));
+              cur = link.p;
+            }
+            actions.reverse();
+            return {
+              levelId,
+              solved: true,
+              moves: actions.length,
+              actions,
+              nodesExpanded,
+              ms: Math.round(performance.now() - t0),
+            };
+          }
+          q.push({ k: nk, s: ns });
+        }
+      }
     }
 
     // Remote arrow moves (selection is free; model as choosing any arrow not under player)
