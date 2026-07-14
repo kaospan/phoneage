@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isArrowCell } from "@/game/arrows";
 import { buildGoalCaveKeySet } from "@/game/caves";
 import dinotoonUrl from "@/assets/dinotoon.png";
+import { themes, type ColorTheme } from "@/data/levels";
 import {
   createKeyIconDataUrl,
   createLockIconDataUrl,
@@ -27,9 +28,39 @@ interface GameTop2DProps {
   zoomFactor?: number;
   fullBleed?: boolean;
   rotateUpright?: boolean;
+  theme?: ColorTheme;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
+
+// ─── Color helpers (for theme-driven tile shading) ────────────────────────────
+
+const hexToRgbTriple = (hex: string): [number, number, number] => {
+  const clean = hex.replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const bigint = parseInt(full, 16);
+  if (Number.isNaN(bigint)) return [128, 128, 128];
+  return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+};
+
+const mixHex = (hex: string, amount: number, toward: 0 | 255): string => {
+  const [r, g, b] = hexToRgbTriple(hex);
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  const nr = clamp(r + (toward - r) * amount);
+  const ng = clamp(g + (toward - g) * amount);
+  const nb = clamp(b + (toward - b) * amount);
+  return `rgb(${nr}, ${ng}, ${nb})`;
+};
+
+const lightenHex = (hex: string, amount: number) => mixHex(hex, amount, 255);
+const darkenHex = (hex: string, amount: number) => mixHex(hex, amount, 0);
+
+/** Small stable hash so per-tile texture flecks are deterministic (no re-randomizing on re-render). */
+const hashUid = (uid: string): number => {
+  let h = 0;
+  for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
+  return h;
+};
 
 const SPRITE_ZOOM_BASELINE_FACTOR = 0.66;
 
@@ -260,46 +291,38 @@ const CaveTile = ({ uid, isStart = false, rotate }: { uid: string; isStart?: boo
   </svg>
 );
 
-/** Fire tile — layered stylised flame with glow */
-const FireTile = ({ uid }: { uid: string }) => (
-  <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
-    <defs>
-      <radialGradient id={`frg${uid}`} cx="50%" cy="90%" r="58%">
-        <stop offset="0%" stopColor="#FF5800" stopOpacity="0.6" />
-        <stop offset="100%" stopColor="transparent" stopOpacity="0" />
-      </radialGradient>
-      <radialGradient id={`frc${uid}`} cx="50%" cy="80%" r="40%">
-        <stop offset="0%" stopColor="#FFA000" stopOpacity="0.3" />
-        <stop offset="100%" stopColor="transparent" stopOpacity="0" />
-      </radialGradient>
-    </defs>
-    <rect width="100" height="100" fill="#120700" />
-    {/* Wide base glow */}
-    <ellipse cx="50" cy="90" rx="40" ry="16" fill={`url(#frg${uid})`} />
-    {/* Warm inner core halo */}
-    <ellipse cx="50" cy="72" rx="22" ry="18" fill={`url(#frc${uid})`} />
-    {/* Outer flame — wide, deep crimson */}
-    <path d="M50,8 C33,26 20,46 26,67 C30,79 38,87 50,88 C62,87 70,79 74,67 C80,46 67,26 50,8Z"
-          fill="#B01800" />
-    {/* Second layer — orange */}
-    <path d="M50,22 C38,37 32,56 36,71 C39,80 45,84 50,84 C55,84 61,80 64,71 C68,56 62,37 50,22Z"
-          fill="#E04800" />
-    {/* Third layer — bright orange */}
-    <path d="M50,36 C43,48 40,62 43,73 C45,79 48,82 50,82 C52,82 55,79 57,73 C60,62 57,48 50,36Z"
-          fill="#FF6C00" />
-    {/* Inner hot core — amber */}
-    <path d="M50,50 C46,58 45,68 47,75 C48,78 49,79 50,79 C51,79 52,78 53,75 C55,68 54,58 50,50Z"
-          fill="#FFAC00" />
-    {/* White-hot tip */}
-    <path d="M50,62 C48,67 48,72 49,76 L50,77 L51,76 C52,72 52,67 50,62Z"
-          fill="rgba(255,240,160,0.80)" />
-    {/* Floating embers */}
-    <circle cx="40" cy="46" r="2.5" fill="#FF7000" opacity="0.80" />
-    <circle cx="60" cy="40" r="2.0" fill="#FFAA00" opacity="0.70" />
-    <circle cx="35" cy="32" r="1.4" fill="#FF5000" opacity="0.55" />
-    <circle cx="65" cy="55" r="1.2" fill="#FFD000" opacity="0.50" />
-  </svg>
-);
+/**
+ * Stone wall — a squat 4-sided pyramid per tile (one square base, 4 triangular faces meeting
+ * at a center apex), the same "block" language as the reference art. Repeated edge-to-edge,
+ * a run of these reads as one continuous ridge of stone rather than isolated tiles.
+ */
+const StoneWallTile = ({ uid, baseColor }: { uid: string; baseColor: string }) => {
+  const top = lightenHex(baseColor, 0.32);
+  const left = lightenHex(baseColor, 0.10);
+  const right = darkenHex(baseColor, 0.24);
+  const bottom = darkenHex(baseColor, 0.44);
+  const h = hashUid(uid);
+  const fleckA = { x: 20 + (h % 15), y: 18 + ((h >> 4) % 15) };
+  const fleckB = { x: 66 + ((h >> 8) % 16), y: 62 + ((h >> 12) % 18) };
+  return (
+    <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
+      {/* Base fill (guards against hairline seams between adjacent triangles) */}
+      <rect width="100" height="100" fill={bottom} />
+      {/* 4-sided pyramid: triangles fanning from each edge to the center apex */}
+      <polygon points="0,0 100,0 50,50" fill={top} />
+      <polygon points="0,0 50,50 0,100" fill={left} />
+      <polygon points="100,0 100,100 50,50" fill={right} />
+      <polygon points="0,100 50,50 100,100" fill={bottom} />
+      {/* Apex highlight — catches the light at the pyramid's peak */}
+      <circle cx="50" cy="50" r="3.2" fill="rgba(255,255,255,0.22)" />
+      <circle cx="50" cy="50" r="1.3" fill="rgba(255,255,255,0.30)" />
+      {/* Subtle hand-hewn texture flecks, deterministic per-tile */}
+      <circle cx={fleckA.x} cy={fleckA.y} r="1.6" fill="rgba(0,0,0,0.16)" />
+      <circle cx={fleckB.x} cy={fleckB.y} r="1.3" fill="rgba(255,255,255,0.10)" />
+      <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.40)" strokeWidth="1.5" />
+    </svg>
+  );
+};
 
 /** Water tile — deep blue with concentric ripples and highlights */
 const WaterTile = ({ uid }: { uid: string }) => (
@@ -491,6 +514,7 @@ export function GameTop2D({
   zoomFactor = 1,
   fullBleed = false,
   rotateUpright = false,
+  theme,
   onArrowClick,
   onCancelSelection,
 }: GameTop2DProps) {
@@ -499,6 +523,7 @@ export function GameTop2D({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
+  const wallColor = themes[theme ?? "default"].wall;
 
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
 
@@ -622,7 +647,7 @@ export function GameTop2D({
                   case 0:  return <FloorTile uid={uid} />;
                   case 2:  return <StoneTile uid={uid} />;
                   case 6:  return <BreakableRockTile uid={uid} />;
-                  case 1:  return <FireTile uid={uid} />;
+                  case 1:  return <StoneWallTile uid={uid} baseColor={wallColor} />;
                   case 4:  return <WaterTile uid={uid} />;
                   case 3:  return <CaveTile uid={uid} isStart={false} rotate={rotateUpright} />;
                   case 18: return <CaveTile uid={uid} isStart rotate={rotateUpright} />;

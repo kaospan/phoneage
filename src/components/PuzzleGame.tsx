@@ -2842,6 +2842,7 @@ export const PuzzleGame = () => {
                 zoomFactor={cameraZoomFactor}
                 fullBleed={isFullscreenMode}
                 rotateUpright={isMobilePortrait}
+                theme={currentLevel.theme}
                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];

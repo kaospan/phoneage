@@ -112,6 +112,14 @@ const smoothDampVec3 = (
   velocity.set(x.velocity, y.velocity, z.velocity);
 };
 
+// Fire/wall tile (cell 1) is rendered as a squat 4-sided pyramid ("one stone block, 4 triangular
+// faces meeting at an apex") so a run of wall tiles reads as a continuous ridge of stone blocks
+// rather than a flat hazard grate. Radius is the circumradius so the square footprint matches the
+// ~1x1 tile: for a desired half-width w, a 4-gon's circumradius is w * sqrt(2).
+const WALL_HEIGHT = 0.62;
+const WALL_HALF_WIDTH = 0.49;
+const WALL_RADIUS = WALL_HALF_WIDTH * Math.SQRT2;
+
 const darkenHexColor = (hex: string, amount = 0.35) => {
   const normalized = hex.replace('#', '');
   if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
@@ -2027,7 +2035,6 @@ export const Game3D = ({
     const floor: Array<[number, number, number]> = [];
     const water: Array<[number, number, number]> = [];
     const wallBase: Array<[number, number, number]> = [];
-    const wallBars: Array<[number, number, number]> = [];
     const stone: Array<[number, number, number]> = [];
     const breakable: Array<[number, number, number]> = [];
     const redKeys: Array<[number, number, number]> = [];
@@ -2061,8 +2068,7 @@ export const Game3D = ({
           floor.push(pos);
         }
         if (cell === 1) {
-          wallBase.push([pos[0], 0.1, pos[2]]);
-          wallBars.push([pos[0], 0.12, pos[2]]);
+          wallBase.push([pos[0], WALL_HEIGHT / 2, pos[2]]);
         }
         if (cell === 2) stone.push([pos[0], 0.04, pos[2]]);
         if (cell === 6) breakable.push([pos[0], 0.16, pos[2]]);
@@ -2087,7 +2093,7 @@ export const Game3D = ({
       }
     }
 
-    return { floor, water, wallBase, wallBars, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, bonusTime, edgeRailsH, edgeRailsV, arrows };
+    return { floor, water, wallBase, stone, breakable, redKeys, greenKeys, redLocks, greenLocks, startCaves, teleports, bonusTime, edgeRailsH, edgeRailsV, arrows };
   }, [grid, offsetX, offsetZ]);
 
   const contentBounds = useMemo(() => {
@@ -2168,19 +2174,21 @@ export const Game3D = ({
   const waterGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1, 8, 8), []);
   const edgeRailHGeometry = useMemo(() => new THREE.BoxGeometry(1.03, 0.08, 0.06), []);
   const edgeRailVGeometry = useMemo(() => new THREE.BoxGeometry(0.06, 0.08, 1.03), []);
-  const wallGeometry = useMemo(() => new THREE.BoxGeometry(0.98, 0.2, 0.98), []);
-  const wallBarGeometry = useMemo(() => new THREE.BoxGeometry(0.96, 0.02, 0.08), []);
+  // 4 radial segments = square footprint; rotate 45° so flat faces (not vertices) face
+  // the cardinal directions, aligning the pyramid's sides with the tile's edges.
+  const wallGeometry = useMemo(() => {
+    const geo = new THREE.ConeGeometry(WALL_RADIUS, WALL_HEIGHT, 4, 1);
+    geo.rotateY(Math.PI / 4);
+    return geo;
+  }, []);
   const breakableGeometry = useMemo(() => new THREE.BoxGeometry(0.92, 0.24, 0.92, 1, 1, 1), []);
   const planeRotation = useMemo(() => new THREE.Euler(-Math.PI / 2, 0, 0), []);
-  const wallBarRotA = useMemo(() => new THREE.Euler(0, Math.PI / 4, 0), []);
-  const wallBarRotB = useMemo(() => new THREE.Euler(0, -Math.PI / 4, 0), []);
 
   const floorMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const floorBorderMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const waterMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const edgeRailMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const wallMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
-  const wallBarMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
   const breakableMaterial = useMemo(() => new THREE.MeshStandardMaterial(), []);
 
   useEffect(() => {
@@ -2224,21 +2232,19 @@ export const Game3D = ({
     edgeRailMaterial.needsUpdate = true;
 
     wallMaterial.color = new THREE.Color(themeColors.wall);
-    wallMaterial.roughness = 0.7;
-    wallMaterial.metalness = 0.2;
+    // Flat shading is essential here: ConeGeometry smooths normals across its 4 side faces by
+    // default, which makes a low-segment pyramid read as a round blob instead of a faceted
+    // stone block. Flat shading restores the crisp "4 triangles meet at an apex" pyramid look.
+    wallMaterial.flatShading = true;
+    wallMaterial.roughness = 0.88;
+    wallMaterial.metalness = 0.02;
     wallMaterial.emissive = new THREE.Color(themeColors.wall);
-    wallMaterial.emissiveIntensity = 0.1;
+    wallMaterial.emissiveIntensity = 0.04;
     wallMaterial.roughnessMap = noiseTexture ?? null;
     wallMaterial.bumpMap = noiseTexture ?? null;
-    wallMaterial.bumpScale = 0.03;
-    wallMaterial.envMapIntensity = 0.4;
+    wallMaterial.bumpScale = 0.05;
+    wallMaterial.envMapIntensity = 0.3;
     wallMaterial.needsUpdate = true;
-
-    wallBarMaterial.color = new THREE.Color('#000000');
-    wallBarMaterial.emissive = new THREE.Color('#ff0000');
-    wallBarMaterial.emissiveIntensity = 0.3;
-    wallBarMaterial.roughness = 0.8;
-    wallBarMaterial.needsUpdate = true;
 
     breakableMaterial.map = breakableTexture ?? null;
     breakableMaterial.color = new THREE.Color('#ffffff');
@@ -2253,7 +2259,7 @@ export const Game3D = ({
     breakableMaterial.bumpScale = 0.06;
     breakableMaterial.envMapIntensity = 0.35;
     breakableMaterial.needsUpdate = true;
-  }, [themeColors, noiseTexture, breakableTexture, floorMaterial, floorBorderMaterial, waterMaterial, edgeRailMaterial, wallMaterial, wallBarMaterial, breakableMaterial]);
+  }, [themeColors, noiseTexture, breakableTexture, floorMaterial, floorBorderMaterial, waterMaterial, edgeRailMaterial, wallMaterial, breakableMaterial]);
 
   const floorBorderPositions = useMemo(
     () => tileData.floor.map(([x, y, z]) => [x, y + 0.001, z] as [number, number, number]),
@@ -2390,22 +2396,6 @@ export const Game3D = ({
           material={wallMaterial}
           castShadow
           receiveShadow
-        />
-        <InstancedMeshSet
-          positions={tileData.wallBars}
-          geometry={wallBarGeometry}
-          material={wallBarMaterial}
-          castShadow
-          receiveShadow
-          rotation={wallBarRotA}
-        />
-        <InstancedMeshSet
-          positions={tileData.wallBars}
-          geometry={wallBarGeometry}
-          material={wallBarMaterial}
-          castShadow
-          receiveShadow
-          rotation={wallBarRotB}
         />
         {tileData.stone.map((position, index) => (
           <StoneRockTile

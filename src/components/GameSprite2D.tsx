@@ -789,7 +789,7 @@ export function GameSprite2D({
                 effectiveTileType === 5 ? "black" :
                 effectiveTileType === 0 ? "rgba(255,255,255,0.08)" :
                 effectiveTileType === 4 ? "rgba(30,144,255,0.55)" :
-                effectiveTileType === 1 ? "rgba(255,80,80,0.65)" :
+                effectiveTileType === 1 ? "rgba(166,124,82,0.78)" :
                 effectiveTileType === 2 ? "rgba(120,85,60,0.75)" :
                 effectiveTileType === 6 ? "rgba(160,155,140,0.80)" :
                 effectiveTileType === 14 ? "rgba(255,70,70,0.70)" :
