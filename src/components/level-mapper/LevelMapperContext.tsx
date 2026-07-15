@@ -5,6 +5,7 @@ import { detectGridLines } from './gridDetection';
 import { LevelMapperContext, type BulkContextType, type LevelMapperContextValue } from './LevelMapperStore';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS } from './mapperDefaults';
 import { findDuplicateGridWarning } from './duplicateGridGuard';
+import { getAdminMode } from '@/lib/adminMode';
 import {
     addColumnLeft as addColLeft,
     addColumnRight as addColRight,
@@ -1543,7 +1544,10 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 }
 
                 try {
-                    const response = await fetch(`${writerUrl}?id=${levelId}&overwrite=1`, {
+                    // Admin mode is an explicit "I know what I'm doing" signal, so let Save push through
+                    // a locked level's repo default without a separate console script.
+                    const forceQuery = getAdminMode() ? '&force=1' : '';
+                    const response = await fetch(`${writerUrl}?id=${levelId}&overwrite=1${forceQuery}`, {
                         method: 'POST',
                         headers: { 'content-type': 'application/json' },
                         body: JSON.stringify(payload),
