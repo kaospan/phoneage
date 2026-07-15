@@ -1411,6 +1411,19 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     return;
                 }
             }
+
+            if (getAdminMode()) {
+                const currentLevelId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
+                // A native confirm() blocks all JS (including any HMR/page reload) until answered,
+                // so it can't be missed the way a toast can when a repo write triggers a reload.
+                const confirmed = window.confirm(
+                    currentLevelId != null
+                        ? `Admin mode is on. Saving now will override the canonical repo default for level ${currentLevelId} if it's locked. Are you sure you want to continue?`
+                        : `Admin mode is on. Saving now may override a canonical repo default. Are you sure you want to continue?`
+                );
+                if (!confirmed) return;
+            }
+
             const nextProvenance: LevelProvenance = 'user-edited';
             const res = saveGridChanges(grid, playerStart, nextProvenance, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
             setAllLevels(res.levels);
