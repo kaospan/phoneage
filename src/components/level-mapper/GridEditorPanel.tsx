@@ -7,8 +7,6 @@ import { learnReferencesFromAlignedMap } from './learningOperations';
 import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
 import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
-import { findDuplicateGridWarning } from './duplicateGridGuard';
-import { toast } from 'sonner';
 
 const GRID_EDITOR_LAYOUT = {
     rulerSizePx: 20,
