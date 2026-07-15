@@ -7,6 +7,8 @@ import { learnReferencesFromAlignedMap } from './learningOperations';
 import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
 import { OVERLAY_IMAGE_SCALE_Y_BASE } from './overlayDefaults';
+import { findDuplicateGridWarning } from './duplicateGridGuard';
+import { toast } from 'sonner';
 
 const GRID_EDITOR_LAYOUT = {
     rulerSizePx: 20,
@@ -599,7 +601,28 @@ export const GridEditorPanel: React.FC = () => {
         }
     };
 
-    const saveCurrentMap = async () => {
+    const saveCurrentMap = async (options?: { skipDuplicateCheck?: boolean }) => {
+        if (!options?.skipDuplicateCheck) {
+            const currentLevelId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
+            const duplicateWarning = findDuplicateGridWarning(grid, currentLevelId, allLevels);
+            if (duplicateWarning) {
+                toast.warning(
+                    `This grid is ${duplicateWarning.similarityPct}% identical to level ${duplicateWarning.matchedLevelId}'s map.`,
+                    {
+                        position: 'bottom-right',
+                        duration: 10000,
+                        description: currentLevelId != null
+                            ? `Saving now would overwrite level ${currentLevelId} with what looks like level ${duplicateWarning.matchedLevelId}'s content. Double-check before proceeding.`
+                            : `Double-check before proceeding.`,
+                        action: {
+                            label: 'Save Anyway',
+                            onClick: () => { void saveCurrentMap({ skipDuplicateCheck: true }); },
+                        },
+                    }
+                );
+                return;
+            }
+        }
         if (imageURL && imageNaturalSize && trustedCellsRef.current.size > 0) {
             try {
                 await learnCurrentMap({ silent: true });
