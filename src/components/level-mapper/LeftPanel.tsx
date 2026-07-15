@@ -17,6 +17,7 @@ import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
 import { getAdminMode, setAdminMode } from '@/lib/adminMode';
+import { getCameraModesSkipped, setCameraModesSkipped } from '@/lib/viewModePrefs';
 import { toast } from 'sonner';
 
 const fitGridToShape = (source: number[][], nextRows: number, nextCols: number, fill = 5) => {
@@ -70,6 +71,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [pendingUploadAllowOverwrite, setPendingUploadAllowOverwrite] = useState(false);
     const [pendingUploadError, setPendingUploadError] = useState<string>('');
     const [adminModeEnabled, setAdminModeEnabled] = useState(() => getAdminMode());
+    const [skipCameraModes, setSkipCameraModes] = useState(() => getCameraModesSkipped());
 
     // Persistent tab state
     const [activeTab, setActiveTab] = useState(() => {
@@ -449,6 +451,38 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             ].join(' ')}
                         >
                             {adminModeEnabled ? 'ON' : 'OFF'}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const next = !skipCameraModes;
+                            setSkipCameraModes(next);
+                            setCameraModesSkipped(next);
+                            toast.success(`3D/FPS camera modes ${next ? 'removed from' : 'restored to'} the game's view rotation.`, {
+                                position: 'bottom-right',
+                                duration: 2200,
+                            });
+                        }}
+                        className={[
+                            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors',
+                            skipCameraModes
+                                ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
+                                : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
+                        ].join(' ')}
+                        title="When enabled, the main game's view-cycle button skips 3D and FPS camera modes."
+                        aria-pressed={skipCameraModes}
+                    >
+                        <span>Skip 3D/FPS</span>
+                        <span
+                            className={[
+                                'inline-flex min-w-8 items-center justify-center rounded-full border px-1.5 py-0.5 text-[9px]',
+                                skipCameraModes
+                                    ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
+                                    : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
+                            ].join(' ')}
+                        >
+                            {skipCameraModes ? 'ON' : 'OFF'}
                         </span>
                     </button>
                 </div>
