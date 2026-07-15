@@ -1,22 +1,27 @@
+import { VIEW_MODES, type ViewMode } from '@/components/PuzzleGame';
+
 // Persists which camera view-modes the main game's view-cycle button should skip.
 // Shared localStorage format with PuzzleGame.tsx's own disabledViewModes state, so a toggle
 // flipped here (e.g. from the Mapper) takes effect in the game without any extra plumbing.
 const DISABLED_VIEW_MODES_KEY = 'stone-age-disabled-view-modes';
-export const CAMERA_VIEW_MODES = ['3d', 'fps'] as const;
 
-const readDisabledViewModes = (): string[] => {
+export { VIEW_MODES };
+export type { ViewMode };
+
+const readDisabledViewModes = (): ViewMode[] => {
     if (typeof window === 'undefined') return [];
     try {
         const stored = localStorage.getItem(DISABLED_VIEW_MODES_KEY);
         if (!stored) return [];
         const parsed = JSON.parse(stored) as unknown;
-        return Array.isArray(parsed) ? parsed.filter((m): m is string => typeof m === 'string') : [];
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((m): m is ViewMode => (VIEW_MODES as readonly string[]).includes(m as string));
     } catch {
         return [];
     }
 };
 
-const writeDisabledViewModes = (modes: string[]): void => {
+const writeDisabledViewModes = (modes: ViewMode[]): void => {
     if (typeof window === 'undefined') return;
     try {
         localStorage.setItem(DISABLED_VIEW_MODES_KEY, JSON.stringify(modes));
@@ -25,16 +30,13 @@ const writeDisabledViewModes = (modes: string[]): void => {
     }
 };
 
-export const getCameraModesSkipped = (): boolean => {
-    const disabled = new Set(readDisabledViewModes());
-    return CAMERA_VIEW_MODES.every((mode) => disabled.has(mode));
-};
+export const getDisabledViewModes = (): ViewMode[] => readDisabledViewModes();
 
-export const setCameraModesSkipped = (skip: boolean): void => {
+export const isViewModeSkipped = (mode: ViewMode): boolean => readDisabledViewModes().includes(mode);
+
+export const setViewModeSkipped = (mode: ViewMode, skip: boolean): void => {
     const disabled = new Set(readDisabledViewModes());
-    for (const mode of CAMERA_VIEW_MODES) {
-        if (skip) disabled.add(mode);
-        else disabled.delete(mode);
-    }
+    if (skip) disabled.add(mode);
+    else disabled.delete(mode);
     writeDisabledViewModes(Array.from(disabled));
 };

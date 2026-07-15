@@ -123,8 +123,8 @@ const CAMERA_ZOOM_LEVELS = CAMERA_ZOOM_PERCENT_LEVELS.map((percent) => CAMERA_BA
 const DEFAULT_CAMERA_ZOOM_INDEX = CAMERA_ZOOM_PERCENT_LEVELS.indexOf(100);
 const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = DEFAULT_CAMERA_ZOOM_INDEX;
 const PINCH_ZOOM_STEP_DISTANCE_PX = 18;
-const VIEW_MODES = ["3d", "fps", "2d", "sprite", "top"] as const;
-type ViewMode = (typeof VIEW_MODES)[number];
+export const VIEW_MODES = ["3d", "fps", "2d", "sprite", "top"] as const;
+export type ViewMode = (typeof VIEW_MODES)[number];
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   "3d": "3D",
   fps: "FPS",
@@ -132,9 +132,6 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   sprite: "SPR",
   top: "TOP",
 };
-/** The camera modes a player can choose to exclude from the view-cycle button (3D/FPS are the
- *  slow-to-render ones people most often want to skip while testing levels). */
-const SKIPPABLE_VIEW_MODES: ViewMode[] = ["3d", "fps"];
 
 const ViewModeSettingsPopover = ({
   disabledViewModes,
@@ -160,7 +157,7 @@ const ViewModeSettingsPopover = ({
         Camera modes to cycle
       </div>
       <div className="space-y-2">
-        {SKIPPABLE_VIEW_MODES.map((mode) => {
+        {VIEW_MODES.map((mode) => {
           const checked = !disabledViewModes.has(mode);
           const inputId = `view-mode-toggle-${mode}`;
           return (
@@ -176,7 +173,7 @@ const ViewModeSettingsPopover = ({
         })}
       </div>
       <div className="mt-2 text-[11px] text-muted-foreground">
-        Unchecked modes are skipped by the view-cycle button. 2D, sprite, and top are always available.
+        Unchecked modes are skipped by the view-cycle button. At least one mode always stays available.
       </div>
     </PopoverContent>
   </Popover>
@@ -312,6 +309,10 @@ export const PuzzleGame = () => {
   const autoMobileFullscreenAppliedRef = useRef(false);
   const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
   const [gestureSurfaceSize, setGestureSurfaceSize] = useState({ w: 0, h: 0 });
+  const topHudBarRef = useRef<HTMLDivElement | null>(null);
+  const bottomHudBarRef = useRef<HTMLDivElement | null>(null);
+  const [topHudBarPx, setTopHudBarPx] = useState(0);
+  const [bottomHudBarPx, setBottomHudBarPx] = useState(0);
   const [userZoomTouched, setUserZoomTouched] = useState(false);
   const [fitRevision, setFitRevision] = useState(0);
   const initialCampaignProgressRef = useRef<CampaignProgressState | null>(null);
@@ -2052,6 +2053,30 @@ export const PuzzleGame = () => {
       return () => ro.disconnect();
     }, []);
 
+    // Measure the floating top/bottom HUD bars (mobile portrait) so the rotated game
+    // canvas below can reserve exactly that much space instead of rendering behind them.
+    useLayoutEffect(() => {
+      if (!isMobilePortrait) {
+        setTopHudBarPx(0);
+        setBottomHudBarPx(0);
+        return;
+      }
+      const topEl = topHudBarRef.current;
+      const bottomEl = bottomHudBarRef.current;
+      const ro = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const height = Math.ceil(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
+          if (entry.target === topEl) setTopHudBarPx(height);
+          else if (entry.target === bottomEl) setBottomHudBarPx(height);
+        }
+      });
+      if (topEl) ro.observe(topEl);
+      else setTopHudBarPx(0);
+      if (bottomEl) ro.observe(bottomEl);
+      else setBottomHudBarPx(0);
+      return () => ro.disconnect();
+    }, [isMobilePortrait]);
+
   const levelBackground = resolvedLevelImageUrl;
   const activeThemeKey = currentLevel?.theme ?? "default";
   const activeTheme = themes[activeThemeKey];
@@ -2666,6 +2691,7 @@ export const PuzzleGame = () => {
 
         {useSplitHud ? (
           <div
+            ref={topHudBarRef}
             className="relative z-50 flex w-full items-start justify-between px-2"
             style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)' }}
           >
@@ -2934,8 +2960,9 @@ export const PuzzleGame = () => {
         )}
         {useSplitHud && isMobilePortrait && (
           <div
-            className="fixed inset-x-2 z-50 flex justify-center"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.25rem)' }}
+            ref={bottomHudBarRef}
+            className="fixed inset-x-2 bottom-0 z-50 flex justify-center"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.25rem)' }}
           >
             <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-full overflow-x-auto">
               {secondaryHudButtons}
@@ -2980,10 +3007,14 @@ export const PuzzleGame = () => {
             ].join(' ')}
             style={isMobilePortrait ? {
               position: 'fixed',
-              width: '100svh',
+              // The board is laid out as a landscape box then rotated -90deg to fill a portrait
+              // screen. Its own width axis becomes the physical vertical axis after rotation, so
+              // shrinking width (and offsetting top/left to match) reserves exactly the on-screen
+              // space the floating top/bottom HUD bars occupy, keeping the map fully unobstructed.
+              width: `calc(100svh - ${topHudBarPx + bottomHudBarPx}px)`,
               height: '100svw',
-              top: 'calc((100svh - 100svw) / 2)',
-              left: 'calc((100svw - 100svh) / 2)',
+              top: `calc((100svh - 100svw) / 2 + ${(topHudBarPx - bottomHudBarPx) / 2}px)`,
+              left: `calc((100svw - 100svh) / 2 + ${(topHudBarPx + bottomHudBarPx) / 2}px)`,
               transform: 'rotate(-90deg)',
               transformOrigin: 'center center',
               borderRadius: '0px',

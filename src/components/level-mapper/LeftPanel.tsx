@@ -17,8 +17,18 @@ import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
 import { getAdminMode, setAdminMode } from '@/lib/adminMode';
-import { getCameraModesSkipped, setCameraModesSkipped } from '@/lib/viewModePrefs';
+import { VIEW_MODES, type ViewMode, getDisabledViewModes, setViewModeSkipped } from '@/lib/viewModePrefs';
 import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+
+const VIEW_MODE_TOGGLE_LABELS: Record<ViewMode, string> = {
+    '3d': '3D',
+    fps: 'FPS',
+    '2d': '2D',
+    sprite: 'SPR',
+    top: 'TOP',
+};
 
 const fitGridToShape = (source: number[][], nextRows: number, nextCols: number, fill = 5) => {
     const out = Array.from({ length: nextRows }, () => Array(nextCols).fill(fill));
@@ -71,7 +81,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [pendingUploadAllowOverwrite, setPendingUploadAllowOverwrite] = useState(false);
     const [pendingUploadError, setPendingUploadError] = useState<string>('');
     const [adminModeEnabled, setAdminModeEnabled] = useState(() => getAdminMode());
-    const [skipCameraModes, setSkipCameraModes] = useState(() => getCameraModesSkipped());
+    const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => new Set(getDisabledViewModes()));
 
     // Persistent tab state
     const [activeTab, setActiveTab] = useState(() => {
@@ -453,38 +463,70 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             {adminModeEnabled ? 'ON' : 'OFF'}
                         </span>
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const next = !skipCameraModes;
-                            setSkipCameraModes(next);
-                            setCameraModesSkipped(next);
-                            toast.success(`3D/FPS camera modes ${next ? 'removed from' : 'restored to'} the game's view rotation.`, {
-                                position: 'bottom-right',
-                                duration: 2200,
-                            });
-                        }}
-                        className={[
-                            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors',
-                            skipCameraModes
-                                ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
-                                : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
-                        ].join(' ')}
-                        title="When enabled, the main game's view-cycle button skips 3D and FPS camera modes."
-                        aria-pressed={skipCameraModes}
-                    >
-                        <span>Skip 3D/FPS</span>
-                        <span
-                            className={[
-                                'inline-flex min-w-8 items-center justify-center rounded-full border px-1.5 py-0.5 text-[9px]',
-                                skipCameraModes
-                                    ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
-                                    : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
-                            ].join(' ')}
-                        >
-                            {skipCameraModes ? 'ON' : 'OFF'}
-                        </span>
-                    </button>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <button
+                                type="button"
+                                className={[
+                                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors',
+                                    disabledViewModes.size > 0
+                                        ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
+                                        : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
+                                ].join(' ')}
+                                title="Choose which camera modes the main game's view-cycle button skips."
+                                aria-pressed={disabledViewModes.size > 0}
+                            >
+                                <span>View Modes</span>
+                                <span
+                                    className={[
+                                        'inline-flex min-w-8 items-center justify-center rounded-full border px-1.5 py-0.5 text-[9px]',
+                                        disabledViewModes.size > 0
+                                            ? 'border-emerald-200/40 bg-emerald-400/25 text-emerald-50'
+                                            : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
+                                    ].join(' ')}
+                                >
+                                    {disabledViewModes.size > 0 ? `${disabledViewModes.size} SKIPPED` : 'ALL ON'}
+                                </span>
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-56">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                                Camera modes to cycle
+                            </div>
+                            <div className="space-y-2">
+                                {VIEW_MODES.map((mode) => {
+                                    const checked = !disabledViewModes.has(mode);
+                                    const inputId = `mapper-view-mode-toggle-${mode}`;
+                                    return (
+                                        <label key={mode} htmlFor={inputId} className="flex items-center gap-2 text-sm cursor-pointer">
+                                            <Checkbox
+                                                id={inputId}
+                                                checked={checked}
+                                                onCheckedChange={(value) => {
+                                                    const skip = value === false;
+                                                    setViewModeSkipped(mode, skip);
+                                                    setDisabledViewModes((prev) => {
+                                                        const next = new Set(prev);
+                                                        if (skip) next.add(mode);
+                                                        else next.delete(mode);
+                                                        return next;
+                                                    });
+                                                    toast.success(`${VIEW_MODE_TOGGLE_LABELS[mode]} ${skip ? 'removed from' : 'restored to'} the game's view rotation.`, {
+                                                        position: 'bottom-right',
+                                                        duration: 2200,
+                                                    });
+                                                }}
+                                            />
+                                            {VIEW_MODE_TOGGLE_LABELS[mode]}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <div className="mt-2 text-[11px] text-muted-foreground">
+                                Unchecked modes are skipped by the view-cycle button. At least one mode always stays available.
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                 </div>
 
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-300">
