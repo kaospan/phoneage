@@ -166,7 +166,7 @@ export interface LevelMapperContextValue {
   // Save state
   isSaved: boolean;
   setIsSaved: (b: boolean) => void;
-  saveChanges: () => Promise<void>;
+  saveChanges: (options?: { force?: boolean }) => Promise<void>;
   lastSavedAt: number | null;
   lastSavedRepoStatus: 'saved' | 'failed' | 'unavailable' | null;
   showUnsavedBanner: boolean;

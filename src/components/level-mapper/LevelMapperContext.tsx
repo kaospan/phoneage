@@ -4,6 +4,7 @@ import { emptyGrid, formatGridRowsOneLine, voidGrid } from '@/lib/levelgrid';
 import { detectGridLines } from './gridDetection';
 import { LevelMapperContext, type BulkContextType, type LevelMapperContextValue } from './LevelMapperStore';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS } from './mapperDefaults';
+import { findDuplicateGridWarning } from './duplicateGridGuard';
 import {
     addColumnLeft as addColLeft,
     addColumnRight as addColRight,
@@ -1387,7 +1388,28 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setIsSaved(true);
         };
 
-        const saveChanges = async () => {
+        const saveChanges = async (options?: { force?: boolean }) => {
+            if (!options?.force) {
+                const currentLevelId = importLevelIndex !== null ? allLevels[importLevelIndex]?.id ?? null : null;
+                const duplicateWarning = findDuplicateGridWarning(grid, currentLevelId, allLevels);
+                if (duplicateWarning) {
+                    toast.warning(
+                        `This grid is ${duplicateWarning.similarityPct}% identical to level ${duplicateWarning.matchedLevelId}'s map.`,
+                        {
+                            position: 'bottom-right',
+                            duration: 12000,
+                            description: currentLevelId != null
+                                ? `Saving now would overwrite level ${currentLevelId} with what looks like level ${duplicateWarning.matchedLevelId}'s content (e.g. from navigating to the next level before saving). Double-check before proceeding.`
+                                : `Double-check before proceeding.`,
+                            action: {
+                                label: 'Save Anyway',
+                                onClick: () => { void saveChanges({ force: true }); },
+                            },
+                        }
+                    );
+                    return;
+                }
+            }
             const nextProvenance: LevelProvenance = 'user-edited';
             const res = saveGridChanges(grid, playerStart, nextProvenance, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
             setAllLevels(res.levels);
