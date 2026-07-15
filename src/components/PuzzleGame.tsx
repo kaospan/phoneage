@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   BookOpen,
@@ -13,6 +15,7 @@ import {
   PanelRightOpen,
   Play,
   RotateCcw,
+  Settings2,
   Sparkles,
   Star,
   TimerReset,
@@ -129,6 +132,56 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   sprite: "SPR",
   top: "TOP",
 };
+/** The camera modes a player can choose to exclude from the view-cycle button (3D/FPS are the
+ *  slow-to-render ones people most often want to skip while testing levels). */
+const SKIPPABLE_VIEW_MODES: ViewMode[] = ["3d", "fps"];
+
+const ViewModeSettingsPopover = ({
+  disabledViewModes,
+  onToggle,
+}: {
+  disabledViewModes: Set<ViewMode>;
+  onToggle: (mode: ViewMode, checked: boolean) => void;
+}) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <Button
+        variant="ghost"
+        size="default"
+        className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+        aria-label="Camera mode settings"
+        title="Choose which camera modes to cycle through"
+      >
+        <Settings2 className="h-4 w-4" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent align="start" className="w-56">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+        Camera modes to cycle
+      </div>
+      <div className="space-y-2">
+        {SKIPPABLE_VIEW_MODES.map((mode) => {
+          const checked = !disabledViewModes.has(mode);
+          const inputId = `view-mode-toggle-${mode}`;
+          return (
+            <label key={mode} htmlFor={inputId} className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                id={inputId}
+                checked={checked}
+                onCheckedChange={(value) => onToggle(mode, value !== false)}
+              />
+              {VIEW_MODE_LABELS[mode]}
+            </label>
+          );
+        })}
+      </div>
+      <div className="mt-2 text-[11px] text-muted-foreground">
+        Unchecked modes are skipped by the view-cycle button. 2D, sprite, and top are always available.
+      </div>
+    </PopoverContent>
+  </Popover>
+);
+
 const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
 /** How long a player can stand on a teleport pad before it auto-advances to the next pad in the
@@ -293,6 +346,48 @@ export const PuzzleGame = () => {
     }
     return "sprite";
   });
+  // Lets the player exclude slow/unwanted camera modes (3D, FPS) from the view-cycle button.
+  // Persisted so the choice sticks across sessions.
+  const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = localStorage.getItem("stone-age-disabled-view-modes");
+      if (!stored) return new Set();
+      const parsed = JSON.parse(stored) as unknown;
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.filter((m): m is ViewMode => (VIEW_MODES as readonly string[]).includes(m)));
+      }
+    } catch {
+      // ignore storage failures
+    }
+    return new Set();
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("stone-age-disabled-view-modes", JSON.stringify(Array.from(disabledViewModes)));
+    } catch {
+      // ignore storage failures
+    }
+  }, [disabledViewModes]);
+  const cyclableViewModes = useMemo(() => {
+    const remaining = VIEW_MODES.filter((m) => !disabledViewModes.has(m));
+    return remaining.length > 0 ? remaining : VIEW_MODES;
+  }, [disabledViewModes]);
+  // If the active mode gets disabled, hop to the nearest still-enabled mode immediately.
+  useEffect(() => {
+    if (!cyclableViewModes.includes(viewMode)) {
+      setViewMode(cyclableViewModes[0]);
+    }
+  }, [cyclableViewModes, viewMode]);
+  const toggleViewModeEnabled = useCallback((mode: ViewMode, checked: boolean) => {
+    setDisabledViewModes((prev) => {
+      const next = new Set(prev);
+      if (checked) next.delete(mode);
+      else next.add(mode);
+      return next;
+    });
+  }, []);
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
   const [cameraZoomIndex, setCameraZoomIndex] = useState(() => (
@@ -1763,7 +1858,7 @@ export const PuzzleGame = () => {
 
     const canZoomIn = cameraZoomIndex < CAMERA_ZOOM_LEVELS.length - 1;
     const canZoomOut = cameraZoomIndex > fitToWidthZoomIndex;
-    const nextViewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length];
+    const nextViewMode = cyclableViewModes[(cyclableViewModes.indexOf(viewMode) + 1) % cyclableViewModes.length];
 
   // Compute approximate viewport rectangle for mini-map viewport indicator
   const miniMapViewport = useMemo(() => {
@@ -2195,6 +2290,8 @@ export const PuzzleGame = () => {
         >
           {VIEW_MODE_LABELS[viewMode]}
         </Button>
+
+        <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
 
         {isMobile && (
           <Button
@@ -2817,6 +2914,8 @@ export const PuzzleGame = () => {
                   >
                     {VIEW_MODE_LABELS[viewMode]}
                   </Button>
+
+                  <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
 
                   <Button
                     onClick={() => void toggleFullscreenMode()}

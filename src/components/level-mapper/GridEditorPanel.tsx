@@ -64,7 +64,7 @@ export const GridEditorPanel: React.FC = () => {
         overlayEnabled, setOverlayEnabled, overlayOpacity, setOverlayOpacity,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         lastGridDetection,
-        saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved,
+        saveChanges, undo, redo, canUndo, canRedo, isSaved, setIsSaved, lastSavedAt, lastSavedRepoStatus,
         hourglassBrushSeconds, setHourglassBonusByCell,
         rows, cols, grid, activeTile, setGrid,
         pushUndo, pushUndoSnapshot,
@@ -665,6 +665,42 @@ export const GridEditorPanel: React.FC = () => {
                         <Save className="mr-1 h-3.5 w-3.5" />
                         {isSaved ? 'Saved' : 'Save'}
                     </Button>
+                    {lastSavedAt !== null && (
+                        <span
+                            className="flex items-center gap-1 whitespace-nowrap rounded-md border border-border/60 bg-background/40 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+                            title={new Date(lastSavedAt).toLocaleString()}
+                        >
+                            <span>
+                                Last saved {new Date(lastSavedAt).toLocaleString(undefined, {
+                                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                })}
+                            </span>
+                            {lastSavedRepoStatus === 'saved' && (
+                                <span
+                                    className="font-semibold text-emerald-500"
+                                    title="This save overwrote the canonical repo default in src/data/promoted-levels.json"
+                                >
+                                    · overrode default DB
+                                </span>
+                            )}
+                            {lastSavedRepoStatus === 'failed' && (
+                                <span
+                                    className="font-semibold text-amber-500"
+                                    title="Repo default write failed - only the local browser copy was saved"
+                                >
+                                    · default DB NOT overridden
+                                </span>
+                            )}
+                            {lastSavedRepoStatus === 'unavailable' && (
+                                <span
+                                    className="font-semibold text-muted-foreground"
+                                    title="asset-writer server not detected - only the local browser copy was saved"
+                                >
+                                    · local only
+                                </span>
+                            )}
+                        </span>
+                    )}
                     <Button
                         size="icon"
                         variant={overlayEnabled ? "secondary" : "outline"}

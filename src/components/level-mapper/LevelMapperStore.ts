@@ -167,6 +167,8 @@ export interface LevelMapperContextValue {
   isSaved: boolean;
   setIsSaved: (b: boolean) => void;
   saveChanges: () => Promise<void>;
+  lastSavedAt: number | null;
+  lastSavedRepoStatus: 'saved' | 'failed' | 'unavailable' | null;
   showUnsavedBanner: boolean;
   restoreDraftForLevel: (levelId: number) => boolean;
 

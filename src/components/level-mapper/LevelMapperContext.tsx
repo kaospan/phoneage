@@ -25,7 +25,8 @@ import {
     saveLevelImageScale,
     loadLevelMapperDraft,
     saveLevelMapperDraft,
-    saveLevelMapperSavedState
+    saveLevelMapperSavedState,
+    loadLevelMapperSavedState
 } from './persistenceOperations';
 import {
     useJsonSync,
@@ -293,6 +294,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const [showGrid, setShowGrid] = useState(true);
         const [jsonInput, setJsonInput] = useState('');
         const [isSaved, setIsSaved] = useState(true);
+        const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+        const [lastSavedRepoStatus, setLastSavedRepoStatus] = useState<'saved' | 'failed' | 'unavailable' | null>(null);
         const [showUnsavedBanner, setShowUnsavedBanner] = useState(true);
         const prevSizeRef = useRef({ rows, cols });
         const skipAutoResizeRef = useRef(false);
@@ -663,6 +666,11 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setUndoStack([]);
                         setRedoStack([]);
                         setIsSaved(true);
+                        // Seed the "last saved" indicator from this level's persisted saved-state (survives reloads);
+                        // the repo-override outcome itself is only known for saves made in the current session.
+                        const persistedSavedState = loadLevelMapperSavedState(baseline.levelId);
+                        setLastSavedAt(persistedSavedState?.updatedAt ?? null);
+                        setLastSavedRepoStatus(null);
                         console.log(`Auto-loaded Level ${baseline.levelId} from saved/default mapper baseline`);
                     };
 
@@ -1535,6 +1543,9 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 }
             }
 
+            setLastSavedAt(Date.now());
+            setLastSavedRepoStatus(repoDefaultStatus === 'skipped' ? null : repoDefaultStatus);
+
             if (res.override === 'cleared' && res.levelId != null) {
                 toast.info(`Grid is empty. Cleared level ${res.levelId} override and reverted to its default map.`, {
                     position: 'bottom-right',
@@ -1652,6 +1663,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             canRedo: redoStack.length > 0,
             isSaved,
             setIsSaved,
+            lastSavedAt,
+            lastSavedRepoStatus,
             saveChanges,
             showUnsavedBanner,
             restoreDraftForLevel,

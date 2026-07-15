@@ -24,6 +24,10 @@ reports_tmp
 .verify*
 apps/android/android/app/build
 
+# Ad-hoc scratch scripts and screen recordings (never intended for the repo)
+scripts/_tmp-*
+scripts/*.mp4
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
