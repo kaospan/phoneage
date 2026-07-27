@@ -772,7 +772,7 @@ export const PuzzleGame = () => {
             if (x < row.length - 1) adjacentCells.push(levelGrid[y][x + 1] as CellType);
 
             const terrainTypes = adjacentCells.filter(c =>
-              c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13
+              c !== 7 && c !== 8 && c !== 9 && c !== 10 && c !== 11 && c !== 12 && c !== 13 && c !== 2 && c !== 6
             ).map((c) => (c === 18 || c === 19 || c === 20 ? 0 : c));
 
             if (terrainTypes.length > 0) {
@@ -784,7 +784,7 @@ export const PuzzleGame = () => {
               const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
               return Number(mostCommon) as CellType;
             }
-            return 5;
+            return 0;
           }
           return cell;
         })
