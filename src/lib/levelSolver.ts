@@ -62,10 +62,13 @@ function buildBaseGrid(levelGrid: CellType[][]): CellType[][] {
         if (x > 0) adjacentCells.push(levelGrid[y][x - 1] as CellType);
         if (x < row.length - 1) adjacentCells.push(levelGrid[y][x + 1] as CellType);
 
-        // Do not let the start-marker cave (18) or teleport (19) "bleed" into arrow base terrain.
+        // Do not let the start-marker cave (18), teleport (19), bonus time (20), stone (2),
+        // or breakable rock (6) "bleed" into arrow base terrain.
         const terrainTypes = adjacentCells
-          .filter((c) => !isArrowCell(c))
-          .map((c) => (c === 18 || c === TELEPORT_CELL || c === 20 ? 0 : c));
+          .filter(
+            (c) =>
+              !isArrowCell(c) && c !== 2 && c !== 6 && c !== 18 && c !== TELEPORT_CELL && c !== 20
+          );
         if (terrainTypes.length > 0) {
           const counts = new Map<number, number>();
           for (const t of terrainTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
