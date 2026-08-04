@@ -247,8 +247,10 @@ const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
 /** How long a player can stand on a teleport pad before it auto-advances to the next pad in the
  *  cycle. Simulation runs at a fixed 60Hz tick (see the requestAnimationFrame loop below), so this
- *  is expressed in ticks: 2000ms * 60 ticks/sec / 1000ms = 120 ticks. */
-const TELEPORT_CYCLE_DELAY_TICKS = 120;
+ *  is expressed in ticks: 3000ms * 60 ticks/sec / 1000ms = 180 ticks. Bumped up from 2s to 3s —
+ *  2s wasn't always enough reaction time to step off before the next cycle fires, which could
+ *  bounce a player back and forth between two linked pads with no way out. */
+const TELEPORT_CYCLE_DELAY_TICKS = 180;
 /** Once a cycle commits, how long the origin pad flashes and the dino stays hidden before
  *  reappearing on the destination pad: 1000ms * 60 ticks/sec / 1000ms = 60 ticks. */
 const TELEPORT_WARP_FLASH_TICKS = 60;
@@ -1643,7 +1645,7 @@ export const PuzzleGame = () => {
               player.pos = { ...dest };
               player.teleportCycleTicksLeft = TELEPORT_CYCLE_DELAY_TICKS;
               if (player.isLocal) {
-                pushHudMessage("Teleporting again in 2s — move to break free!", 1800);
+                pushHudMessage("Teleporting again in 3s — move to break free!", 1800);
               }
             }
             player.teleportWarpFrom = null;
@@ -1778,7 +1780,7 @@ export const PuzzleGame = () => {
             if (sim.grid[player.pos.y]?.[player.pos.x] === TELEPORT_CELL) {
               player.teleportCycleTicksLeft = TELEPORT_CYCLE_DELAY_TICKS;
               if (player.isLocal) {
-                pushHudMessage("Teleporting in 2s — move to break free!", 1800);
+                pushHudMessage("Teleporting in 3s — move to break free!", 1800);
               }
             }
           }

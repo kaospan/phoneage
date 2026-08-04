@@ -28,7 +28,7 @@ A(17,3):L P:R P:R P:D P:L P:U P:U P:D P:L P:D P:R P:U P:U P:U P:L P:L P:L P:L P:
 Level 11
 P:R P:D P:R P:R P:U P:R P:D P:D A(15,6):L P:R A(12,8):U P:D P:R P:L P:U P:L P:L P:L P:D P:L P:L P:D P:D P:U P:U P:U P:U P:L P:L P:U P:D P:U P:R P:D P:L P:U P:R P:U
 Level 12
-UNSOLVED
+P:D P:L P:L P:L P:L A(0,1):R P:L A(2,0):D P:L P:D A(2,4):R A(7,7):L A(2,10):U P:D A(7,3):L P:R P:D P:R P:L P:U P:L P:U T P:R P:R P:R P:L P:R P:U P:U P:U P:R P:R P:U
 Level 13
 A(5,2):R A(13,2):D A(14,2):L A(5,7):R A(13,7):U A(5,2):R A(12,2):D A(12,7):R A(13,7):U A(12,6):R A(13,3):D A(13,5):R A(13,2):D A(13,5):R P:D P:L P:L
 Level 14
