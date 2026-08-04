@@ -11,6 +11,8 @@ import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 type Mode = "signin" | "signup" | "reset";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * Every player gets their own Supabase Auth account so progress can be synced to the cloud
  * and shown in the CRM. Whatever's in localStorage from before this shipped gets uploaded
@@ -25,11 +27,16 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
     // gap previously let <PuzzleGame> mount once, then unmount/remount when migration kicked in.
     const [readyUserId, setReadyUserId] = useState<string | null>(null);
     const [mode, setMode] = useState<Mode>("signin");
+    const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [info, setInfo] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    // Set when sign-in fails specifically because the account's email hasn't been confirmed yet
+    // (only possible for password accounts — Google sign-ins arrive pre-verified), so we can offer
+    // a resend-confirmation action instead of just showing Supabase's raw error text.
+    const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
 
     useEffect(() => {
         if (!supabase) {
@@ -68,9 +75,24 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
         setSubmitting(true);
         setError(null);
         setInfo(null);
+        setUnconfirmedEmail(null);
 
         if (mode === "signup") {
-            const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+            if (!EMAIL_RE.test(email.trim())) {
+                setSubmitting(false);
+                setError("Enter a valid email address.");
+                return;
+            }
+            if (!name.trim()) {
+                setSubmitting(false);
+                setError("Enter your name.");
+                return;
+            }
+            const { data, error: signUpError } = await supabase.auth.signUp({
+                email,
+                password,
+                options: { data: { full_name: name.trim() } },
+            });
             setSubmitting(false);
             if (signUpError) { setError(signUpError.message); return; }
             if (!data.session) {
@@ -92,7 +114,24 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
 
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         setSubmitting(false);
-        if (signInError) setError(signInError.message);
+        if (signInError) {
+            if (/email.*not.*confirmed/i.test(signInError.message)) {
+                setUnconfirmedEmail(email);
+                setError("Please confirm your email before signing in — check your inbox for the link we sent.");
+            } else {
+                setError(signInError.message);
+            }
+        }
+    };
+
+    const handleResendConfirmation = async () => {
+        if (!supabase || !unconfirmedEmail) return;
+        setSubmitting(true);
+        setError(null);
+        const { error: resendError } = await supabase.auth.resend({ type: "signup", email: unconfirmedEmail });
+        setSubmitting(false);
+        if (resendError) { setError(resendError.message); return; }
+        setInfo("Confirmation email resent — check your inbox.");
     };
 
     const handleGoogleSignIn = async () => {
@@ -141,6 +180,20 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                     </div>
 
                     <div className="mt-5 space-y-3">
+                        {mode === "signup" && (
+                            <div>
+                                <Label htmlFor="player-name" className="text-xs text-stone-300">Name</Label>
+                                <Input
+                                    id="player-name"
+                                    type="text"
+                                    autoComplete="name"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    required
+                                    className="mt-1 bg-white/5 text-stone-50"
+                                />
+                            </div>
+                        )}
                         <div>
                             <Label htmlFor="player-email" className="text-xs text-stone-300">Email</Label>
                             <Input
@@ -180,6 +233,16 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                             {info}
                         </div>
                     )}
+                    {unconfirmedEmail && (
+                        <button
+                            type="button"
+                            onClick={handleResendConfirmation}
+                            disabled={submitting}
+                            className="mt-2 w-full text-center text-xs font-bold text-amber-300 hover:text-amber-200"
+                        >
+                            Resend confirmation email
+                        </button>
+                    )}
 
                     <Button type="submit" disabled={submitting} className="mt-5 w-full bg-amber-300 text-stone-950 hover:bg-amber-200">
                         {submitting
@@ -203,7 +266,7 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                     {mode === "signin" && (
                         <button
                             type="button"
-                            onClick={() => { setMode("reset"); setError(null); setInfo(null); }}
+                            onClick={() => { setMode("reset"); setError(null); setInfo(null); setUnconfirmedEmail(null); }}
                             className="mt-3 w-full text-center text-xs text-stone-400 hover:text-stone-200"
                         >
                             Forgot password?
@@ -216,6 +279,7 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                             setMode(mode === "signin" ? "signup" : "signin");
                             setError(null);
                             setInfo(null);
+                            setUnconfirmedEmail(null);
                         }}
                         className="mt-1 w-full text-center text-xs text-stone-400 hover:text-stone-200"
                     >

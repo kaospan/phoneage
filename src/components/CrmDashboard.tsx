@@ -129,6 +129,21 @@ const formatDuration = (ms: number): string => {
 
 type TestUserFilter = "all" | "non-test" | "test-only";
 
+// Shared identity cell: shows the player's name (from registration, or Google's profile for
+// OAuth sign-ins) as the primary label with email as a secondary line, falling back to email
+// alone for accounts that predate the name field.
+function PlayerIdentity({ profile }: { profile: { email: string | null; display_name: string | null; id: string } }) {
+    if (profile.display_name) {
+        return (
+            <div>
+                <div className="font-medium text-stone-100">{profile.display_name}</div>
+                {profile.email && <div className="text-[10px] text-stone-500">{profile.email}</div>}
+            </div>
+        );
+    }
+    return <span className="font-medium text-stone-100">{profile.email ?? profile.id.slice(0, 8)}</span>;
+}
+
 export function CrmDashboard() {
     const [profiles, setProfiles] = useState<ProfileRow[]>([]);
     const [progress, setProgress] = useState<ProgressRow[]>([]);
@@ -425,7 +440,7 @@ export function CrmDashboard() {
                                                     selectedUserId === p.id ? "bg-white/10" : "",
                                                 ].join(" ")}
                                             >
-                                                <TableCell className="font-medium text-stone-100">{p.email ?? p.display_name ?? p.id.slice(0, 8)}</TableCell>
+                                                <TableCell><PlayerIdentity profile={p} /></TableCell>
                                                 <TableCell>
                                                     {online ? (
                                                         <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-300">
@@ -520,7 +535,7 @@ export function CrmDashboard() {
                                                 ].join(" ")}
                                             >
                                                 <TableCell className="text-stone-400">{idx + 1}</TableCell>
-                                                <TableCell className="font-medium text-stone-100">{row.profile.email ?? row.profile.display_name ?? row.profile.id.slice(0, 8)}</TableCell>
+                                                <TableCell><PlayerIdentity profile={row.profile} /></TableCell>
                                                 <TableCell>
                                                     {online ? (
                                                         <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-300">
@@ -585,7 +600,7 @@ export function CrmDashboard() {
                                         return (
                                             <TableRow key={`${entry.levelId}-${entry.userId}`} onClick={() => setSelectedUserId(entry.userId)} className="cursor-pointer border-white/5 hover:bg-white/5">
                                                 <TableCell className="text-stone-400">{idx + 1}</TableCell>
-                                                <TableCell className="font-medium text-stone-100">{profile.email ?? profile.display_name ?? profile.id.slice(0, 8)}</TableCell>
+                                                <TableCell><PlayerIdentity profile={profile} /></TableCell>
                                                 {leaderboardLevelId === "all" && <TableCell className="text-stone-400">L{entry.levelId}</TableCell>}
                                                 <TableCell>{entry.moves}</TableCell>
                                             </TableRow>
@@ -617,7 +632,7 @@ export function CrmDashboard() {
                                         return (
                                             <TableRow key={`${entry.levelId}-${entry.userId}`} onClick={() => setSelectedUserId(entry.userId)} className="cursor-pointer border-white/5 hover:bg-white/5">
                                                 <TableCell className="text-stone-400">{idx + 1}</TableCell>
-                                                <TableCell className="font-medium text-stone-100">{profile.email ?? profile.display_name ?? profile.id.slice(0, 8)}</TableCell>
+                                                <TableCell><PlayerIdentity profile={profile} /></TableCell>
                                                 {leaderboardLevelId === "all" && <TableCell className="text-stone-400">L{entry.levelId}</TableCell>}
                                                 <TableCell>{formatDuration(entry.timeMs)}</TableCell>
                                             </TableRow>
@@ -706,7 +721,12 @@ export function CrmDashboard() {
             {selectedProfile && (
                 <div className="w-[380px] shrink-0 overflow-y-auto border-l border-white/10 bg-stone-900/60 px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <div className="text-sm font-black text-stone-50">{selectedProfile.email}</div>
+                        <div>
+                            <div className="text-sm font-black text-stone-50">{selectedProfile.display_name ?? selectedProfile.email}</div>
+                            {selectedProfile.display_name && selectedProfile.email && (
+                                <div className="text-[10px] text-stone-500">{selectedProfile.email}</div>
+                            )}
+                        </div>
                         <button onClick={() => setSelectedUserId(null)} className="text-xs text-stone-400 hover:text-stone-200">Close</button>
                     </div>
                     <div className="mt-1 text-xs text-stone-500">
