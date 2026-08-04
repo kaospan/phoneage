@@ -679,6 +679,94 @@ export async function solveGrid(
   });
 }
 
+export interface SolutionFrame {
+  /** 0 = initial position before any action has been taken. */
+  step: number;
+  label: string;
+  grid: CellType[][];
+  playerPos: Position;
+  /** Set for remote-arrow actions so the UI can highlight which arrow moved and where it landed. */
+  arrowFrom?: Position;
+  arrowTo?: Position;
+}
+
+const DIR_VECTORS: Record<DirKey, { dx: number; dy: number }> = {
+  U: { dx: 0, dy: -1 },
+  R: { dx: 1, dy: 0 },
+  D: { dx: 0, dy: 1 },
+  L: { dx: -1, dy: 0 },
+};
+
+const DIR_LABELS: Record<DirKey, string> = { U: "Up", R: "Right", D: "Down", L: "Left" };
+
+function parseActionString(raw: string): Action | null {
+  if (raw === "T") return { t: "T" };
+  const pMatch = raw.match(/^P:([URDL])$/);
+  if (pMatch) return { t: "P", d: pMatch[1] as DirKey };
+  const aMatch = raw.match(/^A\((\d+),(\d+)\):([URDL])$/);
+  if (aMatch) return { t: "A", x: Number(aMatch[1]), y: Number(aMatch[2]), d: aMatch[3] as DirKey };
+  return null;
+}
+
+/**
+ * Turns a solved action list (as returned in `LevelSolution.actions`) back into a sequence of
+ * concrete grid + player-position snapshots, by replaying each action through the same atomic
+ * move functions the solver's search used. Used to drive a step-by-step visual playback of a
+ * solution rather than just listing the raw move codes.
+ */
+export function replaySolutionActions(
+  grid: CellType[][],
+  playerStart: Position,
+  actionStrings: string[],
+): SolutionFrame[] {
+  let state: SolveState = {
+    grid: grid.map((r) => r.slice()) as CellType[][],
+    baseGrid: buildBaseGrid(grid.map((r) => r.slice()) as CellType[][]),
+    playerPos: { ...playerStart },
+    inventory: { red: 0, green: 0 },
+    breakableRockStates: new Map(),
+  };
+
+  const frames: SolutionFrame[] = [
+    { step: 0, label: "Start", grid: state.grid, playerPos: state.playerPos },
+  ];
+
+  actionStrings.forEach((raw, i) => {
+    const action = parseActionString(raw);
+    if (!action) return;
+
+    let next: SolveState | null = null;
+    let label = raw;
+    let arrowFrom: Position | undefined;
+    let arrowTo: Position | undefined;
+
+    if (action.t === "P") {
+      const v = DIR_VECTORS[action.d];
+      next = applyPlayerMoveAtomic(state, v.dx, v.dy);
+      label = `Move ${DIR_LABELS[action.d]}`;
+    } else if (action.t === "A") {
+      const v = DIR_VECTORS[action.d];
+      arrowFrom = { x: action.x, y: action.y };
+      const arrowCell = state.grid[action.y]?.[action.x] as CellType | undefined;
+      if (arrowCell !== undefined) {
+        const preview = computeRemoteArrowGlidePath(state.grid, arrowFrom, v.dx, v.dy, arrowCell);
+        if (preview.path.length > 0) arrowTo = preview.path[preview.path.length - 1];
+      }
+      next = applyRemoteArrowMoveAtomic(state, arrowFrom, v.dx, v.dy);
+      label = `Slide arrow (${action.x}, ${action.y}) ${DIR_LABELS[action.d]}`;
+    } else if (action.t === "T") {
+      next = applyTeleportCycleAtomic(state);
+      label = "Wait for teleport";
+    }
+
+    if (!next) return; // Defensive: a valid solution should never hit this.
+    state = next;
+    frames.push({ step: i + 1, label, grid: state.grid, playerPos: state.playerPos, arrowFrom, arrowTo });
+  });
+
+  return frames;
+}
+
 export async function runSolveLevel(levelId: number, options: SolveOptions = {}): Promise<LevelSolution> {
   const levels = getAllLevels();
   const lvl = levels.find((l) => l.id === levelId);
