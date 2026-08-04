@@ -98,7 +98,7 @@ ws.on('message', (raw) => {
 
 Impact:
 1. **Unauthenticated WebSocket flooding:** Any anonymous client can connect and broadcast arbitrary `input` messages to all connected players. An attacker can flood every connected player with phantom inputs, effectively causing a denial-of-service / input-spoofing attack during multiplayer sessions.
-2. **Client-side input trust:** The client receiving `{ type: 'input', input: msg.input }` trusts the `input` payload blindly. If the client does not validate the shape/content of `input` (e.g., unexpected keys, oversized payloads, or non-string values), this can trigger unhandled exceptions, desync, or crashes in the React game loop. (Verify client-side handling in `PuzzleGame.tsx`'s presence input handler.)
+2. **Client-side input trust (confirmed):** The client receives `msg.input` and pushes it directly into the input queue with **zero schema validation** — `PuzzleGame.tsx:1589` (`queue.push(msg.input)`). The queued input is then dispatched by `input.type` (`select`/`deselect`/`move`) and for `move`, `input.dx`/`input.dy` are passed directly to `attemptPlayerMove(state, input.dx, input.dy)` at `PuzzleGame.tsx:1799`, which assumes these are numbers. If an attacker sends `{ type: 'move', dx: 'evil', dy: 'string' }`, `playerPos.x + dx` produces string concatenation, `grid[NaN]` returns `undefined`, and `undefined[targetX]` throws a `TypeError` — crashing the game loop on the **receiving** client. Since the server broadcasts to all peers, a single malicious client can crash every connected player's game.
 3. **No rate limiting:** An attacker can open many connections or send high-frequency messages without throttling.
 
 Recommendation (High priority):

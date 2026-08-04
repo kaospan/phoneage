@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowDownUp, ArrowLeftRight, Eye, EyeOff, Image as ImageIcon, Link2, Link2Off, Maximize2, Move, Redo2, Save, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
 import { TILE_TYPES } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
-import Palette from './Palette';
+import Palette, { useTileSpriteUrls } from './Palette';
 import { learnReferencesFromAlignedMap } from './learningOperations';
 import type { DetectedGrid } from './gridDetection';
 import { updateAlignmentProfile } from './alignmentProfile';
@@ -620,6 +620,8 @@ export const GridEditorPanel: React.FC = () => {
     // Get the import level info for display
     const importLevel = importLevelIndex !== null && importLevelIndex !== undefined ? allLevels[importLevelIndex] : null;
     const selectedTile = TILE_TYPES.find((t) => t.id === activeTile) ?? TILE_TYPES[0];
+    const tileSpriteUrls = useTileSpriteUrls();
+    const selectedTileSprite = tileSpriteUrls[selectedTile.id];
     const rulerSizePx = GRID_EDITOR_LAYOUT.rulerSizePx;
     const gridRightPx = displayOffsetX + cols * cellWidth;
     const gridBottomPx = displayOffsetY + rows * cellHeight;
@@ -916,13 +918,20 @@ export const GridEditorPanel: React.FC = () => {
             </div>
         </div>
             <div className="relative flex min-h-0 flex-1 gap-1.5">
-                <div className="flex w-[92px] shrink-0 flex-col gap-2 overflow-y-auto rounded-md border border-border/60 bg-background/20 p-1.5">
-                    <div className="flex flex-col items-center gap-1 rounded-md border border-border/50 bg-background/40 p-1.5">
+                <div className="flex w-[184px] shrink-0 flex-col gap-2 overflow-y-auto rounded-md border border-border/60 bg-background/20 p-1.5">
+                    <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 p-1.5">
                         <span
-                            className="h-7 w-7 rounded border border-black/25 shadow-sm"
-                            style={{ background: selectedTile.color }}
+                            className="h-8 w-8 shrink-0 rounded-md border-2 shadow-sm"
+                            style={{
+                                borderColor: selectedTile.color,
+                                backgroundColor: selectedTile.color,
+                                backgroundImage: selectedTileSprite ? `url(${selectedTileSprite})` : undefined,
+                                backgroundSize: "cover",
+                                backgroundPosition: "center",
+                                imageRendering: "pixelated",
+                            }}
                         />
-                        <div className="text-center text-[9px] font-semibold leading-tight text-foreground">
+                        <div className="min-w-0 truncate text-xs font-semibold leading-tight text-foreground">
                             {selectedTile.name}
                         </div>
                     </div>
