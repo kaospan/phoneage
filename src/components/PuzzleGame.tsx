@@ -466,6 +466,13 @@ export const PuzzleGame = () => {
     initialCampaignProgressRef.current ?? loadCampaignProgress()
   );
   const didRestoreCampaignLevelRef = useRef(false);
+  // The level-restore effect below fires as soon as allLevels is ready (synchronously on mount),
+  // which used to race ahead of the async cloud-progress fetch and always "win" with stale local
+  // data — so a signed-in player's last-played level from another device never actually got
+  // navigated to, even though their progress data itself was correctly pulled from the cloud.
+  // This ref/tick pair makes the restore wait for the cloud fetch to settle first when logged in.
+  const cloudProgressSettledRef = useRef(false);
+  const [cloudProgressSettledTick, setCloudProgressSettledTick] = useState(0);
 
   useEffect(() => {
     campaignProgressRef.current = campaignProgress;
@@ -499,14 +506,22 @@ export const PuzzleGame = () => {
 
   // On login (or account switch), the cloud is the source of truth — pull it down once.
   useEffect(() => {
-    if (!playerUserId) return;
+    if (!playerUserId) {
+      cloudProgressSettledRef.current = true;
+      setCloudProgressSettledTick((t) => t + 1);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const cloud = await fetchCloudProgress(playerUserId);
-      if (!cloud || cancelled) return;
-      applyingCloudProgressRef.current = true;
-      commitCampaignProgress(cloud);
-      applyingCloudProgressRef.current = false;
+      if (cancelled) return;
+      if (cloud) {
+        applyingCloudProgressRef.current = true;
+        commitCampaignProgress(cloud);
+        applyingCloudProgressRef.current = false;
+      }
+      cloudProgressSettledRef.current = true;
+      setCloudProgressSettledTick((t) => t + 1);
     })();
     return () => { cancelled = true; };
   }, [playerUserId, commitCampaignProgress]);
@@ -706,6 +721,7 @@ export const PuzzleGame = () => {
   useEffect(() => {
     if (didRestoreCampaignLevelRef.current) return;
     if (allLevels.length === 0) return;
+    if (!cloudProgressSettledRef.current) return; // wait for cloud fetch so we don't restore stale local data
     didRestoreCampaignLevelRef.current = true;
 
     const savedLevelId = campaignProgressRef.current.lastPlayedLevelId;
@@ -721,7 +737,7 @@ export const PuzzleGame = () => {
     }
 
     setCurrentLevelIndex((index) => Math.min(index, allLevels.length - 1));
-  }, [allLevels]);
+  }, [allLevels, cloudProgressSettledTick]);
 
   useEffect(() => {
     if (!currentLevel) return;
@@ -889,7 +905,14 @@ export const PuzzleGame = () => {
       if (!isRedundantReapply) {
         const openSessionId = currentPlaySessionIdRef.current;
         if (openSessionId) {
-          void endPlaySession(openSessionId, { completed: false, moves: priorMoves || null });
+          const abandonedTimeLeftSeconds = timerEnabledRef.current
+            ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
+            : null;
+          void endPlaySession(openSessionId, {
+            completed: false,
+            moves: priorMoves || null,
+            timeLeftSeconds: abandonedTimeLeftSeconds,
+          });
           currentPlaySessionIdRef.current = null;
         }
         const sessionUserId = playerUserIdRef.current;
@@ -1615,7 +1638,11 @@ export const PuzzleGame = () => {
 
         commitCampaignProgress(clearUpdate.progress);
         if (currentPlaySessionIdRef.current) {
-          void endPlaySession(currentPlaySessionIdRef.current, { completed: true, moves: localPlayer.moves });
+          void endPlaySession(currentPlaySessionIdRef.current, {
+            completed: true,
+            moves: localPlayer.moves,
+            timeLeftSeconds: clearTimeLeftSeconds,
+          });
           currentPlaySessionIdRef.current = null;
         }
         if (recordMovesEnabledRef.current && !isReplayingRef.current && recordedActionsRef.current.length > 0) {

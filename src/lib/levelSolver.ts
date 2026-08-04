@@ -629,21 +629,17 @@ export function dumpLevel(levelId: number): LevelDump | null {
   };
 }
 
-export async function runSolveLevel(levelId: number, options: SolveOptions = {}): Promise<LevelSolution> {
-  const levels = getAllLevels();
-  const lvl = levels.find((l) => l.id === levelId);
-  if (!lvl) {
-    return {
-      levelId,
-      solved: false,
-      moves: null,
-      actions: [],
-      reason: "Level not found",
-      nodesExpanded: 0,
-      ms: 0,
-    };
-  }
-  const grid = lvl.grid as CellType[][];
+/**
+ * Solves an arbitrary grid directly (no need for it to be registered via getAllLevels()) —
+ * used by level-generation tooling to verify a candidate level before committing to it.
+ */
+export async function solveGrid(
+  grid: CellType[][],
+  playerStart: Position,
+  cavePos: Position,
+  options: SolveOptions = {},
+  levelId = 0,
+): Promise<LevelSolution> {
   if (isPlaceholderGrid(grid)) {
     return {
       levelId,
@@ -655,7 +651,7 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
       ms: 0,
     };
   }
-  const goalCaves = findGoalCaves(grid, lvl.cavePos);
+  const goalCaves = findGoalCaves(grid, cavePos);
   if (goalCaves.length === 0) {
     return {
       levelId,
@@ -671,7 +667,7 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
   const start: SolveState = {
     grid: grid.map((r) => r.slice()) as CellType[][],
     baseGrid: buildBaseGrid(grid.map((r) => r.slice()) as CellType[][]),
-    playerPos: { ...lvl.playerStart },
+    playerPos: { ...playerStart },
     inventory: { red: 0, green: 0 },
     breakableRockStates: new Map(),
   };
@@ -681,4 +677,22 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
     maxDepth: options.maxDepth ?? 300,
     onProgress: options.onProgress,
   });
+}
+
+export async function runSolveLevel(levelId: number, options: SolveOptions = {}): Promise<LevelSolution> {
+  const levels = getAllLevels();
+  const lvl = levels.find((l) => l.id === levelId);
+  if (!lvl) {
+    return {
+      levelId,
+      solved: false,
+      moves: null,
+      actions: [],
+      reason: "Level not found",
+      nodesExpanded: 0,
+      ms: 0,
+    };
+  }
+  const result = await solveGrid(lvl.grid as CellType[][], lvl.playerStart, lvl.cavePos, options, levelId);
+  return result;
 }

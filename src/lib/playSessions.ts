@@ -18,7 +18,7 @@ export async function startPlaySession(userId: string, levelId: number): Promise
 /** Closes out a previously-started session (completion, or the player left/reset before finishing). */
 export async function endPlaySession(
   sessionId: string,
-  outcome: { completed: boolean; moves: number | null },
+  outcome: { completed: boolean; moves: number | null; timeLeftSeconds?: number | null },
 ): Promise<void> {
   if (!supabase) return;
   const { error } = await supabase
@@ -27,6 +27,7 @@ export async function endPlaySession(
       ended_at: new Date().toISOString(),
       completed: outcome.completed,
       moves: outcome.moves,
+      time_left_seconds: outcome.timeLeftSeconds ?? null,
     })
     .eq("id", sessionId);
   if (error) console.warn("[playSessions] end error:", error.message);

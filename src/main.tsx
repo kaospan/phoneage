@@ -4,7 +4,7 @@ import App from "./App.tsx";
 import "./index.css";
 import { seedDefaultReferences } from "@/lib/referenceSeeder";
 import { runBulkBuildAndDownload, runBulkBuildReport } from "@/lib/levelBulkBuilder";
-import { dumpLevel, runSolveAllLevels, runSolveLevel } from "@/lib/levelSolver";
+import { dumpLevel, runSolveAllLevels, runSolveLevel, solveGrid } from "@/lib/levelSolver";
 import { runLevelQaReport } from "@/lib/levelQa";
 
 console.log('🚀 main.tsx starting...');
@@ -113,6 +113,7 @@ try {
       runBulkBuildReport: typeof runBulkBuildReport;
       runSolveAllLevels: typeof runSolveAllLevels;
       runSolveLevel: typeof runSolveLevel;
+      solveGrid: typeof solveGrid;
       dumpLevel: typeof dumpLevel;
       runLevelQaReport: typeof runLevelQaReport;
       exportLocalStorageSeed: typeof buildLocalStorageSeed;
@@ -123,6 +124,7 @@ try {
     debugWindow.runBulkBuildReport = runBulkBuildReport;
     debugWindow.runSolveAllLevels = runSolveAllLevels;
     debugWindow.runSolveLevel = runSolveLevel;
+    debugWindow.solveGrid = solveGrid;
     debugWindow.dumpLevel = dumpLevel;
     debugWindow.runLevelQaReport = runLevelQaReport;
 

@@ -31,6 +31,7 @@ interface ProgressRow {
     best_moves: number | null;
     last_moves: number | null;
     best_time_left_seconds: number | null;
+    last_time_left_seconds: number | null;
     last_completed_at: string | null;
 }
 
@@ -42,6 +43,7 @@ interface SessionRow {
     ended_at: string | null;
     completed: boolean;
     moves: number | null;
+    time_left_seconds: number | null;
 }
 
 interface PresenceMeta {
@@ -75,6 +77,26 @@ const formatTimestamp = (iso: string | null | undefined): string => {
         minute: "2-digit",
         second: "2-digit",
     });
+};
+
+/** Level-clock seconds remaining, e.g. 95 -> "1:35". */
+const formatClock = (seconds: number | null | undefined): string => {
+    if (seconds == null) return "—";
+    const safe = Math.max(0, Math.round(seconds));
+    const m = Math.floor(safe / 60);
+    const s = safe % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+};
+
+/** Wall-clock duration played, e.g. 4025000ms -> "1h 7m". */
+const formatDuration = (ms: number): string => {
+    const totalSeconds = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
 };
 
 export function CrmDashboard() {
@@ -132,17 +154,21 @@ export function CrmDashboard() {
             totalClears: number;
             totalAttempts: number;
             totalMoves: number;
+            totalPlayMs: number;
         }>();
         for (const p of progress) {
-            const s = map.get(p.user_id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0 };
+            const s = map.get(p.user_id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0, totalPlayMs: 0 };
             if (p.completed) s.levelsCompleted += 1;
             s.totalClears += p.clear_count ?? 0;
             map.set(p.user_id, s);
         }
+        const now = Date.now();
         for (const sess of sessions) {
-            const s = map.get(sess.user_id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0 };
+            const s = map.get(sess.user_id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0, totalPlayMs: 0 };
             s.totalAttempts += 1;
             s.totalMoves += sess.moves ?? 0;
+            const endMs = sess.ended_at ? new Date(sess.ended_at).getTime() : now;
+            s.totalPlayMs += Math.max(0, endMs - new Date(sess.started_at).getTime());
             map.set(sess.user_id, s);
         }
         return map;
@@ -196,13 +222,14 @@ export function CrmDashboard() {
                                     <TableHead className="text-stone-400">Levels Cleared</TableHead>
                                     <TableHead className="text-stone-400">Total Attempts</TableHead>
                                     <TableHead className="text-stone-400">Total Moves</TableHead>
+                                    <TableHead className="text-stone-400">Time Played</TableHead>
                                     <TableHead className="text-stone-400">Last Seen</TableHead>
                                     <TableHead className="text-stone-400">Joined</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {profiles.map((p) => {
-                                    const stats = statsByUser.get(p.id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0 };
+                                    const stats = statsByUser.get(p.id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0, totalPlayMs: 0 };
                                     const online = onlineIds.get(p.id);
                                     return (
                                         <TableRow
@@ -227,6 +254,7 @@ export function CrmDashboard() {
                                             <TableCell>{stats.levelsCompleted}</TableCell>
                                             <TableCell>{stats.totalAttempts}</TableCell>
                                             <TableCell>{stats.totalMoves}</TableCell>
+                                            <TableCell>{formatDuration(stats.totalPlayMs)}</TableCell>
                                             <TableCell className="text-stone-400" title={formatTimestamp(p.last_seen_at)}>
                                                 <div>{timeAgo(p.last_seen_at)}</div>
                                                 <div className="text-[10px] text-stone-600">{formatTimestamp(p.last_seen_at)}</div>
@@ -240,7 +268,7 @@ export function CrmDashboard() {
                                 })}
                                 {profiles.length === 0 && (
                                     <TableRow className="border-white/5">
-                                        <TableCell colSpan={7} className="py-8 text-center text-stone-500">
+                                        <TableCell colSpan={8} className="py-8 text-center text-stone-500">
                                             No players yet.
                                         </TableCell>
                                     </TableRow>
@@ -262,6 +290,9 @@ export function CrmDashboard() {
                         <div className="text-xs text-stone-500">
                             Last seen {timeAgo(selectedProfile.last_seen_at)} ({formatTimestamp(selectedProfile.last_seen_at)})
                         </div>
+                        <div className="text-xs text-stone-500">
+                            Total time played: {formatDuration((statsByUser.get(selectedProfile.id) ?? { totalPlayMs: 0 }).totalPlayMs)}
+                        </div>
 
                         <div className="mt-4 text-xs font-black uppercase tracking-wide text-stone-400">Per-level progress</div>
                         <div className="mt-2 space-y-1.5">
@@ -274,6 +305,9 @@ export function CrmDashboard() {
                                     </span>
                                     <span className="text-stone-400">×{row.clear_count}</span>
                                     <span className="text-stone-400">best {row.best_moves ?? "—"} mv</span>
+                                    {row.best_time_left_seconds != null && (
+                                        <span className="text-stone-400">clock {formatClock(row.best_time_left_seconds)}</span>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -289,6 +323,9 @@ export function CrmDashboard() {
                                             {s.completed ? "Cleared" : s.ended_at ? "Abandoned" : "In progress"}
                                         </span>
                                         <span className="text-stone-400">{s.moves ?? "—"} mv</span>
+                                        {s.time_left_seconds != null && (
+                                            <span className="text-stone-400">clock {formatClock(s.time_left_seconds)}</span>
+                                        )}
                                         <span className="text-stone-500" title={formatTimestamp(s.started_at)}>{timeAgo(s.started_at)}</span>
                                     </div>
                                     <div className="mt-0.5 text-[10px] text-stone-600">{formatTimestamp(s.started_at)}</div>
