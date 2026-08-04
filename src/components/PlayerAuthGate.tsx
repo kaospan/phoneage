@@ -19,7 +19,11 @@ type Mode = "signin" | "signup";
 export function PlayerAuthGate({ children }: { children: ReactNode }) {
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
-    const [migrating, setMigrating] = useState(false);
+    // The user id that has finished the one-time migration check/upload and is safe to render
+    // children for. Kept separate from `session` itself so there is no render frame where a
+    // freshly-signed-in session is present but migration hasn't been accounted for yet — that
+    // gap previously let <PuzzleGame> mount once, then unmount/remount when migration kicked in.
+    const [readyUserId, setReadyUserId] = useState<string | null>(null);
     const [mode, setMode] = useState<Mode>("signin");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -48,13 +52,12 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
         if (!userId) return;
         let cancelled = false;
         (async () => {
-            setMigrating(true);
             const already = await hasCloudProgress(userId);
             if (!already && !cancelled) {
                 const local = loadCampaignProgress();
                 await migrateLocalProgressToCloud(userId, local);
             }
-            if (!cancelled) setMigrating(false);
+            if (!cancelled) setReadyUserId(userId);
         })();
         return () => { cancelled = true; };
     }, [session?.user?.id]);
@@ -172,7 +175,7 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
         );
     }
 
-    if (migrating) {
+    if (readyUserId !== session.user.id) {
         return (
             <div className="flex h-full w-full items-center justify-center text-sm text-stone-300">
                 Syncing your progress…

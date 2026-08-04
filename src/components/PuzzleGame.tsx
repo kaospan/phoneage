@@ -299,6 +299,13 @@ export const PuzzleGame = () => {
   const playerUserIdRef = useRef<string | null>(playerUserId);
   useEffect(() => { playerUserIdRef.current = playerUserId; }, [playerUserId]);
   const currentPlaySessionIdRef = useRef<string | null>(null);
+  const currentPlaySessionLevelIdRef = useRef<number | null>(null);
+  const sessionStartInFlightRef = useRef(false);
+  // The fixed-timestep loop can run stepSimulation multiple times synchronously within one
+  // animation frame when catching up on lag; each of those calls closes over the same (stale)
+  // `isComplete` React state until the next render, so `isComplete` alone can't guard against
+  // re-running the completion block several times for one real level clear. This ref can.
+  const hasCompletedRef = useRef(false);
 
   const isMobile = useIsMobile();
   const [isPortrait, setIsPortrait] = useState(false);
@@ -867,19 +874,33 @@ export const PuzzleGame = () => {
     }, []);
 
     const applyLevelState = useCallback((level: LevelData) => {
-      // Close out whatever attempt was previously in flight (level switch, reset, or a fresh
-      // load) as an abandoned/incomplete play session before starting the new one.
-      const openSessionId = currentPlaySessionIdRef.current;
-      if (openSessionId) {
-        const abandonedMoves = simRef.current?.players.get(localPlayerIdRef.current)?.moves ?? null;
-        void endPlaySession(openSessionId, { completed: false, moves: abandonedMoves });
-        currentPlaySessionIdRef.current = null;
-      }
-      const sessionUserId = playerUserIdRef.current;
-      if (sessionUserId && !isReplayingRef.current) {
-        void startPlaySession(sessionUserId, level.id).then((id) => {
-          currentPlaySessionIdRef.current = id;
-        });
+      // applyLevelState can legitimately fire more than once for the *same* level load (React
+      // StrictMode's double-invoke in dev, redundant effect re-runs from unrelated state churn,
+      // etc.), and each of those must NOT count as a separate "attempt" — only a real reset
+      // (the player actually made moves, then the level reloaded) should. Skip the
+      // close-and-reopen entirely when it's the same level with zero progress since the
+      // still-open (or still-starting) session already represents this exact attempt.
+      const priorMoves = simRef.current?.players.get(localPlayerIdRef.current)?.moves ?? 0;
+      const isRedundantReapply =
+        level.id === currentPlaySessionLevelIdRef.current &&
+        priorMoves === 0 &&
+        (currentPlaySessionIdRef.current !== null || sessionStartInFlightRef.current);
+
+      if (!isRedundantReapply) {
+        const openSessionId = currentPlaySessionIdRef.current;
+        if (openSessionId) {
+          void endPlaySession(openSessionId, { completed: false, moves: priorMoves || null });
+          currentPlaySessionIdRef.current = null;
+        }
+        const sessionUserId = playerUserIdRef.current;
+        if (sessionUserId && !isReplayingRef.current) {
+          currentPlaySessionLevelIdRef.current = level.id;
+          sessionStartInFlightRef.current = true;
+          void startPlaySession(sessionUserId, level.id).then((id) => {
+            sessionStartInFlightRef.current = false;
+            currentPlaySessionIdRef.current = id;
+          });
+        }
       }
 
       const gridCopy = level.grid.map(row => [...row]) as CellType[][];
@@ -921,6 +942,7 @@ export const PuzzleGame = () => {
       const players = new Map<PlayerId, SimPlayer>();
       players.set(localId, localPlayer);
 
+      hasCompletedRef.current = false;
       simRef.current = {
         grid: gridCopy,
         baseGrid: baseGridCopy,
@@ -1577,8 +1599,9 @@ export const PuzzleGame = () => {
       });
 
       const localPlayer = sim.players.get(localPlayerIdRef.current);
-      if (localPlayer && sim.goalCaveKeys.has(`${localPlayer.pos.x},${localPlayer.pos.y}`) && !localComplete) {
+      if (localPlayer && sim.goalCaveKeys.has(`${localPlayer.pos.x},${localPlayer.pos.y}`) && !localComplete && !hasCompletedRef.current) {
         localComplete = true;
+        hasCompletedRef.current = true;
         const clearTimeLeftSeconds = timerEnabledRef.current
           ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
           : null;
