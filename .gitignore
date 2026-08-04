@@ -28,6 +28,11 @@ apps/android/android/app/build
 scripts/_tmp-*
 scripts/*.mp4
 
+# Test output
+playwright-report/
+test-results/
+coverage/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
