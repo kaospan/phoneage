@@ -1,20 +1,24 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import { checkIsAdminAccount } from "@/lib/adminAccount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogOut } from "lucide-react";
 
 /**
- * Gates /mapper behind a real Supabase Auth session. The credential check happens
- * server-side (Supabase verifies the password, not this client), so unlike a hardcoded
- * string this can't be defeated by reading the bundled JS. Create the admin account in
- * the Supabase dashboard: Authentication -> Users -> Add user.
+ * Gates /mapper behind a real Supabase Auth session AND admin_users membership. Player
+ * accounts (self-serve signup on the main game) use the SAME Supabase project, so a valid
+ * email/password alone isn't enough — any player could otherwise type their own credentials
+ * in here. admin_users membership is checked server-side (RLS only lets a user read their
+ * own row), so it can't be spoofed from the client either.
  */
 export function MapperAuthGate({ children }: { children: ReactNode }) {
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [checkingAdmin, setCheckingAdmin] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -34,6 +38,17 @@ export function MapperAuthGate({ children }: { children: ReactNode }) {
         });
         return () => subscription.subscription.unsubscribe();
     }, []);
+
+    useEffect(() => {
+        const userId = session?.user?.id;
+        if (!userId) { setIsAdmin(false); return; }
+        let cancelled = false;
+        setCheckingAdmin(true);
+        checkIsAdminAccount(userId).then((admin) => {
+            if (!cancelled) { setIsAdmin(admin); setCheckingAdmin(false); }
+        });
+        return () => { cancelled = true; };
+    }, [session?.user?.id]);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -115,6 +130,35 @@ export function MapperAuthGate({ children }: { children: ReactNode }) {
                         {submitting ? "Signing in…" : "Sign In"}
                     </Button>
                 </form>
+            </div>
+        );
+    }
+
+    if (checkingAdmin) {
+        return (
+            <div className="flex h-full w-full items-center justify-center text-sm text-stone-300">
+                Checking access…
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <div className="flex h-full w-full items-center justify-center px-6 text-center">
+                <div className="max-w-sm rounded-2xl border border-red-300/30 bg-red-950/40 p-6 text-red-100">
+                    <div className="text-sm font-black uppercase tracking-wide">Not Authorized</div>
+                    <div className="mt-2 text-sm text-red-200/80">
+                        This account ({session.user.email}) doesn't have mapper access.
+                    </div>
+                    <Button
+                        onClick={() => supabase.auth.signOut()}
+                        variant="outline"
+                        size="sm"
+                        className="mt-4 border-red-300/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                    >
+                        Sign out
+                    </Button>
+                </div>
             </div>
         );
     }

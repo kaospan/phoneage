@@ -28,6 +28,7 @@ import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { GameTop2D } from "./GameTop2D";
 import { ADMIN_MODE_UPDATED_EVENT, getAdminMode } from "@/lib/adminMode";
+import { checkIsAdminAccount } from "@/lib/adminAccount";
 import {
   RECORD_MOVES_UPDATED_EVENT,
   getRecordMovesEnabled,
@@ -700,7 +701,13 @@ export const PuzzleGame = () => {
   const replayIntervalRef = useRef<number | null>(null);
 
   const [overrideRevision, setOverrideRevision] = useState(0);
-  const [isAdminMode, setIsAdminMode] = useState(() => getAdminMode());
+  // The stone-age-admin-mode flag alone is just a browser-local preference toggle — anyone
+  // could set it via devtools. Level-skip access only actually takes effect when the
+  // CURRENTLY SIGNED-IN player account is also server-verified as an admin (admin_users),
+  // so a regular player account can never benefit from flipping the local flag.
+  const [isAdminModeToggled, setIsAdminModeToggled] = useState(() => getAdminMode());
+  const [isVerifiedAdminAccount, setIsVerifiedAdminAccount] = useState(false);
+  const isAdminMode = isAdminModeToggled && isVerifiedAdminAccount;
   const [isReplaying, setIsReplaying] = useState(false);
   const [resolvedLevelImageUrl, setResolvedLevelImageUrl] = useState<string | null>(null);
   const [tutorialQueue, setTutorialQueue] = useState<TutorialDefinition[]>([]);
@@ -725,7 +732,7 @@ export const PuzzleGame = () => {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const refresh = () => setIsAdminMode(getAdminMode());
+    const refresh = () => setIsAdminModeToggled(getAdminMode());
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'stone-age-admin-mode') refresh();
     };
@@ -736,6 +743,16 @@ export const PuzzleGame = () => {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
+
+  // Server-verified: is the currently signed-in player account an admin? (see admin_users)
+  useEffect(() => {
+    if (!playerUserId) { setIsVerifiedAdminAccount(false); return; }
+    let cancelled = false;
+    checkIsAdminAccount(playerUserId).then((admin) => {
+      if (!cancelled) setIsVerifiedAdminAccount(admin);
+    });
+    return () => { cancelled = true; };
+  }, [playerUserId]);
 
   // The "Record" toggle lives in the mapper (a separate route), so pick up changes made there.
   useEffect(() => {
