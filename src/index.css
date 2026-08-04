@@ -2,7 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+/* Tailwind's `.flex`/`.block`/etc. utility classes and the browser's native `[hidden]{display:none}`
+   rule share the same CSS specificity; whichever comes later in the cascade wins. Since Tailwind's
+   utilities layer loads after the base layer, any element with both `hidden` and a display utility
+   (e.g. Radix's inactive Tabs/Accordion panels, which are `hidden` + `flex` at the same time) ends
+   up visibly rendered anyway — it silently ignores `hidden`. This rule is intentionally OUTSIDE any
+   @layer so it sits in the unlayered cascade, which always wins over Tailwind's layered utilities
+   regardless of specificity or source order. See: https://github.com/tailwindlabs/tailwindcss/discussions/8016 */
+[hidden] {
+  display: none !important;
+}
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
 

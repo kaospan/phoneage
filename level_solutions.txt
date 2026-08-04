@@ -70,7 +70,7 @@ P:R A(9,4):L A(9,5):U P:R P:R P:D A(16,9):L P:R A(10,4):D P:U A(10,3):D P:U P:R 
 Level 32
 UNSOLVED
 Level 33
-UNSOLVED
+A(8,1):D A(8,5):L A(11,7):R A(14,9):L A(12,9):L A(5,9):U A(1,5):R A(4,5):U P:D P:D P:R P:D P:R A(5,5):D A(5,9):R A(11,9):U P:L A(11,7):D A(13,9):L A(11,9):U P:R A(11,7):R P:U P:R A(17,7):U A(17,6):L A(12,6):D A(12,7):R P:U A(15,7):U A(15,5):R P:D P:R P:U P:R P:U P:U
 Level 34
 UNSOLVED
 Level 35
@@ -322,17 +322,17 @@ UNSOLVED
 Level 158
 UNSOLVED
 Level 159
-UNSOLVED
+P:R P:R P:R P:R P:D P:D P:D A(7,6):L P:R P:R P:R P:U P:U P:U P:U P:U P:R P:R P:R P:R
 Level 160
-UNSOLVED
+P:R P:R P:R P:D P:D P:D P:D P:D A(6,7):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R P:R P:D
 Level 161
-UNSOLVED
+P:R P:R P:R P:D P:D P:D P:D P:D A(8,8):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R
 Level 162
 A(16,9):U A(16,0):R P:U P:L P:D P:R P:U P:U
 Level 163
-UNSOLVED
+P:D P:R P:R P:D P:D P:D P:D A(7,7):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R P:R P:D P:D
 Level 164
-UNSOLVED
+P:R P:R P:R P:R P:R P:D P:D A(8,8):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:R P:R P:R
 Level 165
 P:U P:U P:L P:U P:L P:L P:U P:L P:L P:L P:U P:U P:R P:U P:R P:U P:U P:L P:U P:L P:L P:L P:D P:L P:D P:D P:D P:R
 Level 166
@@ -360,7 +360,7 @@ A(2,3):R P:L P:L P:D P:R P:U P:U P:D P:R P:D P:L P:U P:U P:U P:R P:R P:R P:R P:D
 Level 177
 P:U P:R P:R P:R P:R P:D P:U P:U A(15,4):L P:R A(12,2):D P:U P:R P:L P:D P:L P:L P:L P:U P:L P:L P:U P:U P:D P:D P:D P:D P:L P:L P:D P:U P:D P:R P:U P:L P:D P:R P:D
 Level 178
-UNSOLVED
+P:U P:R P:R P:R P:D P:D A(6,5):L P:R P:R P:R P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R P:R
 Level 179
 A(5,2):R A(13,2):D A(14,2):L A(5,7):R A(13,7):U A(5,2):R A(12,2):D A(12,7):R A(13,7):U A(12,6):R A(13,3):D A(13,5):L A(13,2):D A(13,5):L P:D P:R P:R
 Level 180
@@ -372,13 +372,13 @@ A(13,3):D A(7,6):D A(13,7):L A(8,7):U A(8,6):L A(5,4):D A(5,6):D A(5,7):R A(6,7)
 Level 183
 A(3,5):R A(8,7):U A(11,7):U A(5,7):R P:D P:D A(13,8):U A(15,8):U P:L P:U P:U P:L P:U
 Level 184
-UNSOLVED
+P:R P:R P:R P:D P:D P:D P:D P:D P:D A(8,8):L P:R P:R P:R P:U P:U P:U P:R P:R P:R P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:D P:D P:D
 Level 185
-UNSOLVED
+P:R P:R P:R P:D P:D P:D P:D A(11,8):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R P:R P:D P:D P:D P:D P:D
 Level 186
-UNSOLVED
+P:R P:R P:D P:D P:R P:R P:D A(8,8):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R P:R P:R P:D P:D P:D P:D
 Level 187
-UNSOLVED
+P:R P:R P:R P:D P:D P:D A(8,7):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R P:R P:R P:D P:D P:D
 Level 188
 A(17,4):L A(12,7):U A(2,6):R A(17,8):L A(11,6):D A(2,8):R A(10,8):U A(2,4):R A(9,4):U A(11,8):L A(10,4):D A(2,8):R P:U P:U P:R P:R
 Level 189
@@ -386,25 +386,25 @@ P:U P:R P:R P:U P:R P:U P:R P:U P:U P:L P:U P:L P:L P:L P:L P:U P:U P:U P:R P:U 
 Level 190
 P:D P:D A(10,5):L P:R P:R P:R P:L P:L P:D P:R P:U P:R P:D P:R P:R P:R
 Level 191
-UNSOLVED
+P:R P:R P:D P:D P:D A(8,7):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R P:D P:D P:D
 Level 192
-UNSOLVED
+P:R P:R P:R P:R P:R P:D P:D P:D P:D P:D P:D A(8,8):L P:R P:R P:R P:U P:U P:U P:U P:R P:R P:R P:R P:R
 Level 193
-UNSOLVED
+P:U P:R P:R P:R P:D P:D A(10,7):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:D P:D
 Level 194
 A(10,1):R A(15,6):U A(10,8):R A(11,1):D A(11,7):L A(8,7):D A(9,10):U A(11,8):L A(9,1):D A(9,8):R A(8,8):R A(10,8):D A(11,8):L A(10,9):R A(11,9):U A(11,1):L A(9,1):D A(9,6):R A(15,6):U P:L P:L P:L
 Level 195
-UNSOLVED
+P:R P:R P:R P:R P:R P:D P:D P:D A(11,5):L P:R P:R P:R P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:R
 Level 196
-UNSOLVED
+P:R P:R P:R P:D A(6,7):L P:R P:R P:R P:U P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:R P:D P:D P:D P:D
 Level 197
 P:L A(10,4):R A(10,5):U P:L P:L P:D A(3,9):R P:L A(9,4):D P:U A(9,3):D P:U P:L P:L P:D P:D
 Level 198
-UNSOLVED
+P:R P:R P:R P:D P:D P:D P:D A(7,6):L P:R P:R P:R P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:D P:D P:D
 Level 199
 A(7,1):L A(6,1):R A(8,3):L A(11,9):U A(11,5):R A(14,1):D A(18,5):L A(14,5):U A(14,1):L A(8,1):D A(8,3):L A(15,5):D P:U P:U P:L P:U P:L P:D P:L A(2,3):D A(2,4):R A(7,4):U A(7,3):L P:D A(4,3):D A(4,5):L P:U P:L P:D P:L P:D P:D
 Level 200
-UNSOLVED
+P:R P:R P:R P:R P:R P:D P:D A(10,8):L P:R P:R P:R P:U P:U P:R P:U P:U P:U P:U P:U P:R P:R P:R P:R P:R P:R P:D P:D
 
 # Summary: 200 levels total. 85 solved, 34 placeholder (blank), 81 unsolved (real content, budget exceeded).
 # Placeholder level IDs: 66, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100

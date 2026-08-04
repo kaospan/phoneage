@@ -256,7 +256,11 @@ export function CrmDashboard() {
     }, [profiles, statsByUser, bestSortBy]);
 
     const levelLeaderboardMoves = useMemo(() => {
-        const entries: { userId: string; moves: number }[] = [];
+        // Each entry is a (level, user) pair, not just a user — with "All Levels" selected, the
+        // same player legitimately appears once per level they've cleared. Carrying levelId
+        // through lets the row key (and the Level column) disambiguate those repeats instead of
+        // colliding on userId alone.
+        const entries: { levelId: number; userId: string; moves: number }[] = [];
         const targetLevels = leaderboardLevelId === "all" ? levels.map((l) => l.id) : [leaderboardLevelId];
         for (const levelId of targetLevels) {
             const userMoves = new Map<string, number>();
@@ -266,14 +270,14 @@ export function CrmDashboard() {
                 if (prev == null || p.best_moves < prev) userMoves.set(p.user_id, p.best_moves);
             }
             for (const [userId, moves] of userMoves) {
-                entries.push({ userId, moves });
+                entries.push({ levelId, userId, moves });
             }
         }
         return entries.sort((a, b) => a.moves - b.moves);
     }, [progress, levels, leaderboardLevelId]);
 
     const levelLeaderboardTime = useMemo(() => {
-        const entries: { userId: string; timeMs: number }[] = [];
+        const entries: { levelId: number; userId: string; timeMs: number }[] = [];
         const targetLevels = leaderboardLevelId === "all" ? levels.map((l) => l.id) : [leaderboardLevelId];
         for (const levelId of targetLevels) {
             const userTime = new Map<string, number>();
@@ -285,7 +289,7 @@ export function CrmDashboard() {
                 if (prev == null || durationMs < prev) userTime.set(sess.user_id, durationMs);
             }
             for (const [userId, timeMs] of userTime) {
-                entries.push({ userId, timeMs });
+                entries.push({ levelId, userId, timeMs });
             }
         }
         return entries.sort((a, b) => a.timeMs - b.timeMs);
@@ -570,6 +574,7 @@ export function CrmDashboard() {
                                     <TableRow className="border-white/10 hover:bg-transparent">
                                         <TableHead className="text-stone-400">#</TableHead>
                                         <TableHead className="text-stone-400">Player</TableHead>
+                                        {leaderboardLevelId === "all" && <TableHead className="text-stone-400">Level</TableHead>}
                                         <TableHead className="text-stone-400">Best Moves</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -578,16 +583,17 @@ export function CrmDashboard() {
                                         const profile = profiles.find((p) => p.id === entry.userId);
                                         if (!profile) return null;
                                         return (
-                                            <TableRow key={entry.userId} onClick={() => setSelectedUserId(entry.userId)} className="cursor-pointer border-white/5 hover:bg-white/5">
+                                            <TableRow key={`${entry.levelId}-${entry.userId}`} onClick={() => setSelectedUserId(entry.userId)} className="cursor-pointer border-white/5 hover:bg-white/5">
                                                 <TableCell className="text-stone-400">{idx + 1}</TableCell>
                                                 <TableCell className="font-medium text-stone-100">{profile.email ?? profile.display_name ?? profile.id.slice(0, 8)}</TableCell>
+                                                {leaderboardLevelId === "all" && <TableCell className="text-stone-400">L{entry.levelId}</TableCell>}
                                                 <TableCell>{entry.moves}</TableCell>
                                             </TableRow>
                                         );
                                     })}
                                     {levelLeaderboardMoves.length === 0 && (
                                         <TableRow className="border-white/5">
-                                            <TableCell colSpan={3} className="py-8 text-center text-stone-500">No completed runs yet.</TableCell>
+                                            <TableCell colSpan={leaderboardLevelId === "all" ? 4 : 3} className="py-8 text-center text-stone-500">No completed runs yet.</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
@@ -600,6 +606,7 @@ export function CrmDashboard() {
                                     <TableRow className="border-white/10 hover:bg-transparent">
                                         <TableHead className="text-stone-400">#</TableHead>
                                         <TableHead className="text-stone-400">Player</TableHead>
+                                        {leaderboardLevelId === "all" && <TableHead className="text-stone-400">Level</TableHead>}
                                         <TableHead className="text-stone-400">Time to Complete</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -608,16 +615,17 @@ export function CrmDashboard() {
                                         const profile = profiles.find((p) => p.id === entry.userId);
                                         if (!profile) return null;
                                         return (
-                                            <TableRow key={entry.userId} onClick={() => setSelectedUserId(entry.userId)} className="cursor-pointer border-white/5 hover:bg-white/5">
+                                            <TableRow key={`${entry.levelId}-${entry.userId}`} onClick={() => setSelectedUserId(entry.userId)} className="cursor-pointer border-white/5 hover:bg-white/5">
                                                 <TableCell className="text-stone-400">{idx + 1}</TableCell>
                                                 <TableCell className="font-medium text-stone-100">{profile.email ?? profile.display_name ?? profile.id.slice(0, 8)}</TableCell>
+                                                {leaderboardLevelId === "all" && <TableCell className="text-stone-400">L{entry.levelId}</TableCell>}
                                                 <TableCell>{formatDuration(entry.timeMs)}</TableCell>
                                             </TableRow>
                                         );
                                     })}
                                     {levelLeaderboardTime.length === 0 && (
                                         <TableRow className="border-white/5">
-                                            <TableCell colSpan={3} className="py-8 text-center text-stone-500">No completed runs yet.</TableCell>
+                                            <TableCell colSpan={leaderboardLevelId === "all" ? 4 : 3} className="py-8 text-center text-stone-500">No completed runs yet.</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
