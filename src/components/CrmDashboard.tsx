@@ -363,6 +363,7 @@ export function CrmDashboard() {
                 </div>
             )}
 
+            <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
             <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
                 <div className="shrink-0 border-b border-white/10 px-5 pt-3">
                     <TabsList className="bg-white/5">
@@ -755,6 +756,7 @@ export function CrmDashboard() {
                     </div>
                 </div>
             )}
+            </div>
 
             <AlertDialog open={deleteTargetId !== null} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
                 <AlertDialogContent className="bg-stone-950 text-stone-50 border-white/10">
