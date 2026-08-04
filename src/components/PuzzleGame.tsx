@@ -27,6 +27,13 @@ import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { GameTop2D } from "./GameTop2D";
 import { ADMIN_MODE_UPDATED_EVENT, getAdminMode } from "@/lib/adminMode";
+import {
+  RECORD_MOVES_UPDATED_EVENT,
+  getRecordMovesEnabled,
+  getRecordedRun,
+  saveRecordedRun,
+  type RecordedInputCommand,
+} from "@/lib/moveRecording";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell } from "@/game/arrows";
@@ -46,8 +53,13 @@ import {
   saveCampaignProgress,
   setLastPlayedLevel,
   syncCampaignProgress,
+  type CampaignLevelRecord,
   type CampaignProgressState,
 } from "@/lib/campaignProgress";
+import { usePlayerSession } from "@/contexts/PlayerSessionContext";
+import { fetchCloudProgress, pushLevelProgress, pushProfileMeta } from "@/lib/cloudProgress";
+import { startPlaySession, endPlaySession } from "@/lib/playSessions";
+import { usePlayerPresence } from "@/hooks/usePlayerPresence";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CampaignDialog } from "./CampaignDialog";
 import { HowToPlayDialog } from "./HowToPlayDialog";
@@ -281,6 +293,20 @@ type BrowserFullscreenElement = HTMLElement & {
 export const PuzzleGame = () => {
   console.log('⚛️ PuzzleGame component rendering...');
 
+  const playerSession = usePlayerSession();
+  const playerUserId = playerSession?.user?.id ?? null;
+  const playerEmail = playerSession?.user?.email ?? null;
+  const playerUserIdRef = useRef<string | null>(playerUserId);
+  useEffect(() => { playerUserIdRef.current = playerUserId; }, [playerUserId]);
+  const currentPlaySessionIdRef = useRef<string | null>(null);
+  const currentPlaySessionLevelIdRef = useRef<number | null>(null);
+  const sessionStartInFlightRef = useRef(false);
+  // The fixed-timestep loop can run stepSimulation multiple times synchronously within one
+  // animation frame when catching up on lag; each of those calls closes over the same (stale)
+  // `isComplete` React state until the next render, so `isComplete` alone can't guard against
+  // re-running the completion block several times for one real level clear. This ref can.
+  const hasCompletedRef = useRef(false);
+
   const isMobile = useIsMobile();
   const [isPortrait, setIsPortrait] = useState(false);
   const [hasMeasuredOrientation, setHasMeasuredOrientation] = useState(false);
@@ -445,12 +471,45 @@ export const PuzzleGame = () => {
     campaignProgressRef.current = campaignProgress;
   }, [campaignProgress]);
 
+  // Set true while overwriting local state FROM the cloud (on login) so that write doesn't
+  // immediately bounce right back to the cloud as if it were a fresh local change.
+  const applyingCloudProgressRef = useRef(false);
+
   const commitCampaignProgress = useCallback((next: CampaignProgressState) => {
     if (next === campaignProgressRef.current) return;
+    const prev = campaignProgressRef.current;
     campaignProgressRef.current = next;
     saveCampaignProgress(next);
     setCampaignProgress(next);
+
+    const userId = playerUserIdRef.current;
+    if (userId && !applyingCloudProgressRef.current) {
+      for (const [levelIdStr, record] of Object.entries(next.levels)) {
+        if (prev.levels[levelIdStr] === record) continue;
+        void pushLevelProgress(userId, Number(levelIdStr), record as CampaignLevelRecord);
+      }
+      if (next.highestUnlockedLevelId !== prev.highestUnlockedLevelId || next.lastPlayedLevelId !== prev.lastPlayedLevelId) {
+        void pushProfileMeta(userId, {
+          highestUnlockedLevelId: next.highestUnlockedLevelId,
+          lastPlayedLevelId: next.lastPlayedLevelId,
+        });
+      }
+    }
   }, []);
+
+  // On login (or account switch), the cloud is the source of truth — pull it down once.
+  useEffect(() => {
+    if (!playerUserId) return;
+    let cancelled = false;
+    (async () => {
+      const cloud = await fetchCloudProgress(playerUserId);
+      if (!cloud || cancelled) return;
+      applyingCloudProgressRef.current = true;
+      commitCampaignProgress(cloud);
+      applyingCloudProgressRef.current = false;
+    })();
+    return () => { cancelled = true; };
+  }, [playerUserId, commitCampaignProgress]);
 
   const updateCampaignProgress = useCallback((updater: (prev: CampaignProgressState) => CampaignProgressState) => {
     const next = updater(campaignProgressRef.current);
@@ -541,9 +600,14 @@ export const PuzzleGame = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const lastRenderRef = useRef(0);
   const buildInFlightRef = useRef<Set<number>>(new Set());
+  const recordedActionsRef = useRef<RecordedInputCommand[]>([]);
+  const recordMovesEnabledRef = useRef(false);
+  const isReplayingRef = useRef(false);
+  const replayIntervalRef = useRef<number | null>(null);
 
   const [overrideRevision, setOverrideRevision] = useState(0);
   const [isAdminMode, setIsAdminMode] = useState(() => getAdminMode());
+  const [isReplaying, setIsReplaying] = useState(false);
   const [resolvedLevelImageUrl, setResolvedLevelImageUrl] = useState<string | null>(null);
 
   // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
@@ -576,11 +640,29 @@ export const PuzzleGame = () => {
     };
   }, []);
 
+  // The "Record" toggle lives in the mapper (a separate route), so pick up changes made there.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    recordMovesEnabledRef.current = getRecordMovesEnabled();
+    const refresh = () => { recordMovesEnabledRef.current = getRecordMovesEnabled(); };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'stone-age-record-moves-enabled') refresh();
+    };
+    window.addEventListener(RECORD_MOVES_UPDATED_EVENT, refresh as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(RECORD_MOVES_UPDATED_EVENT, refresh as EventListener);
+      window.removeEventListener("storage", onStorage);
+      if (replayIntervalRef.current != null) window.clearInterval(replayIntervalRef.current);
+    };
+  }, []);
+
   const allLevels = useMemo(() => {
     void overrideRevision;
     return getAllLevels();
   }, [overrideRevision]);
   const currentLevel = allLevels[Math.min(currentLevelIndex, Math.max(0, allLevels.length - 1))] ?? allLevels[0];
+  usePlayerPresence(playerUserId, playerEmail, currentLevel?.id ?? null);
   const orderedLevelIds = useMemo(() => allLevels.map((level) => level.id), [allLevels]);
   const completedLevelCount = useMemo(
     () => getCompletedLevelCount(campaignProgress, orderedLevelIds),
@@ -792,6 +874,35 @@ export const PuzzleGame = () => {
     }, []);
 
     const applyLevelState = useCallback((level: LevelData) => {
+      // applyLevelState can legitimately fire more than once for the *same* level load (React
+      // StrictMode's double-invoke in dev, redundant effect re-runs from unrelated state churn,
+      // etc.), and each of those must NOT count as a separate "attempt" — only a real reset
+      // (the player actually made moves, then the level reloaded) should. Skip the
+      // close-and-reopen entirely when it's the same level with zero progress since the
+      // still-open (or still-starting) session already represents this exact attempt.
+      const priorMoves = simRef.current?.players.get(localPlayerIdRef.current)?.moves ?? 0;
+      const isRedundantReapply =
+        level.id === currentPlaySessionLevelIdRef.current &&
+        priorMoves === 0 &&
+        (currentPlaySessionIdRef.current !== null || sessionStartInFlightRef.current);
+
+      if (!isRedundantReapply) {
+        const openSessionId = currentPlaySessionIdRef.current;
+        if (openSessionId) {
+          void endPlaySession(openSessionId, { completed: false, moves: priorMoves || null });
+          currentPlaySessionIdRef.current = null;
+        }
+        const sessionUserId = playerUserIdRef.current;
+        if (sessionUserId && !isReplayingRef.current) {
+          currentPlaySessionLevelIdRef.current = level.id;
+          sessionStartInFlightRef.current = true;
+          void startPlaySession(sessionUserId, level.id).then((id) => {
+            sessionStartInFlightRef.current = false;
+            currentPlaySessionIdRef.current = id;
+          });
+        }
+      }
+
       const gridCopy = level.grid.map(row => [...row]) as CellType[][];
       const baseGridCopy = buildBaseGrid(gridCopy);
       const rows = gridCopy.length;
@@ -831,6 +942,7 @@ export const PuzzleGame = () => {
       const players = new Map<PlayerId, SimPlayer>();
       players.set(localId, localPlayer);
 
+      hasCompletedRef.current = false;
       simRef.current = {
         grid: gridCopy,
         baseGrid: baseGridCopy,
@@ -850,6 +962,7 @@ export const PuzzleGame = () => {
       setMoves(0);
       setIsComplete(false);
       setCompletionSummary(null);
+      recordedActionsRef.current = [];
       setSelectedArrow(null);
       setSelectorPos({ ...spawn });
       setIsSelectorActive(false);
@@ -1117,13 +1230,18 @@ export const PuzzleGame = () => {
       queue.push(input);
       inputQueueRef.current.set(localId, queue);
 
+      // Don't record inputs that replay itself is injecting — only capture live play.
+      if (!isReplayingRef.current && recordMovesEnabledRef.current) {
+        recordedActionsRef.current.push(command);
+      }
+
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "input", id: localId, input }));
       }
     }, []);
 
     const queueMove = useCallback((dx: number, dy: number) => {
-      if (isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart) return;
+      if (isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart || isReplaying) return;
 
       // FPS view uses "relative" controls:
       // Up = forward (keep going straight), Down = backward, Left/Right = strafe relative to facing.
@@ -1147,7 +1265,7 @@ export const PuzzleGame = () => {
       }
 
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode, isMobilePortrait]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode, isMobilePortrait, isReplaying]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -1481,8 +1599,9 @@ export const PuzzleGame = () => {
       });
 
       const localPlayer = sim.players.get(localPlayerIdRef.current);
-      if (localPlayer && sim.goalCaveKeys.has(`${localPlayer.pos.x},${localPlayer.pos.y}`) && !localComplete) {
+      if (localPlayer && sim.goalCaveKeys.has(`${localPlayer.pos.x},${localPlayer.pos.y}`) && !localComplete && !hasCompletedRef.current) {
         localComplete = true;
+        hasCompletedRef.current = true;
         const clearTimeLeftSeconds = timerEnabledRef.current
           ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
           : null;
@@ -1495,6 +1614,18 @@ export const PuzzleGame = () => {
         });
 
         commitCampaignProgress(clearUpdate.progress);
+        if (currentPlaySessionIdRef.current) {
+          void endPlaySession(currentPlaySessionIdRef.current, { completed: true, moves: localPlayer.moves });
+          currentPlaySessionIdRef.current = null;
+        }
+        if (recordMovesEnabledRef.current && !isReplayingRef.current && recordedActionsRef.current.length > 0) {
+          saveRecordedRun({
+            levelId: currentLevel.id,
+            actions: recordedActionsRef.current,
+            moves: localPlayer.moves,
+            recordedAt: new Date().toISOString(),
+          });
+        }
         setCompletionSummary({
           levelId: currentLevel.id,
           moves: localPlayer.moves,
@@ -1698,6 +1829,46 @@ export const PuzzleGame = () => {
       applyLevelState(levelToReset);
       pushHudMessage("Level reset");
     }, [activeLevel, applyLevelState, currentLevel, pushHudMessage]);
+
+    const stopReplay = useCallback(() => {
+      if (replayIntervalRef.current != null) {
+        window.clearInterval(replayIntervalRef.current);
+        replayIntervalRef.current = null;
+      }
+      isReplayingRef.current = false;
+      setIsReplaying(false);
+    }, []);
+
+    // Replays a previously recorded run by resetting the level and re-feeding the recorded
+    // inputs through the same enqueueInput/simulation pipeline live play uses, paced for
+    // watchability — the sim's own 60Hz loop still drives movement/glide animation normally.
+    const startReplay = useCallback(() => {
+      const levelForReplay = activeLevel ?? currentLevel;
+      if (!levelForReplay) return;
+      const run = getRecordedRun(levelForReplay.id);
+      if (!run) {
+        pushHudMessage("No recorded run for this level");
+        return;
+      }
+      stopReplay();
+      isReplayingRef.current = true;
+      applyLevelState(levelForReplay);
+      inputQueueRef.current.set(localPlayerIdRef.current, []);
+      setIsReplaying(true);
+
+      const actions = run.actions;
+      let i = 0;
+      const stepReplay = () => {
+        if (i >= actions.length) {
+          stopReplay();
+          return;
+        }
+        enqueueInput(actions[i]);
+        i += 1;
+      };
+      stepReplay();
+      replayIntervalRef.current = window.setInterval(stepReplay, 220);
+    }, [activeLevel, applyLevelState, currentLevel, enqueueInput, pushHudMessage, stopReplay]);
 
     const startLevelWhenReady = useCallback(() => {
       if (!levelTimeLimitSeconds || isTimerArmed || isTimeUp || isBuilding || isComplete) return;
@@ -3230,6 +3401,22 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
+        {isReplaying && (
+          <div className="pointer-events-none absolute left-1/2 top-16 z-[65] -translate-x-1/2 px-4">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-red-300/30 bg-red-950/85 px-4 py-2 text-sm font-black uppercase tracking-[0.12em] text-red-100 shadow-xl backdrop-blur-md">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-400" />
+              Watching Recorded Run
+              <Button
+                onClick={stopReplay}
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[10px] text-red-100 hover:bg-red-500/20"
+              >
+                Stop
+              </Button>
+            </div>
+          </div>
+        )}
         {hudMessage && !isComplete && !isTimeUp && (
           <div
             className="pointer-events-none absolute left-1/2 z-40 -translate-x-1/2 px-4"
@@ -3350,6 +3537,16 @@ export const PuzzleGame = () => {
                 >
                   Replay
                 </Button>
+                {getRecordedRun(completionSummary.levelId) && (
+                  <Button
+                    onClick={startReplay}
+                    variant="outline"
+                    className="border-red-300/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                    title="Watch back the moves you recorded while playing this level"
+                  >
+                    Watch Recorded Run
+                  </Button>
+                )}
                 {currentLevelIndex < allLevels.length - 1 ? (
                   <Button
                     onClick={nextLevel}

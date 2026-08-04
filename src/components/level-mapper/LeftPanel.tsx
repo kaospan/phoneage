@@ -17,6 +17,7 @@ import { resolveLevelMapperBaseline } from './levelBaseline';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
 import { MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
 import { getAdminMode, setAdminMode } from '@/lib/adminMode';
+import { getRecordMovesEnabled, setRecordMovesEnabled } from '@/lib/moveRecording';
 import { VIEW_MODES, type ViewMode, getDisabledViewModes, setViewModeSkipped } from '@/lib/viewModePrefs';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -81,6 +82,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [pendingUploadAllowOverwrite, setPendingUploadAllowOverwrite] = useState(false);
     const [pendingUploadError, setPendingUploadError] = useState<string>('');
     const [adminModeEnabled, setAdminModeEnabled] = useState(() => getAdminMode());
+    const [recordMovesOn, setRecordMovesOn] = useState(() => getRecordMovesEnabled());
     const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => new Set(getDisabledViewModes()));
 
     // Persistent tab state
@@ -463,6 +465,45 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             {adminModeEnabled ? 'ON' : 'OFF'}
                         </span>
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const next = !recordMovesOn;
+                            setRecordMovesOn(next);
+                            setRecordMovesEnabled(next);
+                            toast.success(`Move recording ${next ? 'enabled' : 'disabled'}.`, {
+                                position: 'bottom-right',
+                                duration: 2200,
+                            });
+                        }}
+                        className={[
+                            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors',
+                            recordMovesOn
+                                ? 'border-red-300/30 bg-red-500/15 text-red-100'
+                                : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
+                        ].join(' ')}
+                        title="When enabled, playing a level in the main game records your moves, viewable as a replay on completion — to assist the solver."
+                        aria-pressed={recordMovesOn}
+                    >
+                        <span>Record</span>
+                        <span
+                            className={[
+                                'inline-flex min-w-8 items-center justify-center rounded-full border px-1.5 py-0.5 text-[9px]',
+                                recordMovesOn
+                                    ? 'border-red-200/40 bg-red-400/25 text-red-50'
+                                    : 'border-stone-500/40 bg-stone-700/40 text-stone-200',
+                            ].join(' ')}
+                        >
+                            {recordMovesOn ? 'ON' : 'OFF'}
+                        </span>
+                    </button>
+                    <a
+                        href={`${import.meta.env.BASE_URL ?? '/'}crm`}
+                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-2 text-[10px] font-black uppercase tracking-[0.12em] text-stone-300 transition-colors hover:border-amber-200/30 hover:text-stone-50"
+                        title="Open the player CRM — who's online, levels played, moves, attempts"
+                    >
+                        CRM
+                    </a>
                     <Popover>
                         <PopoverTrigger asChild>
                             <button
