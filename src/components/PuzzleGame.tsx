@@ -16,7 +16,6 @@ import {
   PanelRightOpen,
   Play,
   RotateCcw,
-  Settings2,
   Sparkles,
   Star,
   TimerReset,
@@ -163,52 +162,6 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   sprite: "SPR",
   top: "TOP",
 };
-
-const ViewModeSettingsPopover = ({
-  disabledViewModes,
-  onToggle,
-}: {
-  disabledViewModes: Set<ViewMode>;
-  onToggle: (mode: ViewMode, checked: boolean) => void;
-}) => (
-  <Popover>
-    <PopoverTrigger asChild>
-      <Button
-        variant="ghost"
-        size="default"
-        className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
-        aria-label="Camera mode settings"
-        title="Choose which camera modes to cycle through"
-      >
-        <Settings2 className="h-4 w-4" />
-      </Button>
-    </PopoverTrigger>
-    <PopoverContent align="start" className="w-56">
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-        Camera modes to cycle
-      </div>
-      <div className="space-y-2">
-        {VIEW_MODES.map((mode) => {
-          const checked = !disabledViewModes.has(mode);
-          const inputId = `view-mode-toggle-${mode}`;
-          return (
-            <label key={mode} htmlFor={inputId} className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox
-                id={inputId}
-                checked={checked}
-                onCheckedChange={(value) => onToggle(mode, value !== false)}
-              />
-              {VIEW_MODE_LABELS[mode]}
-            </label>
-          );
-        })}
-      </div>
-      <div className="mt-2 text-[11px] text-muted-foreground">
-        Unchecked modes are skipped by the view-cycle button. At least one mode always stays available.
-      </div>
-    </PopoverContent>
-  </Popover>
-);
 
 const TutorialSettingsPopover = ({
   enabled,
@@ -472,30 +425,32 @@ export const PuzzleGame = () => {
     }
     return "top";
   });
-  // Lets the player exclude slow/unwanted camera modes (3D, FPS) from the view-cycle button.
-  // Persisted so the choice sticks across sessions.
+  // Which camera modes the view-cycle button skips — set by admins in the Mapper, not by the
+  // player (there's no in-game control for this anymore). Synced live via the "storage" event
+  // so a change made in another tab (e.g. the Mapper) takes effect without a reload.
+  const parseDisabledViewModes = (raw: string | null): Set<ViewMode> => {
+    if (!raw) return new Set();
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return new Set();
+      return new Set(parsed.filter((m): m is ViewMode => (VIEW_MODES as readonly string[]).includes(m)));
+    } catch {
+      return new Set();
+    }
+  };
   const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => {
     if (typeof window === "undefined") return new Set();
-    try {
-      const stored = localStorage.getItem("stone-age-disabled-view-modes");
-      if (!stored) return new Set();
-      const parsed = JSON.parse(stored) as unknown;
-      if (Array.isArray(parsed)) {
-        return new Set(parsed.filter((m): m is ViewMode => (VIEW_MODES as readonly string[]).includes(m)));
-      }
-    } catch {
-      // ignore storage failures
-    }
-    return new Set();
+    return parseDisabledViewModes(localStorage.getItem("stone-age-disabled-view-modes"));
   });
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem("stone-age-disabled-view-modes", JSON.stringify(Array.from(disabledViewModes)));
-    } catch {
-      // ignore storage failures
-    }
-  }, [disabledViewModes]);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "stone-age-disabled-view-modes") return;
+      setDisabledViewModes(parseDisabledViewModes(e.newValue));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
   const cyclableViewModes = useMemo(() => {
     const remaining = VIEW_MODES.filter((m) => !disabledViewModes.has(m));
     return remaining.length > 0 ? remaining : VIEW_MODES;
@@ -506,14 +461,6 @@ export const PuzzleGame = () => {
       setViewMode(cyclableViewModes[0]);
     }
   }, [cyclableViewModes, viewMode]);
-  const toggleViewModeEnabled = useCallback((mode: ViewMode, checked: boolean) => {
-    setDisabledViewModes((prev) => {
-      const next = new Set(prev);
-      if (checked) next.delete(mode);
-      else next.add(mode);
-      return next;
-    });
-  }, []);
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
   const [cameraZoomIndex, setCameraZoomIndex] = useState(() => (
@@ -2783,7 +2730,6 @@ export const PuzzleGame = () => {
           {VIEW_MODE_LABELS[viewMode]}
         </Button>
 
-        <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
         <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
 
         <Button
@@ -3434,8 +3380,7 @@ export const PuzzleGame = () => {
                     {VIEW_MODE_LABELS[viewMode]}
                   </Button>
 
-                  <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
-        <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
+                  <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
 
         <Button
           onClick={handleToggleMusic}
