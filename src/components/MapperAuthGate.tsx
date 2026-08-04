@@ -5,6 +5,7 @@ import { checkIsAdminAccount } from "@/lib/adminAccount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LogOut } from "lucide-react";
 
 /**
@@ -22,7 +23,9 @@ export function MapperAuthGate({ children }: { children: ReactNode }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
+    const [info, setInfo] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [resetMode, setResetMode] = useState(false);
 
     useEffect(() => {
         if (!supabase) {
@@ -55,9 +58,31 @@ export function MapperAuthGate({ children }: { children: ReactNode }) {
         if (!supabase) return;
         setSubmitting(true);
         setError(null);
+        setInfo(null);
+
+        if (resetMode) {
+            const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}reset-password`;
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+            setSubmitting(false);
+            if (resetError) { setError(resetError.message); return; }
+            setInfo("Check your email for a password reset link.");
+            setResetMode(false);
+            return;
+        }
+
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         setSubmitting(false);
         if (signInError) setError(signInError.message);
+    };
+
+    const handleGoogleSignIn = async () => {
+        if (!supabase) return;
+        setError(null);
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}mapper` },
+        });
+        if (oauthError) setError(oauthError.message);
     };
 
     if (loading) {
@@ -90,7 +115,9 @@ export function MapperAuthGate({ children }: { children: ReactNode }) {
                 >
                     <div className="text-center">
                         <div className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">Admin Only</div>
-                        <div className="mt-1 text-xl font-black text-stone-50">Mapper Access</div>
+                        <div className="mt-1 text-xl font-black text-stone-50">
+                            {resetMode ? "Reset Password" : "Mapper Access"}
+                        </div>
                     </div>
 
                     <div className="mt-5 space-y-3">
@@ -106,18 +133,20 @@ export function MapperAuthGate({ children }: { children: ReactNode }) {
                                 className="mt-1 bg-white/5 text-stone-50"
                             />
                         </div>
-                        <div>
-                            <Label htmlFor="mapper-password" className="text-xs text-stone-300">Password</Label>
-                            <Input
-                                id="mapper-password"
-                                type="password"
-                                autoComplete="current-password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                className="mt-1 bg-white/5 text-stone-50"
-                            />
-                        </div>
+                        {!resetMode && (
+                            <div>
+                                <Label htmlFor="mapper-password" className="text-xs text-stone-300">Password</Label>
+                                <Input
+                                    id="mapper-password"
+                                    type="password"
+                                    autoComplete="current-password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    className="mt-1 bg-white/5 text-stone-50"
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {error && (
@@ -125,10 +154,36 @@ export function MapperAuthGate({ children }: { children: ReactNode }) {
                             {error}
                         </div>
                     )}
+                    {info && (
+                        <div className="mt-3 rounded-lg border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                            {info}
+                        </div>
+                    )}
 
                     <Button type="submit" disabled={submitting} className="mt-5 w-full bg-amber-300 text-stone-950 hover:bg-amber-200">
-                        {submitting ? "Signing in…" : "Sign In"}
+                        {submitting ? "Please wait…" : resetMode ? "Send reset link" : "Sign In"}
                     </Button>
+
+                    <button
+                        type="button"
+                        onClick={() => { setResetMode(!resetMode); setError(null); setInfo(null); }}
+                        className="mt-3 w-full text-center text-xs text-stone-400 hover:text-stone-200"
+                    >
+                        {resetMode ? "Back to sign in" : "Forgot password?"}
+                    </button>
+
+                    {!resetMode && (
+                        <>
+                            <div className="mt-4 flex items-center gap-3 text-[10px] uppercase tracking-wide text-stone-500">
+                                <div className="h-px flex-1 bg-white/10" />
+                                or
+                                <div className="h-px flex-1 bg-white/10" />
+                            </div>
+                            <div className="mt-4">
+                                <GoogleSignInButton onClick={handleGoogleSignIn} disabled={submitting} />
+                            </div>
+                        </>
+                    )}
                 </form>
             </div>
         );

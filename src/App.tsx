@@ -7,6 +7,7 @@ import { Component, ErrorInfo, ReactNode, useState, useEffect } from "react";
 import { supabase, type DbLevel } from "@/lib/supabaseClient";
 import Index from "./pages/Index";
 import Crm from "./pages/Crm";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -78,6 +79,7 @@ const App = () => {
               <Route path="/" element={<Index />} />
               <Route path="/mapper" element={<Index />} />
               <Route path="/crm" element={<Crm />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

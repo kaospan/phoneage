@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlayerSessionProvider } from "@/contexts/PlayerSessionContext";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "reset";
 
 /**
  * Every player gets their own Supabase Auth account so progress can be synced to the cloud
@@ -79,9 +80,29 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
             return;
         }
 
+        if (mode === "reset") {
+            const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}reset-password`;
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+            setSubmitting(false);
+            if (resetError) { setError(resetError.message); return; }
+            setInfo("Check your email for a password reset link.");
+            setMode("signin");
+            return;
+        }
+
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         setSubmitting(false);
         if (signInError) setError(signInError.message);
+    };
+
+    const handleGoogleSignIn = async () => {
+        if (!supabase) return;
+        setError(null);
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
+        });
+        if (oauthError) setError(oauthError.message);
     };
 
     if (loading) {
@@ -115,7 +136,7 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                     <div className="text-center">
                         <div className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">Stone Age</div>
                         <div className="mt-1 text-xl font-black text-stone-50">
-                            {mode === "signin" ? "Sign In" : "Create Account"}
+                            {mode === "signin" ? "Sign In" : mode === "signup" ? "Create Account" : "Reset Password"}
                         </div>
                     </div>
 
@@ -132,19 +153,21 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                                 className="mt-1 bg-white/5 text-stone-50"
                             />
                         </div>
-                        <div>
-                            <Label htmlFor="player-password" className="text-xs text-stone-300">Password</Label>
-                            <Input
-                                id="player-password"
-                                type="password"
-                                autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                minLength={6}
-                                className="mt-1 bg-white/5 text-stone-50"
-                            />
-                        </div>
+                        {mode !== "reset" && (
+                            <div>
+                                <Label htmlFor="player-password" className="text-xs text-stone-300">Password</Label>
+                                <Input
+                                    id="player-password"
+                                    type="password"
+                                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    minLength={6}
+                                    className="mt-1 bg-white/5 text-stone-50"
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {error && (
@@ -159,15 +182,48 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                     )}
 
                     <Button type="submit" disabled={submitting} className="mt-5 w-full bg-amber-300 text-stone-950 hover:bg-amber-200">
-                        {submitting ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}
+                        {submitting
+                            ? "Please wait…"
+                            : mode === "signin" ? "Sign In" : mode === "signup" ? "Create Account" : "Send reset link"}
                     </Button>
+
+                    {mode !== "reset" && (
+                        <>
+                            <div className="mt-4 flex items-center gap-3 text-[10px] uppercase tracking-wide text-stone-500">
+                                <div className="h-px flex-1 bg-white/10" />
+                                or
+                                <div className="h-px flex-1 bg-white/10" />
+                            </div>
+                            <div className="mt-4">
+                                <GoogleSignInButton onClick={handleGoogleSignIn} disabled={submitting} />
+                            </div>
+                        </>
+                    )}
+
+                    {mode === "signin" && (
+                        <button
+                            type="button"
+                            onClick={() => { setMode("reset"); setError(null); setInfo(null); }}
+                            className="mt-3 w-full text-center text-xs text-stone-400 hover:text-stone-200"
+                        >
+                            Forgot password?
+                        </button>
+                    )}
 
                     <button
                         type="button"
-                        onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); setInfo(null); }}
-                        className="mt-3 w-full text-center text-xs text-stone-400 hover:text-stone-200"
+                        onClick={() => {
+                            setMode(mode === "signin" ? "signup" : "signin");
+                            setError(null);
+                            setInfo(null);
+                        }}
+                        className="mt-1 w-full text-center text-xs text-stone-400 hover:text-stone-200"
                     >
-                        {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+                        {mode === "signin"
+                            ? "New here? Create an account"
+                            : mode === "signup"
+                                ? "Already have an account? Sign in"
+                                : "Back to sign in"}
                     </button>
                 </form>
             </div>
