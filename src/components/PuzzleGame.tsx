@@ -246,16 +246,29 @@ const TutorialSettingsPopover = ({
         Watch again
       </div>
       <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto pr-1">
-        {TUTORIAL_DEFINITIONS.map((def) => (
-          <button
-            key={def.id}
-            onClick={() => onReplaySingle(def.id)}
-            className="flex w-full items-center justify-between rounded-md px-1.5 py-1 text-left text-xs text-foreground hover:bg-accent"
-          >
-            {def.title}
-            <span aria-hidden className="text-muted-foreground">▶</span>
-          </button>
-        ))}
+        {(() => {
+          const seen = getSeenTutorials();
+          // Only mechanics the player has actually reached — showing a "Teleport" tutorial
+          // before they've ever seen a teleport tile would just be confusing/spoiler-y.
+          const unlocked = TUTORIAL_DEFINITIONS.filter((def) => seen.has(def.id));
+          if (unlocked.length === 0) {
+            return (
+              <div className="px-1.5 py-1 text-xs text-muted-foreground">
+                Keep playing — mechanics you've encountered will show up here.
+              </div>
+            );
+          }
+          return unlocked.map((def) => (
+            <button
+              key={def.id}
+              onClick={() => onReplaySingle(def.id)}
+              className="flex w-full items-center justify-between rounded-md px-1.5 py-1 text-left text-xs text-foreground hover:bg-accent"
+            >
+              {def.title}
+              <span aria-hidden className="text-muted-foreground">▶</span>
+            </button>
+          ));
+        })()}
       </div>
 
       <Button

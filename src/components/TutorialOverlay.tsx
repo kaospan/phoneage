@@ -142,9 +142,15 @@ interface TutorialOverlayProps {
   onDone: (shown: TutorialDefinition[]) => void;
 }
 
+// Steps auto-advance (that's the walkthrough animation), but the overlay itself must never
+// disappear on its own — only an explicit click (Skip, Got it, or the ×) may close it. Slowed
+// down from the original pacing so captions have time to actually be read.
+const STEP_DURATION_MULTIPLIER = 1.5;
+
 export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   const [tutorialIndex, setTutorialIndex] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
+  const [awaitingDismiss, setAwaitingDismiss] = useState(false);
   const shownRef = useRef<TutorialDefinition[]>([]);
   const timerRef = useRef<number | null>(null);
 
@@ -168,7 +174,9 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
       setStepIndex(0);
       return;
     }
-    finish();
+    // Reached the end of the last queued tutorial — freeze here instead of auto-closing;
+    // the player has to click Got it (or ×) to dismiss.
+    setAwaitingDismiss(true);
   };
 
   const skip = () => {
@@ -178,12 +186,12 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   };
 
   useEffect(() => {
-    if (!step) return;
+    if (!step || awaitingDismiss) return;
     playTutorialSound(step.sound);
-    timerRef.current = window.setTimeout(advance, step.durationMs);
+    timerRef.current = window.setTimeout(advance, step.durationMs * STEP_DURATION_MULTIPLIER);
     return () => { if (timerRef.current != null) window.clearTimeout(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutorialIndex, stepIndex]);
+  }, [tutorialIndex, stepIndex, awaitingDismiss]);
 
   const rows = tutorial?.miniGrid.length ?? 0;
   const cols = tutorial?.miniGrid[0]?.length ?? 0;
@@ -209,10 +217,10 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
       >
         ×
       </button>
-      <div className="flex w-full max-w-lg flex-col items-center px-4">
+      <div className="flex w-full max-w-xl flex-col items-center px-4">
         <div className="text-center">
-          <div className="text-xs font-black uppercase tracking-[0.22em] text-amber-300">{tutorial.title}</div>
-          <div className="mt-1 text-sm text-stone-100">{step.caption ?? tutorial.text}</div>
+          <div className="text-base font-black uppercase tracking-[0.22em] text-amber-300 sm:text-lg">{tutorial.title}</div>
+          <div className="mt-2 text-lg font-medium leading-snug text-stone-50 sm:text-xl">{step.caption ?? tutorial.text}</div>
         </div>
 
         <div
@@ -298,14 +306,24 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
           ))}
         </div>
 
-        <Button
-          onClick={skip}
-          variant="ghost"
-          size="sm"
-          className="mt-4 text-xs text-stone-400 hover:bg-white/10 hover:text-stone-100"
-        >
-          Skip
-        </Button>
+        {awaitingDismiss ? (
+          <Button
+            onClick={finish}
+            size="lg"
+            className="mt-5 bg-amber-400 px-8 text-base font-black text-stone-950 hover:bg-amber-300"
+          >
+            Got it!
+          </Button>
+        ) : (
+          <Button
+            onClick={skip}
+            variant="ghost"
+            size="sm"
+            className="mt-4 text-sm text-stone-300 hover:bg-white/10 hover:text-stone-50"
+          >
+            Skip
+          </Button>
+        )}
       </div>
     </div>
   );
