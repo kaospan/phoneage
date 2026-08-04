@@ -107,7 +107,7 @@ try {
     console.warn('Failed to seed default references:', error);
   });
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && import.meta.env.DEV) {
     const debugWindow = window as Window & {
       runBulkBuildAndDownload: typeof runBulkBuildAndDownload;
       runBulkBuildReport: typeof runBulkBuildReport;
@@ -161,12 +161,14 @@ try {
   console.log('✅ App rendered successfully!');
 } catch (error) {
   console.error('❌ Fatal error in main.tsx:', error);
-  console.error('Stack trace:', (error as Error).stack);
+  const isDev = import.meta.env.DEV;
+  const details = isDev
+    ? `<p><strong>Error:</strong> ${(error as Error).message}</p><pre>${(error as Error).stack}</pre>`
+    : `<p>Please refresh the page. If the problem persists, contact support.</p>`;
   document.body.innerHTML = `
     <div style="padding: 20px; font-family: monospace; color: red;">
       <h1>🚨 Application Failed to Load</h1>
-      <p><strong>Error:</strong> ${(error as Error).message}</p>
-      <pre>${(error as Error).stack}</pre>
+      ${details}
     </div>
   `;
 }

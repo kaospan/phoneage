@@ -497,7 +497,7 @@ const buildAutoLevels = (): Level[] => {
   return applyDefaultTimeLimits(built);
 };
 
-type VariationMode = 'flip-h' | 'flip-v' | 'flip-hv';
+type VariationMode = 'flip-h' | 'flip-v' | 'flip-hv' | 'rotate90' | 'rotate270';
 
 const flipArrowHorizontal = (cell: number): number => {
   if (cell === 8) return 10;
@@ -511,17 +511,55 @@ const flipArrowVertical = (cell: number): number => {
   return cell;
 };
 
+const rotateArrow90 = (cell: number): number => {
+  if (cell === 7) return 8;
+  if (cell === 8) return 9;
+  if (cell === 9) return 10;
+  if (cell === 10) return 7;
+  return cell;
+};
+
+const rotateArrow270 = (cell: number): number => {
+  if (cell === 7) return 10;
+  if (cell === 10) return 9;
+  if (cell === 9) return 8;
+  if (cell === 8) return 7;
+  return cell;
+};
+
 const transformCellForMode = (cell: number, mode: VariationMode): number => {
   if (mode === 'flip-h') return flipArrowHorizontal(cell);
   if (mode === 'flip-v') return flipArrowVertical(cell);
+  if (mode === 'rotate90') return rotateArrow90(cell);
+  if (mode === 'rotate270') return rotateArrow270(cell);
   return flipArrowVertical(flipArrowHorizontal(cell));
 };
 
 const transformGridForMode = (grid: number[][], mode: VariationMode): number[][] => {
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
-  const out = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 5));
 
+  if (mode === 'rotate90') {
+    const out = Array.from({ length: cols }, () => Array.from({ length: rows }, () => 5));
+    for (let y = 0; y < rows; y += 1) {
+      for (let x = 0; x < cols; x += 1) {
+        out[x][rows - 1 - y] = transformCellForMode(grid[y][x], mode);
+      }
+    }
+    return out;
+  }
+
+  if (mode === 'rotate270') {
+    const out = Array.from({ length: cols }, () => Array.from({ length: rows }, () => 5));
+    for (let y = 0; y < rows; y += 1) {
+      for (let x = 0; x < cols; x += 1) {
+        out[cols - 1 - x][y] = transformCellForMode(grid[y][x], mode);
+      }
+    }
+    return out;
+  }
+
+  const out = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 5));
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
       const nextY = mode === 'flip-v' || mode === 'flip-hv' ? rows - 1 - y : y;
@@ -529,7 +567,6 @@ const transformGridForMode = (grid: number[][], mode: VariationMode): number[][]
       out[nextY][nextX] = transformCellForMode(grid[y][x], mode);
     }
   }
-
   return out;
 };
 
@@ -538,10 +575,18 @@ const transformPosForMode = (
   rows: number,
   cols: number,
   mode: VariationMode
-) => ({
-  x: mode === 'flip-h' || mode === 'flip-hv' ? cols - 1 - pos.x : pos.x,
-  y: mode === 'flip-v' || mode === 'flip-hv' ? rows - 1 - pos.y : pos.y,
-});
+) => {
+  if (mode === 'rotate90') {
+    return { x: rows - 1 - pos.y, y: pos.x };
+  }
+  if (mode === 'rotate270') {
+    return { x: pos.y, y: cols - 1 - pos.x };
+  }
+  return {
+    x: mode === 'flip-h' || mode === 'flip-hv' ? cols - 1 - pos.x : pos.x,
+    y: mode === 'flip-v' || mode === 'flip-hv' ? rows - 1 - pos.y : pos.y,
+  };
+};
 
 const transformHourglassBonusForMode = (
   hourglassBonusByCell: Record<string, number> | undefined,
@@ -572,7 +617,7 @@ const buildVariationLevels = (baseLevels: Level[]): Level[] => {
     .slice(0, targetExtraLevels);
   if (sourceLevels.length === 0) return [];
 
-  const variationModes: VariationMode[] = ['flip-h', 'flip-v', 'flip-hv'];
+  const variationModes: VariationMode[] = ['flip-h', 'flip-v', 'flip-hv', 'rotate90', 'rotate270'];
   const themeCycle: ColorTheme[] = ['default', 'ocean', 'forest', 'sunset', 'lava', 'crystal', 'neon', 'snow', 'gray', 'slate'];
   const maxBaseId = Math.max(...baseLevels.map((level) => level.id));
 

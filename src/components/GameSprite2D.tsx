@@ -50,6 +50,8 @@ interface GameSprite2DProps {
   zoomFactor?: number;
   fullBleed?: boolean;
   rotateUpright?: boolean;
+  /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
+  idleArrowHintDirections?: { dx: number; dy: number }[];
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
@@ -208,6 +210,35 @@ const renderSpawnMarkerSprite = (rotate?: boolean) => (
   />
 );
 
+// Direction -> which edge of the tile to hug (inset, staying inside the block) and how much to
+// rotate the "points up" chevron shape. Left/right sit above center so they clear the hero's feet.
+const IDLE_HINT_DIR_STYLE: Record<string, React.CSSProperties> = {
+  "0,-1": { top: "4%", left: "50%", transform: "translate(-50%, 0) rotate(0deg)" },
+  "1,0": { top: "32%", right: "3%", transform: "translate(0, -50%) rotate(90deg)" },
+  "0,1": { bottom: "4%", left: "50%", transform: "translate(-50%, 0) rotate(180deg)" },
+  "-1,0": { top: "32%", left: "3%", transform: "translate(0, -50%) rotate(270deg)" },
+};
+
+/** Pulsing chevrons hugging the tile's edges, hinting which way an idle-standing arrow can glide. Kept off the hero's feet (bottom-center) by hugging left/right sides higher up. */
+const renderIdleHintChevrons = (directions: { dx: number; dy: number }[] | undefined) => {
+  if (!directions || directions.length === 0) return null;
+  return directions.map(({ dx, dy }) => {
+    const style = IDLE_HINT_DIR_STYLE[`${dx},${dy}`];
+    if (!style) return null;
+    return (
+      <svg
+        key={`${dx},${dy}`}
+        viewBox="0 0 24 24"
+        aria-hidden
+        className="pointer-events-none absolute z-30 h-4 w-4 animate-pulse"
+        style={{ ...style, filter: "drop-shadow(0 0 4px rgba(0,0,0,0.9))" }}
+      >
+        <path d="M12 3 L21 15 L15 15 L15 21 L9 21 L9 15 L3 15 Z" fill="#5eead4" stroke="rgba(6,20,20,0.9)" strokeWidth="1.5" />
+      </svg>
+    );
+  });
+};
+
 export function GameSprite2D({
   grid,
   atlasSourceGrid,
@@ -220,6 +251,7 @@ export function GameSprite2D({
   zoomFactor = 1,
   fullBleed = false,
   rotateUpright = false,
+  idleArrowHintDirections,
   onArrowClick,
   onCancelSelection,
 }: GameSprite2DProps) {
@@ -725,16 +757,6 @@ export function GameSprite2D({
             row.map((cell, x) => {
               const isCave = goalCaveKeys.has(`${x},${y}`);
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
-              const isPlayerAtScreenshotStart =
-                Boolean(
-                  isPlayer &&
-                  useScreenshotBase &&
-                  playerStart &&
-                  playerStart.x === x &&
-                  playerStart.y === y
-                );
-              const suppressPlayerOverlay =
-                isPlayer && useScreenshotBase && isPlayerAtScreenshotStart;
               const tileType = isCave ? 3 : cell;
               // If the player is standing on the start-marker cave (18), render the base tile as floor
               // so the cave appears only after the hero moves off the spawn tile (nostalgia behavior).
@@ -743,43 +765,28 @@ export function GameSprite2D({
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
               const edge = edgeMasks?.[y]?.[x] ?? null;
-              const isDirectionalArrowTile = displayTileType >= 7 && displayTileType <= 13;
-              // Keep arrow hidden while the player occupies that tile (DOS behavior feel).
-              const effectiveTileType =
-                isPlayer && isDirectionalArrowTile && !useScreenshotBase ? 0 : displayTileType;
+              // Arrow tiles stay visible even while the player stands on them — hiding them here
+              // used to make it impossible to tell what you were standing on.
+              const effectiveTileType = displayTileType;
               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
               const originalTileType = atlasGoalCaveKeys.has(`${x},${y}`) ? 3 : (sourceGrid[y]?.[x] ?? tileType);
               const baselineTileType = goalCaveKeys.has(`${x},${y}`)
                 ? 3
                 : (renderBaselineRef.current?.grid[y]?.[x] ?? originalTileType);
               const originalIsArrow = originalTileType >= 7 && originalTileType <= 13;
-              const hasMovedOffScreenshotStart =
-                Boolean(
-                  useScreenshotBase &&
-                  playerStart &&
-                  localPlayer &&
-                  (localPlayer.pos.x !== playerStart.x || localPlayer.pos.y !== playerStart.y)
-                );
+              // The original DOS screenshot has the hero (with a visible white-square backdrop)
+              // baked into the pixels at the level's spawn tile. Always paint over that spot with
+              // clean floor art — regardless of whether the player is still standing there — so
+              // our own transparent hero sprite is the only "hero" ever shown, never the
+              // screenshot's baked-in one.
               const heroFootprintNeedsCleanup =
-                Boolean(
-                  hasMovedOffScreenshotStart &&
-                  levelAtlas?.heroFootprintKeys?.has(`${x},${y}`)
-                );
+                Boolean(useScreenshotBase && levelAtlas?.heroFootprintKeys?.has(`${x},${y}`));
               const playerStartNeedsCleanup =
-                Boolean(
-                  playerStart &&
-                  playerStart.x === x &&
-                  playerStart.y === y &&
-                  localPlayer &&
-                  (localPlayer.pos.x !== x || localPlayer.pos.y !== y)
-                ) || heroFootprintNeedsCleanup;
+                Boolean(playerStart && playerStart.x === x && playerStart.y === y) || heroFootprintNeedsCleanup;
               const tileChangedFromScreenshot = effectiveTileType !== baselineTileType;
-              const shouldPaintStaticTile =
-                !suppressPlayerOverlay && (
-                  useScreenshotBase
-                    ? tileChangedFromScreenshot || playerStartNeedsCleanup
-                    : allowGeneratedFallback
-                );
+              const shouldPaintStaticTile = useScreenshotBase
+                ? tileChangedFromScreenshot || playerStartNeedsCleanup
+                : allowGeneratedFallback;
 
               const atlasSprite =
                 levelAtlas?.tileSprites?.[effectiveTileType] ??
@@ -813,7 +820,7 @@ export function GameSprite2D({
               const useRotatedChild = rotateUpright && needsUprightSprite && Boolean(backgroundImage);
               const cellBackgroundImage = useRotatedChild ? undefined : backgroundImage;
               const arrowVector =
-                effectiveIsArrow && !isPlayer && shouldPaintStaticTile && !backgroundImage
+                effectiveIsArrow && shouldPaintStaticTile && !backgroundImage
                   ? renderArrowVector(effectiveTileType)
                   : null;
 
@@ -839,8 +846,9 @@ export function GameSprite2D({
                   key={`${x}-${y}`}
                   className={[
                     "relative min-h-0 min-w-0",
-                    isPlayer && !suppressPlayerOverlay ? "z-10 overflow-visible" : "overflow-hidden",
+                    isPlayer ? "z-10 overflow-visible" : "overflow-hidden",
                     isArrow ? "cursor-pointer hover:brightness-110" : "",
+                    isPlayer && effectiveIsArrow ? "ring-2 ring-amber-300/80" : "",
                     isSelected ? "ring-2 ring-white" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
                   ].join(" ")}
@@ -885,9 +893,10 @@ export function GameSprite2D({
                       }}
                     />
                   )}
-                  {isPlayer && !isPlayerAtScreenshotStart && !suppressPlayerOverlay && (
+                  {isPlayer && (
                     renderPlayerSprite(rotateUpright)
                   )}
+                  {isPlayer && renderIdleHintChevrons(idleArrowHintDirections)}
                   {!isPlayer && effectiveTileType === 18 && playerStart && x === playerStart.x && y === playerStart.y && (
                     renderSpawnMarkerSprite(rotateUpright)
                   )}

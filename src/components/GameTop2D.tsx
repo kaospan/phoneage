@@ -30,6 +30,8 @@ interface GameTop2DProps {
   fullBleed?: boolean;
   rotateUpright?: boolean;
   theme?: ColorTheme;
+  /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
+  idleArrowHintDirections?: { dx: number; dy: number }[];
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
@@ -417,6 +419,35 @@ const renderArrowVector = (tileType: number) => {
   );
 };
 
+// Direction -> which edge of the tile to hug (inset, staying inside the block) and how much to
+// rotate the "points up" chevron shape. Left/right sit above center so they clear the hero's feet.
+const IDLE_HINT_DIR_STYLE: Record<string, React.CSSProperties> = {
+  "0,-1": { top: "4%", left: "50%", transform: "translate(-50%, 0) rotate(0deg)" },
+  "1,0": { top: "32%", right: "3%", transform: "translate(0, -50%) rotate(90deg)" },
+  "0,1": { bottom: "4%", left: "50%", transform: "translate(-50%, 0) rotate(180deg)" },
+  "-1,0": { top: "32%", left: "3%", transform: "translate(0, -50%) rotate(270deg)" },
+};
+
+/** Pulsing chevrons hugging the tile's edges, hinting which way an idle-standing arrow can glide. Kept off the hero's feet (bottom-center) by hugging left/right sides higher up. */
+const renderIdleHintChevrons = (directions: { dx: number; dy: number }[] | undefined) => {
+  if (!directions || directions.length === 0) return null;
+  return directions.map(({ dx, dy }) => {
+    const style = IDLE_HINT_DIR_STYLE[`${dx},${dy}`];
+    if (!style) return null;
+    return (
+      <svg
+        key={`${dx},${dy}`}
+        viewBox="0 0 24 24"
+        aria-hidden
+        className="pointer-events-none absolute z-30 h-4 w-4 animate-pulse"
+        style={{ ...style, filter: "drop-shadow(0 0 4px rgba(0,0,0,0.9))" }}
+      >
+        <path d="M12 3 L21 15 L15 15 L15 21 L9 21 L9 15 L3 15 Z" fill="#5eead4" stroke="rgba(6,20,20,0.9)" strokeWidth="1.5" />
+      </svg>
+    );
+  });
+};
+
 // ─── Arrow background — warm amber stone with deeper bevel ────────────────────
 
 const ArrowBgTile = ({ uid }: { uid: string }) => (
@@ -527,6 +558,7 @@ export function GameTop2D({
   fullBleed = false,
   rotateUpright = false,
   theme,
+  idleArrowHintDirections,
   onArrowClick,
   onCancelSelection,
 }: GameTop2DProps) {
@@ -646,10 +678,9 @@ export function GameTop2D({
               const isArrow = isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13;
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
-              const effectiveTileType =
-                isPlayer && displayTileType >= 7 && displayTileType <= 13
-                  ? 0
-                  : displayTileType;
+              // Arrow tiles stay visible even while the player stands on them — hiding them here
+              // used to make it impossible to tell what you were standing on.
+              const effectiveTileType = displayTileType;
               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
 
               const needsUprightIcon =
@@ -688,6 +719,7 @@ export function GameTop2D({
                     "relative min-h-0 min-w-0",
                     isPlayer ? "z-10 overflow-visible" : "overflow-hidden",
                     isArrow && !isPlayer ? "cursor-pointer hover:brightness-110" : "",
+                    isPlayer && effectiveIsArrow ? "ring-2 ring-amber-300/80" : "",
                     isSelected ? "ring-2 ring-white" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
                   ].join(" ")}
@@ -699,7 +731,7 @@ export function GameTop2D({
                 >
                   {renderTileBg()}
 
-                  {effectiveIsArrow && !isPlayer && (
+                  {effectiveIsArrow && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       {renderArrowVector(effectiveTileType)}
                     </div>
@@ -707,6 +739,7 @@ export function GameTop2D({
 
                   {isPlayer && isPlayerWarping && <TeleportFlashOverlay />}
                   {isPlayer && !isPlayerWarping && <PlayerSprite rotate={rotateUpright} />}
+                  {isPlayer && renderIdleHintChevrons(idleArrowHintDirections)}
                 </div>
               );
             }),

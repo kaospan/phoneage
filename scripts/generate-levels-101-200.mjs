@@ -71,7 +71,15 @@ const shuffle = (rng, arr) => {
 // Canvas + room construction
 // ---------------------------------------------------------------------------
 const ROWS = 11;
-const COLS = 20;
+// Mutable, set per-candidate in buildCandidate() before anything else runs (synchronous, so this
+// is safe). A relay hop's wide gap makes a 3rd room physically impossible to fit in the original
+// fixed 20-column canvas (confirmed empirically — every tier collapsed to 2 rooms), which also
+// silently starved tier 4+ of lock-gating (locks need a simple-hop room entrance, and a 2-room
+// level's only hop is always the forced relay). Widening the canvas for higher tiers is what
+// actually lets "more rooms + locks" difficulty scaling exist at all. Levels 1-100 already vary
+// board width slightly (11x20 and 11x21 both appear), so this isn't unprecedented.
+let COLS = 20;
+const colsForTier = (tier) => (tier <= 2 ? 20 : tier === 3 ? 24 : tier === 4 ? 27 : 30);
 
 const setStoneIfVoid = (grid, x, y) => {
   if (y < 0 || y >= ROWS || x < 0 || x >= COLS) return;
@@ -165,6 +173,7 @@ function buildRelayHop(grid, room, nextRoom, bandY0, bandHeight, rng, usedCells)
 /** Builds one candidate level for the given id/seed. Returns null if room layout doesn't fit. */
 function buildCandidate(id, rng) {
   const tier = tierFor(id);
+  COLS = colsForTier(tier);
   const numRooms = roomCountForTier(tier, rng);
 
   // Fixed near the top of the canvas so every room has guaranteed room below it for a relay
@@ -175,8 +184,14 @@ function buildCandidate(id, rng) {
   const bandY0 = 1;
 
   // Lay rooms left-to-right. Relay hops need a wider gap (room for the corridor's remote arrow).
+  // Hop 0 is ALWAYS relay: the original generator let tier-1 levels use a "simple ride" hop,
+  // which meant their solver-optimal solution used zero remote-arrow moves at all (confirmed
+  // empirically against the real solver — the arrow was decorative). Since room 0 -> room 1 is
+  // the only way forward, forcing that first hop to be relay guarantees every level genuinely
+  // requires the remote-move mechanic. Later hops stay probabilistic so simple-hop entrances
+  // (needed for lock gating, see below) remain available at higher tiers.
   const hopIsRelay = [];
-  for (let i = 0; i < numRooms - 1; i++) hopIsRelay.push(tier >= 2 && rng() < 0.6);
+  for (let i = 0; i < numRooms - 1; i++) hopIsRelay.push(i === 0 || (tier >= 2 && rng() < 0.7));
 
   const rooms = [];
   let cursorX = 1;
@@ -207,13 +222,13 @@ function buildCandidate(id, rng) {
   }
 
   for (let i = 0; i < rooms.length - 1; i++) {
-    const isLastHop = i === rooms.length - 2;
     if (hopIsRelay[i]) {
       const ok = buildRelayHop(grid, rooms[i], rooms[i + 1], bandY0, bandHeight, rng, usedCells);
       if (!ok) return null;
     } else {
       const room = rooms[i];
       const x = room.x0 + room.w - 1;
+      const isLastHop = i === rooms.length - 2;
       const arrowType = tier === 5 && isLastHop && rng() < 0.5 ? 13 : 8; // 13 = omni, 8 = right
       grid[bridgeRow][x] = arrowType;
       usedCells.add(`${x},${bridgeRow}`);
@@ -334,7 +349,10 @@ async function main() {
         if (!solution.solved) continue;
         const gap = Math.abs(solution.moves - target);
         const remoteMoves = solution.actions.filter((a) => a.startsWith('A(')).length;
-        const meetsRemote = candidate.tier < 2 || remoteMoves > 0;
+        // Every level's hop 0 is a forced relay hop now (see buildCandidate), so a genuinely
+        // solvable candidate should never have a zero-remote-move optimal solution — require it
+        // at every tier instead of exempting tier 1, as a defense-in-depth check on that fix.
+        const meetsRemote = remoteMoves > 0;
         const better = !best || (meetsRemote && !best.meetsRemote) || (meetsRemote === best.meetsRemote && gap < best.gap);
         if (better) {
           best = { ...candidate, moves: solution.moves, gap, remoteMoves, meetsRemote };
@@ -345,8 +363,13 @@ async function main() {
         console.error(`Level ${id}: FAILED to find any solvable candidate after ${maxAttempts} attempts`);
         continue;
       }
+      // Timer formula derived from levels 1-100's real (solver-moves, assigned-timer) pairs:
+      // a median of ~8.5 seconds of timer per minimum-solution move, plus a flat bonus per
+      // remote-arrow move (those need extra thinking time — identify the arrow, plan the glide)
+      // and a small flat buffer for initial orientation. Floored at 30s.
+      const timeLimitSeconds = Math.max(30, Math.round(best.moves * 8.5 + best.remoteMoves * 5 + 15));
       console.log(
-        `Level ${id} [tier ${best.tier}, ${best.rooms} rooms]: target ${target}mv, got ${best.moves}mv (gap ${best.gap}), ${best.remoteMoves} remote-arrow moves`,
+        `Level ${id} [tier ${best.tier}, ${best.rooms} rooms]: target ${target}mv, got ${best.moves}mv (gap ${best.gap}), ${best.remoteMoves} remote-arrow moves, timer ${timeLimitSeconds}s`,
       );
       results.push({
         id,
@@ -357,6 +380,7 @@ async function main() {
         targetMoves: target,
         actualMoves: best.moves,
         remoteMoves: best.remoteMoves,
+        timeLimitSeconds,
       });
     }
   });
@@ -375,6 +399,7 @@ async function main() {
     grid: r.grid,
     playerStart: r.playerStart,
     cavePos: r.cavePos,
+    timeLimitSeconds: r.timeLimitSeconds,
   }));
   const merged = [...filtered, ...newEntries].sort((a, b) => a.id - b.id);
   writeFileSync(promotedPath, JSON.stringify(merged, null, 2));

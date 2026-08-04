@@ -36,8 +36,14 @@ class ErrorBoundary extends Component<
       return (
         <div style={{ padding: '20px', fontFamily: 'monospace', color: 'red' }}>
           <h1>🚨 Something went wrong</h1>
-          <p><strong>Error:</strong> {this.state.error?.message}</p>
-          <pre>{this.state.error?.stack}</pre>
+          {import.meta.env.DEV ? (
+            <>
+              <p><strong>Error:</strong> {this.state.error?.message}</p>
+              <pre>{this.state.error?.stack}</pre>
+            </>
+          ) : (
+            <p>Please refresh the page. If the problem persists, contact support.</p>
+          )}
           <button onClick={() => window.location.reload()}>Reload Page</button>
         </div>
       );

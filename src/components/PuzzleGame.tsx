@@ -38,7 +38,7 @@ import {
 } from "@/lib/moveRecording";
 import { Thumbstick } from "./Thumbstick";
 import { CellType, GameState, KeyInventory, Position } from "@/game/types";
-import { isArrowCell } from "@/game/arrows";
+import { isArrowCell, getArrowDirections } from "@/game/arrows";
 import { buildGoalCaveKeySet, findGoalCaves } from "@/game/caves";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
 import { getNextTeleport, TELEPORT_CELL } from "@/game/teleport";
@@ -148,6 +148,8 @@ const CAMERA_ZOOM_LEVELS = CAMERA_ZOOM_PERCENT_LEVELS.map((percent) => CAMERA_BA
 const DEFAULT_CAMERA_ZOOM_INDEX = CAMERA_ZOOM_PERCENT_LEVELS.indexOf(100);
 const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = DEFAULT_CAMERA_ZOOM_INDEX;
 const PINCH_ZOOM_STEP_DISTANCE_PX = 18;
+const IDLE_ARROW_HINT_MS = 2500;
+const EMPTY_ARROW_HINT: { dx: number; dy: number }[] = [];
 export const VIEW_MODES = ["3d", "fps", "2d", "sprite", "top"] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
@@ -440,9 +442,9 @@ export const PuzzleGame = () => {
   const [moves, setMoves] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [completionSummary, setCompletionSummary] = useState<LevelCompletionSummary | null>(null);
-  // Keep the user's chosen view mode persistent; default to sprite if not set.
+  // Keep the user's chosen view mode persistent; default to top-down if not set.
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window === "undefined") return "sprite";
+    if (typeof window === "undefined") return "top";
     try {
       const stored = localStorage.getItem("stone-age-view-mode");
       if (stored && (VIEW_MODES as readonly string[]).includes(stored)) {
@@ -451,7 +453,7 @@ export const PuzzleGame = () => {
     } catch {
       // ignore storage failures
     }
-    return "sprite";
+    return "top";
   });
   // Lets the player exclude slow/unwanted camera modes (3D, FPS) from the view-cycle button.
   // Persisted so the choice sticks across sessions.
@@ -692,6 +694,9 @@ export const PuzzleGame = () => {
   const inputQueueRef = useRef<Map<PlayerId, InputCommand[]>>(new Map());
   const localPlayerIdRef = useRef<PlayerId>('local');
   const inputSeqRef = useRef(0);
+  // Drives the "idle on an arrow tile" hint below — reset on every input so the flash only
+  // kicks in once the player has genuinely stopped acting, not just between simulation ticks.
+  const lastInputAtRef = useRef<number>(Date.now());
   const wsRef = useRef<WebSocket | null>(null);
   const lastRenderRef = useRef(0);
   const buildInFlightRef = useRef<Set<number>>(new Set());
@@ -1404,6 +1409,7 @@ export const PuzzleGame = () => {
     const enqueueInput = useCallback((command: QueuedInputCommand) => {
       const sim = simRef.current;
       if (!sim) return;
+      lastInputAtRef.current = Date.now();
       const localId = localPlayerIdRef.current;
       const seq = ++inputSeqRef.current;
       const input = { ...command, seq } as InputCommand;
@@ -1883,6 +1889,30 @@ export const PuzzleGame = () => {
       [renderPlayers]
     );
     const localPlayerPos = localPlayer?.pos ?? { x: 0, y: 0 };
+
+    // After a few idle seconds standing on an arrow tile, flash the direction(s) it can glide —
+    // the tile itself is now shown under the player (see view components), but a stationary
+    // player might still not notice it's an arrow without an explicit nudge.
+    const [isIdleOnArrow, setIsIdleOnArrow] = useState(false);
+    useEffect(() => {
+      if (isReplaying || isTutorialActive || isBuilding || isComplete) {
+        setIsIdleOnArrow(false);
+        return;
+      }
+      const interval = window.setInterval(() => {
+        const cell = renderGrid[localPlayerPos.y]?.[localPlayerPos.x];
+        const onArrow = cell !== undefined && isArrowCell(cell);
+        const idleLongEnough = Date.now() - lastInputAtRef.current >= IDLE_ARROW_HINT_MS;
+        setIsIdleOnArrow(onArrow && idleLongEnough);
+      }, 300);
+      return () => window.clearInterval(interval);
+    }, [renderGrid, localPlayerPos.x, localPlayerPos.y, isReplaying, isTutorialActive, isBuilding, isComplete]);
+
+    const idleArrowHintDirections = useMemo(() => {
+      if (!isIdleOnArrow) return EMPTY_ARROW_HINT;
+      const cell = renderGrid[localPlayerPos.y]?.[localPlayerPos.x];
+      return cell !== undefined ? getArrowDirections(cell) : EMPTY_ARROW_HINT;
+    }, [isIdleOnArrow, renderGrid, localPlayerPos.x, localPlayerPos.y]);
     const redKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.red) || 0));
     const greenKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.green) || 0));
     const timeLeftText = timeLeftSeconds == null
@@ -3437,6 +3467,7 @@ export const PuzzleGame = () => {
                 fullBleed={isFullscreenMode}
                 rotateUpright={isMobilePortrait}
                 theme={currentLevel.theme}
+                idleArrowHintDirections={idleArrowHintDirections}
                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];
@@ -3480,6 +3511,7 @@ export const PuzzleGame = () => {
                 zoomFactor={cameraZoomFactor}
                 fullBleed={isFullscreenMode}
                 rotateUpright={isMobilePortrait}
+                idleArrowHintDirections={idleArrowHintDirections}
                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];

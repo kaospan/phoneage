@@ -19,7 +19,13 @@
       (function () {
         const params = new URLSearchParams(window.location.search);
         const redirect = params.get("redirect");
-        if (redirect) {
+        // Only allow same-origin relative paths (must start with a single "/",
+        // not "//" or "/\" which browsers treat as protocol-relative URLs).
+        const isSafeRelativePath = redirect
+          && redirect.startsWith("/")
+          && !redirect.startsWith("//")
+          && !redirect.startsWith("/\\");
+        if (isSafeRelativePath) {
           params.delete("redirect");
           const newSearch = params.toString();
           const search = newSearch ? `?${newSearch}` : "";

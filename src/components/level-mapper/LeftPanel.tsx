@@ -1,11 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TILE_TYPES, voidGrid } from '@/lib/levelgrid';
-import Palette from './Palette';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SpriteCapture } from './SpriteCapture';
-import { CellReferenceManager } from './CellReferenceManager';
 import { themes, type ColorTheme, type Level } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
 import { detectGridLines } from './gridDetection';
@@ -60,7 +56,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
-        activeTile, setActiveTile, setGrid, grid, setPlayerStart,
+        activeTile, setGrid, grid, setPlayerStart,
         hourglassBrushSeconds, setHourglassBrushSeconds, setHourglassBonusByCell,
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
@@ -85,17 +81,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [recordMovesOn, setRecordMovesOn] = useState(() => getRecordMovesEnabled());
     const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => new Set(getDisabledViewModes()));
 
-    // Persistent tab state
-    const [activeTab, setActiveTab] = useState(() => {
-        return localStorage.getItem('levelmapper-active-tab') || 'sprites'; // Default to sprites for capture
-    });
-
-    // Save tab preference
-    const handleTabChange = (value: string) => {
-        setActiveTab(value);
-        localStorage.setItem('levelmapper-active-tab', value);
-    };
-
     const currentLevel = importLevelIndex !== null ? allLevels[importLevelIndex] ?? null : null;
     const currentLevelTitle = currentLevel ? `Level ${currentLevel.id}` : 'Level Mapper';
     const selectedTile = TILE_TYPES.find((tile) => tile.id === activeTile) ?? TILE_TYPES[0];
@@ -113,16 +98,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 : 'No reliable floor-tile measurement yet.'
         : 'Upload a screenshot to enable alignment and scan tools.';
     const triggerFileUpload = () => fileInputRef.current?.click();
-
-    const handleSpriteCapture = (cellData: {
-        imageData: string;
-        tileType: number;
-        row: number;
-        col: number;
-    }) => {
-        console.log('Captured sprite:', cellData);
-        // Don't switch tabs - stay on capture tab
-    };
 
     // Expose a console helper for exporting current calibrations as a factory-defaults snippet.
     useEffect(() => {
@@ -793,14 +768,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                 </DialogContent>
             </Dialog>
 
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col px-4 py-4">
-                <TabsList className="mb-3 grid h-11 w-full shrink-0 grid-cols-3 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-                    <TabsTrigger value="editor" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">Editor</TabsTrigger>
-                    <TabsTrigger value="sprites" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">Capture</TabsTrigger>
-                    <TabsTrigger value="references" className="rounded-xl data-[state=active]:bg-amber-300 data-[state=active]:text-stone-950">References</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="editor" className="relative mt-0 space-y-3 pr-1">
+            <div className="relative space-y-3 px-4 py-4 pr-5">
                     {isDetecting && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center rounded-[24px] bg-stone-950/75 backdrop-blur-sm">
                             <div className="rounded-[22px] border border-sky-300/20 bg-stone-900/95 p-6 text-sky-50 shadow-lg">
@@ -1002,51 +970,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             </div>
                         </MapperSection>
                     )}
-
-                    <MapperSection
-                        title="Tile Palette"
-                        eyebrow="Paint Tools"
-                        description="Choose the active tile and then paint directly in the center editor."
-                        contentClassName="space-y-3 pt-3"
-                    >
-                        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-stone-900/55 px-3 py-3">
-                            <span className="inline-block h-8 w-8 rounded-2xl border border-white/10 shadow-sm" style={{ backgroundColor: selectedTile.color }} />
-                            <div className="min-w-0">
-                                <div className="text-xs font-semibold text-stone-100">{selectedTile.name}</div>
-                                <div className="text-[11px] text-stone-400">Tile ID {selectedTile.id}</div>
-                            </div>
-                        </div>
-                        <Palette activeTile={activeTile} setActiveTile={setActiveTile} />
-                    </MapperSection>
-                </TabsContent>
-
-                <TabsContent value="sprites" className="mt-0 pr-1">
-                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2">
-                        <SpriteCapture
-                            imageURL={imageURL}
-                            rows={rows}
-                            cols={cols}
-                            gridOffsetX={gridOffsetX}
-                            gridOffsetY={gridOffsetY}
-                            gridFrameWidth={gridFrameWidth}
-                            gridFrameHeight={gridFrameHeight}
-                            imageScaleX={imageScaleX}
-                            imageScaleY={imageScaleY}
-                            imageOffsetX={imageOffsetX}
-                            imageOffsetY={imageOffsetY}
-                            grid={grid}
-                            setGrid={setGrid}
-                            onCapture={handleSpriteCapture}
-                        />
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="references" className="mt-0 pr-1">
-                    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2">
-                        <CellReferenceManager />
-                    </div>
-                </TabsContent>
-            </Tabs>
+            </div>
             </div>
 
             {resizable ? (
