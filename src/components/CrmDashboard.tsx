@@ -64,6 +64,19 @@ const timeAgo = (iso: string | null | undefined): string => {
     return `${d}d ago`;
 };
 
+/** Full local date + time, e.g. "Aug 4, 2026, 3:45:12 PM" — used both as a visible timestamp and as a hover tooltip on the relative "time ago" text. */
+const formatTimestamp = (iso: string | null | undefined): string => {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+    });
+};
+
 export function CrmDashboard() {
     const [profiles, setProfiles] = useState<ProfileRow[]>([]);
     const [progress, setProgress] = useState<ProgressRow[]>([]);
@@ -214,8 +227,14 @@ export function CrmDashboard() {
                                             <TableCell>{stats.levelsCompleted}</TableCell>
                                             <TableCell>{stats.totalAttempts}</TableCell>
                                             <TableCell>{stats.totalMoves}</TableCell>
-                                            <TableCell className="text-stone-400">{timeAgo(p.last_seen_at)}</TableCell>
-                                            <TableCell className="text-stone-400">{timeAgo(p.created_at)}</TableCell>
+                                            <TableCell className="text-stone-400" title={formatTimestamp(p.last_seen_at)}>
+                                                <div>{timeAgo(p.last_seen_at)}</div>
+                                                <div className="text-[10px] text-stone-600">{formatTimestamp(p.last_seen_at)}</div>
+                                            </TableCell>
+                                            <TableCell className="text-stone-400" title={formatTimestamp(p.created_at)}>
+                                                <div>{timeAgo(p.created_at)}</div>
+                                                <div className="text-[10px] text-stone-600">{formatTimestamp(p.created_at)}</div>
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })}
@@ -237,7 +256,12 @@ export function CrmDashboard() {
                             <div className="text-sm font-black text-stone-50">{selectedProfile.email}</div>
                             <button onClick={() => setSelectedUserId(null)} className="text-xs text-stone-400 hover:text-stone-200">Close</button>
                         </div>
-                        <div className="mt-1 text-xs text-stone-500">Joined {timeAgo(selectedProfile.created_at)} · Last seen {timeAgo(selectedProfile.last_seen_at)}</div>
+                        <div className="mt-1 text-xs text-stone-500">
+                            Joined {timeAgo(selectedProfile.created_at)} ({formatTimestamp(selectedProfile.created_at)})
+                        </div>
+                        <div className="text-xs text-stone-500">
+                            Last seen {timeAgo(selectedProfile.last_seen_at)} ({formatTimestamp(selectedProfile.last_seen_at)})
+                        </div>
 
                         <div className="mt-4 text-xs font-black uppercase tracking-wide text-stone-400">Per-level progress</div>
                         <div className="mt-2 space-y-1.5">
@@ -258,13 +282,16 @@ export function CrmDashboard() {
                         <div className="mt-2 space-y-1.5">
                             {selectedSessions.length === 0 && <div className="text-xs text-stone-500">No sessions logged yet.</div>}
                             {selectedSessions.map((s) => (
-                                <div key={s.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs">
-                                    <span className="font-bold text-stone-200">L{s.level_id}</span>
-                                    <span className={s.completed ? "text-emerald-300" : s.ended_at ? "text-stone-500" : "text-amber-300"}>
-                                        {s.completed ? "Cleared" : s.ended_at ? "Abandoned" : "In progress"}
-                                    </span>
-                                    <span className="text-stone-400">{s.moves ?? "—"} mv</span>
-                                    <span className="text-stone-500">{timeAgo(s.started_at)}</span>
+                                <div key={s.id} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-stone-200">L{s.level_id}</span>
+                                        <span className={s.completed ? "text-emerald-300" : s.ended_at ? "text-stone-500" : "text-amber-300"}>
+                                            {s.completed ? "Cleared" : s.ended_at ? "Abandoned" : "In progress"}
+                                        </span>
+                                        <span className="text-stone-400">{s.moves ?? "—"} mv</span>
+                                        <span className="text-stone-500" title={formatTimestamp(s.started_at)}>{timeAgo(s.started_at)}</span>
+                                    </div>
+                                    <div className="mt-0.5 text-[10px] text-stone-600">{formatTimestamp(s.started_at)}</div>
                                 </div>
                             ))}
                         </div>
