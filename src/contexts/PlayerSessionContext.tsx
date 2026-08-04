@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 
 export interface PlayerSessionValue {
   user: User;
+  signOut: () => void;
 }
 
 const PlayerSessionContext = createContext<PlayerSessionValue | null>(null);

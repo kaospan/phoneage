@@ -6,7 +6,6 @@ import { hasCloudProgress, migrateLocalProgressToCloud } from "@/lib/cloudProgre
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogOut } from "lucide-react";
 import { PlayerSessionProvider } from "@/contexts/PlayerSessionContext";
 
 type Mode = "signin" | "signup";
@@ -183,21 +182,12 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
         );
     }
 
+    // Sign-out lives inside the game's own HUD button cluster (via context) rather than as a
+    // floating corner button — a fixed-position overlay here collided with the in-game HUD's
+    // own top-right controls at normal desktop widths.
     return (
-        <PlayerSessionProvider value={{ user: session.user }}>
-            <div className="relative h-full w-full">
-                <Button
-                    onClick={() => supabase.auth.signOut()}
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-3 top-3 z-[80] h-8 gap-1.5 rounded-lg border border-white/10 bg-black/40 px-2.5 text-xs text-stone-200 hover:bg-black/60"
-                    title="Sign out"
-                >
-                    <LogOut className="h-3.5 w-3.5" />
-                    Sign out
-                </Button>
-                {children}
-            </div>
+        <PlayerSessionProvider value={{ user: session.user, signOut: () => { void supabase.auth.signOut(); } }}>
+            {children}
         </PlayerSessionProvider>
     );
 }

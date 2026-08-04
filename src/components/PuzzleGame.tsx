@@ -8,6 +8,7 @@ import {
   Compass,
   Expand,
   LayoutDashboard,
+  LogOut,
   Map as MapIcon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -60,6 +61,17 @@ import { usePlayerSession } from "@/contexts/PlayerSessionContext";
 import { fetchCloudProgress, pushLevelProgress, pushProfileMeta } from "@/lib/cloudProgress";
 import { startPlaySession, endPlaySession } from "@/lib/playSessions";
 import { usePlayerPresence } from "@/hooks/usePlayerPresence";
+import { TutorialOverlay } from "./TutorialOverlay";
+import { TUTORIAL_DEFINITIONS, getTutorialDefinition } from "@/lib/tutorials/tutorialDefinitions";
+import type { TutorialDefinition } from "@/lib/tutorials/tutorialTypes";
+import {
+  TUTORIALS_ENABLED_UPDATED_EVENT,
+  getSeenTutorials,
+  getTutorialsEnabled,
+  markTutorialSeen,
+  resetSeenTutorials,
+  setTutorialsEnabled,
+} from "@/lib/tutorials/tutorialProgress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CampaignDialog } from "./CampaignDialog";
 import { HowToPlayDialog } from "./HowToPlayDialog";
@@ -186,6 +198,73 @@ const ViewModeSettingsPopover = ({
       </div>
       <div className="mt-2 text-[11px] text-muted-foreground">
         Unchecked modes are skipped by the view-cycle button. At least one mode always stays available.
+      </div>
+    </PopoverContent>
+  </Popover>
+);
+
+const TutorialSettingsPopover = ({
+  enabled,
+  onToggleEnabled,
+  onReplay,
+  onReplaySingle,
+}: {
+  enabled: boolean;
+  onToggleEnabled: (checked: boolean) => void;
+  onReplay: () => void;
+  onReplaySingle: (id: TutorialDefinition["id"]) => void;
+}) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <Button
+        variant="ghost"
+        size="default"
+        className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+        aria-label="Tutorial settings"
+        title="Tutorial settings"
+      >
+        ?
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent align="start" className="w-64">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+        Tutorials
+      </div>
+      <label htmlFor="tutorials-enabled-toggle" className="flex items-center gap-2 text-sm cursor-pointer">
+        <Checkbox
+          id="tutorials-enabled-toggle"
+          checked={enabled}
+          onCheckedChange={(value) => onToggleEnabled(value !== false)}
+        />
+        Auto-show new mechanic tutorials
+      </label>
+
+      <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Watch again
+      </div>
+      <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto pr-1">
+        {TUTORIAL_DEFINITIONS.map((def) => (
+          <button
+            key={def.id}
+            onClick={() => onReplaySingle(def.id)}
+            className="flex w-full items-center justify-between rounded-md px-1.5 py-1 text-left text-xs text-foreground hover:bg-accent"
+          >
+            {def.title}
+            <span aria-hidden className="text-muted-foreground">▶</span>
+          </button>
+        ))}
+      </div>
+
+      <Button
+        onClick={onReplay}
+        variant="outline"
+        size="sm"
+        className="mt-3 w-full text-xs"
+      >
+        Reset All Tutorial Progress
+      </Button>
+      <div className="mt-2 text-[11px] text-muted-foreground">
+        Resets which tutorials you've seen — they'll pop up again the next time each mechanic appears.
       </div>
     </PopoverContent>
   </Popover>
@@ -624,6 +703,9 @@ export const PuzzleGame = () => {
   const [isAdminMode, setIsAdminMode] = useState(() => getAdminMode());
   const [isReplaying, setIsReplaying] = useState(false);
   const [resolvedLevelImageUrl, setResolvedLevelImageUrl] = useState<string | null>(null);
+  const [tutorialQueue, setTutorialQueue] = useState<TutorialDefinition[]>([]);
+  const [tutorialsEnabled, setTutorialsEnabledState] = useState(() => getTutorialsEnabled());
+  const isTutorialActive = tutorialQueue.length > 0;
 
   // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
   useEffect(() => {
@@ -672,12 +754,71 @@ export const PuzzleGame = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refresh = () => setTutorialsEnabledState(getTutorialsEnabled());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'stone-age-tutorials-enabled') refresh();
+    };
+    window.addEventListener(TUTORIALS_ENABLED_UPDATED_EVENT, refresh as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(TUTORIALS_ENABLED_UPDATED_EVENT, refresh as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
   const allLevels = useMemo(() => {
     void overrideRevision;
     return getAllLevels();
   }, [overrideRevision]);
   const currentLevel = allLevels[Math.min(currentLevelIndex, Math.max(0, allLevels.length - 1))] ?? allLevels[0];
   usePlayerPresence(playerUserId, playerEmail, currentLevel?.id ?? null);
+
+  // Every time a level's grid is (re)applied, check whether it introduces any cell type/mechanic
+  // the player hasn't seen a tutorial for yet — level 1 additionally always teaches the basics.
+  useEffect(() => {
+    if (!tutorialsEnabled || isReplaying) return;
+    if (!currentLevel || renderGrid.length === 0) return;
+    if (tutorialQueue.length > 0) return;
+
+    const seen = getSeenTutorials();
+    const queue: TutorialDefinition[] = [];
+    if (currentLevel.id === 1 && !seen.has("basics")) {
+      const basics = getTutorialDefinition("basics");
+      if (basics) queue.push(basics);
+    }
+    const usedTypes = new Set<number>();
+    for (const row of renderGrid) for (const cell of row) usedTypes.add(cell);
+    for (const def of TUTORIAL_DEFINITIONS) {
+      if (def.id === "basics" || seen.has(def.id)) continue;
+      if (def.triggerCellTypes.some((t) => usedTypes.has(t))) queue.push(def);
+    }
+    if (queue.length > 0) setTutorialQueue(queue);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderGrid, currentLevel?.id, tutorialsEnabled, isReplaying]);
+
+  const handleTutorialsDone = useCallback((shown: TutorialDefinition[]) => {
+    for (const t of shown) markTutorialSeen(t.id);
+    setTutorialQueue([]);
+  }, []);
+
+  const handleToggleTutorialsEnabled = useCallback((checked: boolean) => {
+    setTutorialsEnabled(checked);
+    setTutorialsEnabledState(checked);
+  }, []);
+
+  const handleReplayAllTutorials = useCallback(() => {
+    resetSeenTutorials();
+    pushHudMessage("Tutorials reset — they'll show again as mechanics appear.");
+  }, [pushHudMessage]);
+
+  // Lets a player pull up any specific mechanic's tutorial on demand, independent of the
+  // current level's contents and without touching the "seen" state of the others.
+  const handleReplaySingleTutorial = useCallback((id: TutorialDefinition["id"]) => {
+    const def = getTutorialDefinition(id);
+    if (def) setTutorialQueue([def]);
+  }, []);
   const orderedLevelIds = useMemo(() => allLevels.map((level) => level.id), [allLevels]);
   const completedLevelCount = useMemo(
     () => getCompletedLevelCount(campaignProgress, orderedLevelIds),
@@ -1264,7 +1405,7 @@ export const PuzzleGame = () => {
     }, []);
 
     const queueMove = useCallback((dx: number, dy: number) => {
-      if (isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart || isReplaying) return;
+      if (isComplete || isBuilding || isTimeUp || shouldRotateGate || isWaitingToStart || isReplaying || isTutorialActive) return;
 
       // FPS view uses "relative" controls:
       // Up = forward (keep going straight), Down = backward, Left/Right = strafe relative to facing.
@@ -1288,7 +1429,7 @@ export const PuzzleGame = () => {
       }
 
       enqueueInput({ type: "move", dx, dy });
-    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode, isMobilePortrait, isReplaying]);
+    }, [enqueueInput, isComplete, isBuilding, isTimeUp, isWaitingToStart, shouldRotateGate, viewMode, isMobilePortrait, isReplaying, isTutorialActive]);
 
     useEffect(() => {
       const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -1742,6 +1883,7 @@ export const PuzzleGame = () => {
     const completionBestClockText = formatCampaignClock(completionSummary?.bestTimeLeftSeconds ?? null);
 
     const goToLevelIndex = useCallback((nextIndex: number) => {
+      if (isTutorialActive) return false;
       if (nextIndex < 0 || nextIndex >= allLevels.length) return false;
       if (!isAdminMode && nextIndex > highestUnlockedIndex) {
         const currentFrontier = allLevels[Math.min(highestUnlockedIndex, allLevels.length - 1)];
@@ -1759,7 +1901,7 @@ export const PuzzleGame = () => {
       setCompletionSummary(null);
       setCurrentLevelIndex(nextIndex);
       return true;
-    }, [allLevels, highestUnlockedIndex, isAdminMode, pushHudMessage]);
+    }, [allLevels, highestUnlockedIndex, isAdminMode, isTutorialActive, pushHudMessage]);
 
     const goToLevelId = useCallback((levelId: number) => {
       const nextIndex = allLevels.findIndex((level) => level.id === levelId);
@@ -1851,11 +1993,12 @@ export const PuzzleGame = () => {
     }, [isSelectorActive, localPlayerPos.x, localPlayerPos.y, selectedArrow]);
 
     const resetLevel = useCallback(() => {
+      if (isTutorialActive) return;
       const levelToReset = activeLevel ?? currentLevel;
       if (!levelToReset) return;
       applyLevelState(levelToReset);
       pushHudMessage("Level reset");
-    }, [activeLevel, applyLevelState, currentLevel, pushHudMessage]);
+    }, [activeLevel, applyLevelState, currentLevel, isTutorialActive, pushHudMessage]);
 
     const stopReplay = useCallback(() => {
       if (replayIntervalRef.current != null) {
@@ -1923,7 +2066,7 @@ export const PuzzleGame = () => {
     // Keyboard controls (player movement + keyboard arrow selection)
     useEffect(() => {
       const handleKeyPress = (e: KeyboardEvent) => {
-        if (isBuilding) return;
+        if (isBuilding || isTutorialActive) return;
         const key = e.key;
         const isStartKey = key === ' ' || key === 'Enter' || e.code === 'Space';
 
@@ -1994,6 +2137,7 @@ export const PuzzleGame = () => {
       hasStartedGame,
       isBuilding,
       isSelectorActive,
+      isTutorialActive,
       isWaitingToStart,
       moveKeyboardSelector,
       goToLevelIndex,
@@ -2515,6 +2659,20 @@ export const PuzzleGame = () => {
         </Button>
 
         <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
+        <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
+
+        {playerSession && (
+          <Button
+            onClick={() => playerSession.signOut()}
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        )}
 
         {isMobile && (
           <Button
@@ -3140,6 +3298,20 @@ export const PuzzleGame = () => {
                   </Button>
 
                   <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
+        <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
+
+        {playerSession && (
+          <Button
+            onClick={() => playerSession.signOut()}
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        )}
 
                   <Button
                     onClick={() => void toggleFullscreenMode()}
@@ -3443,6 +3615,9 @@ export const PuzzleGame = () => {
               </Button>
             </div>
           </div>
+        )}
+        {isTutorialActive && (
+          <TutorialOverlay queue={tutorialQueue} onDone={handleTutorialsDone} />
         )}
         {hudMessage && !isComplete && !isTimeUp && (
           <div
