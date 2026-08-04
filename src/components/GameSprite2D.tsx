@@ -580,15 +580,20 @@ export function GameSprite2D({
 
     const aspect = cols / rows;
     const frameInset = fullBleed ? 0 : 16;
-    const maxWidth = Math.max(1, availableSize.width - frameInset);
-    const maxHeight = Math.max(1, availableSize.height - frameInset);
+    // Mobile portrait always reserves extra clearance here, even fullBleed/fullscreen, so the
+    // board never touches the floating top/bottom HUD bars regardless of minor measurement
+    // drift (safe-area insets, HUD bar reflow, sub-pixel rounding).
+    const hudSafetyInset = rotateUpright ? 24 : 0;
+    const totalInset = frameInset + hudSafetyInset;
+    const maxWidth = Math.max(1, availableSize.width - totalInset);
+    const maxHeight = Math.max(1, availableSize.height - totalInset);
     const fitWidth = Math.min(maxWidth, maxHeight * aspect);
     const width = Math.max(cols, Math.floor(fitWidth * scale));
     return {
       width,
       height: Math.max(rows, Math.floor(width / aspect)),
     };
-  }, [availableSize.height, availableSize.width, cols, fullBleed, rows, scale]);
+  }, [availableSize.height, availableSize.width, cols, fullBleed, rotateUpright, rows, scale]);
 
   const teleportFallbackUrl = useMemo(() => {
     return createVortexIconDataUrl(32);

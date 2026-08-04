@@ -1,5 +1,7 @@
 import { PuzzleGame } from "@/components/PuzzleGame";
 import LevelMapper from "@/components/LevelMapper";
+import { MapperAuthGate } from "@/components/MapperAuthGate";
+import { PlayerAuthGate } from "@/components/PlayerAuthGate";
 import bgImage from "@/assets/stone-age-bg.png";
 import { useLocation } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -42,7 +44,15 @@ const Index = () => {
 
                 {/* Game content - prioritize playable area */}
                 <div className="relative z-10 h-full w-full">
-                    {showMapper ? <LevelMapper /> : <PuzzleGame />}
+                    {showMapper ? (
+                        <MapperAuthGate>
+                            <LevelMapper />
+                        </MapperAuthGate>
+                    ) : (
+                        <PlayerAuthGate>
+                            <PuzzleGame />
+                        </PlayerAuthGate>
+                    )}
                 </div>
 
                 {/* Retro footer */}
