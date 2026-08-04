@@ -20,10 +20,14 @@ import {
   Sparkles,
   Star,
   TimerReset,
+  Volume2,
+  VolumeX,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
+import { getMusicEnabled, setMusicEnabled, MUSIC_ENABLED_UPDATED_EVENT } from "@/lib/musicPrefs";
+import phoneageMusicUrl from "@/assets/phoneage.mp3";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { GameTop2D } from "./GameTop2D";
@@ -731,6 +735,8 @@ export const PuzzleGame = () => {
   const [tutorialQueue, setTutorialQueue] = useState<TutorialDefinition[]>([]);
   const [tutorialsEnabled, setTutorialsEnabledState] = useState(() => getTutorialsEnabled());
   const isTutorialActive = tutorialQueue.length > 0;
+  const [musicEnabled, setMusicEnabledState] = useState(() => getMusicEnabled());
+  const musicElRef = useRef<HTMLAudioElement | null>(null);
 
   // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
   useEffect(() => {
@@ -803,6 +809,57 @@ export const PuzzleGame = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refresh = () => setMusicEnabledState(getMusicEnabled());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "stone-age-music-enabled") refresh();
+    };
+    window.addEventListener(MUSIC_ENABLED_UPDATED_EVENT, refresh as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(MUSIC_ENABLED_UPDATED_EVENT, refresh as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  const musicEnabledRef = useRef(musicEnabled);
+
+  // Background music plays by default. Browsers block audio autoplay until the user has
+  // interacted with the page at least once, so a blocked .play() here is expected on first
+  // load — a one-time listener on the next click/key/touch retries it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const el = new Audio(phoneageMusicUrl);
+    el.loop = true;
+    el.volume = 0.35;
+    musicElRef.current = el;
+
+    const tryPlay = () => { void el.play().catch(() => { /* blocked until user gesture */ }); };
+    if (musicEnabledRef.current) tryPlay();
+
+    const retryOnGesture = () => {
+      if (musicEnabledRef.current) tryPlay();
+    };
+    window.addEventListener("pointerdown", retryOnGesture);
+    window.addEventListener("keydown", retryOnGesture);
+
+    return () => {
+      window.removeEventListener("pointerdown", retryOnGesture);
+      window.removeEventListener("keydown", retryOnGesture);
+      el.pause();
+      musicElRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    musicEnabledRef.current = musicEnabled;
+    const el = musicElRef.current;
+    if (!el) return;
+    if (musicEnabled) void el.play().catch(() => { /* still blocked until a gesture arrives */ });
+    else el.pause();
+  }, [musicEnabled]);
+
   const allLevels = useMemo(() => {
     void overrideRevision;
     return getAllLevels();
@@ -841,6 +898,14 @@ export const PuzzleGame = () => {
   const handleToggleTutorialsEnabled = useCallback((checked: boolean) => {
     setTutorialsEnabled(checked);
     setTutorialsEnabledState(checked);
+  }, []);
+
+  const handleToggleMusic = useCallback(() => {
+    setMusicEnabledState((prev) => {
+      const next = !prev;
+      setMusicEnabled(next);
+      return next;
+    });
   }, []);
 
   const handleReplayAllTutorials = useCallback(() => {
@@ -2721,6 +2786,18 @@ export const PuzzleGame = () => {
         <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
         <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
 
+        <Button
+          onClick={handleToggleMusic}
+          variant="ghost"
+          size="sm"
+          className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+          title={musicEnabled ? "Mute music" : "Unmute music"}
+          aria-label={musicEnabled ? "Mute music" : "Unmute music"}
+          aria-pressed={musicEnabled}
+        >
+          {musicEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+        </Button>
+
         {playerSession && (
           <Button
             onClick={() => playerSession.signOut()}
@@ -3359,6 +3436,18 @@ export const PuzzleGame = () => {
 
                   <ViewModeSettingsPopover disabledViewModes={disabledViewModes} onToggle={toggleViewModeEnabled} />
         <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
+
+        <Button
+          onClick={handleToggleMusic}
+          variant="ghost"
+          size="sm"
+          className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+          title={musicEnabled ? "Mute music" : "Unmute music"}
+          aria-label={musicEnabled ? "Mute music" : "Unmute music"}
+          aria-pressed={musicEnabled}
+        >
+          {musicEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+        </Button>
 
         {playerSession && (
           <Button

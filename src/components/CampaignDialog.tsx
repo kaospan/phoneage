@@ -1,10 +1,7 @@
 import { useMemo, useState } from "react";
-import { Lock, Map, Play, TimerReset, Trophy, X } from "lucide-react";
+import { Map, Play, X } from "lucide-react";
 
-import { themes, type ColorTheme } from "@/data/levels";
-import { cn } from "@/lib/utils";
-import { formatCampaignClock } from "@/lib/campaignProgress";
-import { Badge } from "@/components/ui/badge";
+import type { ColorTheme } from "@/data/levels";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { CampaignMapPath } from "./CampaignMapPath";
 
 export interface CampaignDialogLevel {
   id: number;
@@ -37,13 +35,6 @@ interface CampaignDialogProps {
   totalLevels: number;
   onSelectLevel: (levelId: number) => void;
 }
-
-const statusLabel = (level: CampaignDialogLevel) => {
-  if (level.isCurrent) return "Current";
-  if (!level.isUnlocked) return "Locked";
-  if (level.isCompleted) return "Cleared";
-  return "Ready";
-};
 
 export const CampaignDialog = ({
   compact = false,
@@ -127,80 +118,11 @@ export const CampaignDialog = ({
           </div>
         </div>
 
-        <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {levels.map((level) => {
-              const accentColor = themes[level.theme ?? "default"]?.arrow ?? "#d4a574";
-              const bestClock = formatCampaignClock(level.bestTimeLeftSeconds);
-
-              return (
-                <button
-                  key={level.id}
-                  type="button"
-                  disabled={!level.isUnlocked}
-                  onClick={() => {
-                    if (!level.isUnlocked) return;
-                    onSelectLevel(level.id);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "group rounded-2xl border px-4 py-4 text-left transition-all",
-                    "disabled:cursor-not-allowed disabled:opacity-60",
-                    level.isCurrent
-                      ? "border-amber-300/80 bg-amber-500/15 shadow-[0_0_0_1px_rgba(252,211,77,0.25)]"
-                      : level.isUnlocked
-                        ? "border-white/10 bg-white/5 hover:border-amber-200/40 hover:bg-white/10"
-                        : "border-white/10 bg-white/[0.03]",
-                  )}
-                >
-                  <div className="mb-4 h-1.5 w-full rounded-full" style={{ backgroundColor: accentColor }} />
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">
-                        Level {level.id}
-                      </div>
-                      <div className="mt-1 text-lg font-black text-stone-50">
-                        {level.isCompleted ? "Solved Route" : level.isUnlocked ? "Open Challenge" : "Locked Route"}
-                      </div>
-                    </div>
-                    <Badge
-                      variant={level.isCurrent ? "default" : "outline"}
-                      className={cn(
-                        "shrink-0 border-white/15 bg-white/10 text-[11px] font-black uppercase tracking-[0.14em]",
-                        level.isCurrent && "border-transparent bg-amber-300 text-stone-950",
-                      )}
-                    >
-                      {statusLabel(level)}
-                    </Badge>
-                  </div>
-
-                  <div className="mt-4 space-y-2 text-sm text-stone-300">
-                    {level.bestMoves != null ? (
-                      <div className="flex items-center gap-2">
-                        <Trophy className="h-4 w-4 text-amber-300" />
-                        <span>{level.bestMoves} best moves</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-stone-500">
-                        {level.isUnlocked ? <Play className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                        <span>{level.isUnlocked ? "No clear recorded yet" : "Complete earlier stages to unlock"}</span>
-                      </div>
-                    )}
-
-                    {bestClock ? (
-                      <div className="flex items-center gap-2">
-                        <TimerReset className="h-4 w-4 text-sky-300" />
-                        <span>{bestClock} left on the clock</span>
-                      </div>
-                    ) : (
-                      <div className="h-5" />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <CampaignMapPath
+          levels={levels}
+          onSelectLevel={onSelectLevel}
+          onAfterSelect={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   );

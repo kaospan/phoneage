@@ -95,12 +95,22 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.95" },
         },
+        "map-dot-pop": {
+          "0%": { opacity: "0", transform: "translate(-50%, -50%) scale(0.4)" },
+          "100%": { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
+        },
+        "map-trail-flow": {
+          "0%": { strokeDashoffset: "0" },
+          "100%": { strokeDashoffset: "-32" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "flicker": "flicker 0.15s infinite",
+        "map-dot-pop": "map-dot-pop 0.45s ease-out backwards",
+        "map-trail-flow": "map-trail-flow 1.1s linear infinite",
       },
     },
   },

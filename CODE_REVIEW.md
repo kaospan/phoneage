@@ -76,33 +76,66 @@ Impact: Information leakage (DOM structure, internal state) and minor performanc
 
 Recommendation: Gate behind `import.meta.env.DEV` or replace with a structured logger that respects an env-level config.
 
-### S5 (Low) — Dev asset-write server has zero authentication
-**File:** `server/asset-writer.mjs` (and `server/ws-server.mjs`)
+### S5 (High) — Production WebSocket server has zero authentication & broadcasts unsanitized input
+**File:** `server/ws-server.mjs` (lines 8–49), `render.yaml` (line 7)
 
-The `asset-writer.mjs` server exposes an HTTP endpoint (`POST /write`) that writes files to paths derived from request bodies, with CORS set to `access-control-allow-origin: *`. No authentication, no origin check, no path-confinement beyond a basic prefix check.
+`render.yaml` deploys `server/ws-server.mjs` as the `phoneage-ws` service on Render (production). The server:
+- Binds to `0.0.0.0` (all interfaces) — line 5
+- Has **no authentication** on the WebSocket endpoint (`/ws`) — line 18
+- Has **no origin check** — any website can open a connection
+- **Broadcasts raw client input** to all peers with zero validation or sanitization — lines 40–49
 
-Impact: If this server is reachable from the public internet (e.g., exposed on Render alongside the app, or via a misconfigured port), an attacker can write arbitrary files to the server filesystem within the allowed prefixes. The `ws-server.mjs` similarly broadcasts raw client input to all WebSocket peers without validation or sanitization.
+```js
+ws.on('message', (raw) => {
+  try {
+    const msg = JSON.parse(raw.toString());
+    if (msg.type === 'input' && msg.input) {
+      broadcast({ type: 'input', id: msg.id || id, input: msg.input }, ws);
+    }
+  } catch { /* Ignore malformed messages */ }
+});
+```
 
-Note: These appear to be **development-only** servers (used for live asset reloading / multiplayer testing), not the production deployment. This is flagged as Low/Informational: confirm these are never exposed in production, and ensure they are explicitly excluded from `render.yaml` / production builds.
+Impact:
+1. **Unauthenticated WebSocket flooding:** Any anonymous client can connect and broadcast arbitrary `input` messages to all connected players. An attacker can flood every connected player with phantom inputs, effectively causing a denial-of-service / input-spoofing attack during multiplayer sessions.
+2. **Client-side input trust:** The client receiving `{ type: 'input', input: msg.input }` trusts the `input` payload blindly. If the client does not validate the shape/content of `input` (e.g., unexpected keys, oversized payloads, or non-string values), this can trigger unhandled exceptions, desync, or crashes in the React game loop. (Verify client-side handling in `PuzzleGame.tsx`'s presence input handler.)
+3. **No rate limiting:** An attacker can open many connections or send high-frequency messages without throttling.
 
-Recommendation: Add a dev-only guard (auth token or localhost-only binding). Document clearly that these servers must not be exposed externally.
+Recommendation (High priority):
+- Add **authentication**: issue signed session tokens (JWT or Supabase-signed) and require them in the WebSocket handshake query param / `Sec-WebSocket-Protocol`.
+- Add an **origin check** on the initial HTTP upgrade request.
+- **Validate/sanitize** `msg.input` on the server before broadcasting (schema-validated with `zod` or equivalent; cap message size).
+- Add **rate limiting** (e.g., max N messages/second per connection, max concurrent connections per IP).
 
-### S6 (Informational) — `.env` file contains live secrets
+### S6 (Medium) — Dev asset-writer server has zero auth + wildcard CORS
+**File:** `server/asset-writer.mjs` (lines 43–53, 74–219)
+
+The `asset-writer.mjs` server exposes two HTTP endpoints — `POST /write-level-image` and `POST /write-level-default` — that write files to the repository (`src/assets/level_*.png` and `src/data/promoted-levels.json`). CORS is set to `access-control-allow-origin: *`. **No authentication, no origin check.**
+
+A notable positive: the handler does validate input shape (`isGrid`, `isInt`, bounds checks on `playerStart`/`cavePos`) before writing — lines 137–166. The path-confinement is implicit (hardcoded `path.resolve(repoRoot, ...)` — can't be manipulated to escape the repo root). So this is **input-validated but unauthenticated**.
+
+Impact: If exposed to the internet, an attacker can (a) upload arbitrary PNG data to `src/assets/level_XXX.png`, and (b) overwrite `promoted-levels.json` with attacker-controlled level definitions (subject to the `?overwrite=1` query gate, and `?force=1` to bypass locks). The PNG upload could be used to serve malicious content if `src/assets` is web-served, and the level JSON could inject malformed levels that break the solver or rendering.
+
+Note: `asset-writer.mjs` is **not** referenced in `render.yaml` — it appears to be a local-dev tool. Confirm it is never started in production.
+
+Recommendation: Bind to `localhost` only in dev; add a shared-secret token for write access; restrict `access-control-allow-origin` to `localhost:*` in dev.
+
+### S7 (Informational) — `.env` file contains live secrets
 **File:** `.env` (git-ignored)
 
 The `.env` file contains `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, and a Google OAuth secret. The file is correctly git-ignored (`git status` confirms it is not tracked; only `.env.example` is tracked). This is expected for local dev, but worth confirming the production deploy uses a secrets manager and not a committed `.env`.
 
-### S7 (Informational) — `dangerouslySetInnerHTML` usage
+### S8 (Informational) — `dangerouslySetInnerHTML` usage
 **File:** `src/components/ui/chart.tsx` (1 match)
 
 One usage of `dangerouslySetInnerHTML` found in the charting component (likely the Recharts-based `Cell` rendering). Verify the HTML content is static/trusted (not derived from user input). If this component is used in the level mapper or admin dashboard, confirm no user-controlled data flows into it.
 
-### S8 (Positive) — Admin-mode client flag is properly server-validated
+### S9 (Positive) — Admin-mode client flag is properly server-validated
 **File:** `src/lib/adminMode.ts` + `src/lib/adminAccount.ts`
 
 The `stone-age-admin-mode` localStorage flag is correctly documented as spoofable/client-side only. The authoritative check (`checkIsAdminAccount`) queries the `admin_users` table via Supabase with RLS, so a user cannot escalate privileges by editing localStorage. This is a good pattern — no action needed.
 
-### S9 (Positive) — `localStorage` access is null-safe
+### S10 (Positive) — `localStorage` access is null-safe
 **File:** `src/lib/supabaseClient.ts`
 
 Supabase client construction guards for missing env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). Good defensive practice.
@@ -255,7 +288,7 @@ Recommendation: Replace ad-hoc `as` casts with `zod` (or a lightweight runtime v
 | Auth gates (`PlayerAuthGate.tsx`, `MapperAuthGate.tsx`) | Present and used. Good. |
 | Level solver (`src/lib/levelSolver.ts`) | Pure, well-separated, but untested. Risky. |
 | `PuzzleGame.tsx` | Monolith — needs decomposition. |
-| Dev servers (`server/`) | Not part of production build. Must confirm isolation. |
+| Dev servers (`server/`) | `ws-server.mjs` is **production** (Render `phoneage-ws`); `asset-writer.mjs` is dev-only (not in render.yaml). |
 | `AGENTS.md` alignment | Partially violated (strict mode off, debug logging, stack-trace leakage). |
 
 ---
@@ -264,6 +297,7 @@ Recommendation: Replace ad-hoc `as` casts with `zod` (or a lightweight runtime v
 
 | Priority | Item | Files | Effort |
 |----------|------|-------|--------|
+| P0 | Add auth + input validation + rate limiting to production WS server | `server/ws-server.mjs`, `render.yaml` | Medium |
 | P0 | Gate debug `window` attachment behind `DEV` | `src/main.tsx:110-135` | Small |
 | P0 | Fix unvalidated `redirect` param | `index.html:18-29` | Small |
 | P0 | Gate stack-trace leakage in error boundary | `src/main.tsx:162-171`, `src/App.tsx` | Small |
