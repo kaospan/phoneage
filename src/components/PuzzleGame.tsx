@@ -78,6 +78,8 @@ import {
 } from "@/lib/tutorials/tutorialProgress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CampaignDialog } from "./CampaignDialog";
+import { CampaignJourneyOverlay } from "./CampaignJourneyOverlay";
+import { hasSeenCampaignIntro, markCampaignIntroSeen } from "@/lib/campaignIntroSeen";
 import { HowToPlayDialog } from "./HowToPlayDialog";
 import { TouchControls } from "./TouchControls";
 import { getLevelImageUrl } from "@/components/level-mapper/levelImageStore";
@@ -503,6 +505,10 @@ export const PuzzleGame = () => {
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [isTimerArmed, setIsTimerArmed] = useState(true);
   const [hasStartedGame, setHasStartedGame] = useState(false);
+  const [showCampaignIntro, setShowCampaignIntro] = useState(false);
+  const [pendingLevelTransition, setPendingLevelTransition] = useState<
+    { fromLevelId: number; toLevelId: number; toIndex: number } | null
+  >(null);
   const [leftShellPanelOpen, setLeftShellPanelOpen] = useState(false);
   const [rightShellPanelOpen, setRightShellPanelOpen] = useState(false);
   const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
@@ -2127,15 +2133,31 @@ export const PuzzleGame = () => {
       pushHudMessage("Timer started — good luck!", 1600);
     }, [isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, pushHudMessage]);
 
-    const startGameFromTitle = useCallback(() => {
+    const armAndStartTimer = useCallback(() => {
       if (levelTimeLimitSeconds) {
         timerRemainingMsRef.current = levelTimeLimitSeconds * 1000;
         setTimeLeftSeconds(levelTimeLimitSeconds);
       }
       setIsTimeUp(false);
       setIsTimerArmed(true);
-      setHasStartedGame(true);
     }, [levelTimeLimitSeconds]);
+
+    const startGameFromTitle = useCallback(() => {
+      setHasStartedGame(true);
+      // First-ever session on Level 1: show the campaign path before gameplay starts instead
+      // of arming the timer immediately. armAndStartTimer runs once the intro's CTA is tapped.
+      if (currentLevelIndex === 0 && !hasSeenCampaignIntro()) {
+        setShowCampaignIntro(true);
+        return;
+      }
+      armAndStartTimer();
+    }, [armAndStartTimer, currentLevelIndex]);
+
+    const handleCampaignIntroBegin = useCallback(() => {
+      markCampaignIntroSeen();
+      setShowCampaignIntro(false);
+      armAndStartTimer();
+    }, [armAndStartTimer]);
 
     // Keyboard controls (player movement + keyboard arrow selection)
     useEffect(() => {
@@ -2226,7 +2248,15 @@ export const PuzzleGame = () => {
 
     const nextLevel = () => {
       if (currentLevelIndex < allLevels.length - 1) {
-        goToLevelIndex(currentLevelIndex + 1);
+        const toLevel = allLevels[currentLevelIndex + 1];
+        if (currentLevel && toLevel) {
+          // Defer the actual level swap until the dino finishes walking the path
+          // (or the player taps to skip) — see the CampaignJourneyOverlay render below.
+          setIsComplete(false);
+          setPendingLevelTransition({ fromLevelId: currentLevel.id, toLevelId: toLevel.id, toIndex: currentLevelIndex + 1 });
+        } else {
+          goToLevelIndex(currentLevelIndex + 1);
+        }
       } else {
         pushHudMessage("All levels complete!", 2600);
       }
@@ -2828,6 +2858,21 @@ export const PuzzleGame = () => {
               Start
             </Button>
           </div>
+        </div>
+      );
+    }
+
+    if (showCampaignIntro) {
+      return (
+        <div className="relative h-[100svh] w-full overflow-hidden">
+          <CampaignJourneyOverlay
+            levels={campaignLevelCards}
+            dinoAtLevelId={allLevels[0]?.id ?? 1}
+            title="Your Journey Begins"
+            subtitle="Every stage on this path is waiting to be cleared."
+            ctaLabel="Start Level 1"
+            onCta={handleCampaignIntroBegin}
+          />
         </div>
       );
     }
@@ -3868,6 +3913,20 @@ export const PuzzleGame = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {pendingLevelTransition && (
+          <CampaignJourneyOverlay
+            levels={campaignLevelCards}
+            dinoAtLevelId={pendingLevelTransition.fromLevelId}
+            walkToLevelId={pendingLevelTransition.toLevelId}
+            title={`Level ${pendingLevelTransition.fromLevelId} Complete!`}
+            subtitle={`Onward to Level ${pendingLevelTransition.toLevelId}`}
+            onDone={() => {
+              goToLevelIndex(pendingLevelTransition.toIndex);
+              setPendingLevelTransition(null);
+            }}
+          />
         )}
       </div>
     );

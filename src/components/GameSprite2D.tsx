@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CELL_REFERENCES_UPDATED_EVENT, getCellReferences, type CellReference } from "@/lib/spriteMatching";
-import { createBreakableRockTileDataUrl, createClockIconDataUrl, createKeyIconDataUrl, createLockIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
+import { createBreakableRockTileDataUrl, createHourglassIconDataUrl, createKeyIconDataUrl, createLockIconDataUrl, createVortexIconDataUrl } from "@/lib/canvasIcons";
 import { isArrowCell } from "@/game/arrows";
 import { buildGoalCaveKeySet } from "@/game/caves";
 import { referenceSpriteUrls } from "@/data/assetCatalog";
@@ -673,7 +673,7 @@ export function GameSprite2D({
   }, []);
 
   const bonusTimeFallbackUrl = useMemo(() => {
-    return createClockIconDataUrl(32, { glow: "rgba(239,68,68,0.18)" });
+    return createHourglassIconDataUrl(32);
   }, []);
 
   const redLockFallbackUrl = useMemo(() => {

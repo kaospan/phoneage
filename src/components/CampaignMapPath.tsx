@@ -2,13 +2,8 @@ import { useEffect, useMemo, useRef } from "react";
 import { Lock, MapPin, Star } from "lucide-react";
 import { themes } from "@/data/levels";
 import { cn } from "@/lib/utils";
+import { DOT_SIZE, buildCampaignPathD, buildCampaignPathPoints, contentHeightForCount } from "@/lib/campaignPathGeometry";
 import type { CampaignDialogLevel } from "./CampaignDialog";
-
-const DOTS_PER_ROW = 4;
-const ROW_HEIGHT = 108;
-const DOT_SIZE = 56;
-// Keeps dots away from the container edges (as a fraction of width) so they never get clipped.
-const EDGE_INSET_FRAC = 0.14;
 
 interface CampaignMapPathProps {
   levels: CampaignDialogLevel[];
@@ -16,37 +11,18 @@ interface CampaignMapPathProps {
   onAfterSelect?: () => void;
 }
 
-/** x position (0-1 fraction of width) of the i-th dot within its row, snaking left-right. */
-const xFractionForCol = (col: number, row: number): number => {
-  const t = DOTS_PER_ROW <= 1 ? 0.5 : col / (DOTS_PER_ROW - 1);
-  const eased = EDGE_INSET_FRAC + t * (1 - EDGE_INSET_FRAC * 2);
-  return row % 2 === 0 ? eased : 1 - eased;
-};
-
 export function CampaignMapPath({ levels, onSelectLevel, onAfterSelect }: CampaignMapPathProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const currentDotRef = useRef<HTMLButtonElement | null>(null);
 
-  const rowCount = Math.max(1, Math.ceil(levels.length / DOTS_PER_ROW));
-  const contentHeight = rowCount * ROW_HEIGHT + DOT_SIZE;
+  const contentHeight = contentHeightForCount(levels.length);
 
   const points = useMemo(
-    () =>
-      levels.map((level, i) => {
-        const row = Math.floor(i / DOTS_PER_ROW);
-        const col = i % DOTS_PER_ROW;
-        const xFrac = xFractionForCol(col, row);
-        return { level, row, col, xFrac, y: row * ROW_HEIGHT + DOT_SIZE / 2 };
-      }),
+    () => buildCampaignPathPoints(levels).map((p) => ({ ...p, level: p.item })),
     [levels],
   );
 
-  // The SVG uses a 0-100 (percent-like) X coordinate space via viewBox + preserveAspectRatio
-  //="none", so this can share the exact same xFrac used to position the HTML dot buttons.
-  const pathD = useMemo(() => {
-    if (points.length === 0) return "";
-    return points.map((p, i) => `${i === 0 ? "M" : "L"} ${(p.xFrac * 100).toFixed(2)} ${p.y}`).join(" ");
-  }, [points]);
+  const pathD = useMemo(() => buildCampaignPathD(points), [points]);
 
   // Auto-scroll so the current (or next-up) level starts roughly a third of the way down the
   // viewport when the map first opens — new players land right where they left off.

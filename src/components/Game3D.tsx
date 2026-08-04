@@ -5,7 +5,7 @@ import { useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { themes, type ColorTheme } from '@/data/levels';
 import { isArrowCell } from '@/game/arrows';
 import { findGoalCaves } from '@/game/caves';
-import { createBreakableRockTileCanvas, createClockIconCanvas, createKeyIconCanvas, createVortexIconCanvas } from '@/lib/canvasIcons';
+import { createBreakableRockTileCanvas, createHourglassIconCanvas, createKeyIconCanvas, createVortexIconCanvas } from '@/lib/canvasIcons';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
@@ -557,13 +557,13 @@ const LockTile = ({
   );
 };
 
-// Bonus Time collectible (clock) - adds time to the countdown when collected.
+// Bonus Time collectible (hourglass) - adds time to the countdown when collected.
 const BonusTimeTile = ({ position }: { position: [number, number, number] }) => {
   const groupRef = useRef<THREE.Group | null>(null);
-  const glow = "#ef4444";
+  const glow = "#fbbf24";
 
   const iconTexture = useMemo(() => {
-    const canvas = createClockIconCanvas(128, { glow: "rgba(239,68,68,0.18)" });
+    const canvas = createHourglassIconCanvas(128);
     if (!canvas) return null;
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -595,7 +595,7 @@ const BonusTimeTile = ({ position }: { position: [number, number, number] }) => 
         <meshBasicMaterial color="#0b1220" transparent opacity={0.25} depthWrite={false} toneMapped={false} />
       </mesh>
 
-      {/* Top-down clock icon (Bonus Time) */}
+      {/* Top-down hourglass icon (Bonus Time) */}
       <mesh position={[0, 0.011, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={12}>
         <planeGeometry args={[0.7, 0.7]} />
         <meshBasicMaterial

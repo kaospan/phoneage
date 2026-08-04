@@ -69,6 +69,11 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
         sound: "chime",
         caption: "Reach the ladder to clear the level!",
       },
+      {
+        uiCallout: { icon: "restart", label: "Replay" },
+        durationMs: 2800,
+        caption: "Heads up: some moves can leave you stuck with no way to finish — the game won't warn you. Remember this ↻ Replay button — it restarts the level instantly, no penalty.",
+      },
     ],
   },
   {

@@ -3,7 +3,7 @@ import { TILE_TYPES } from "@/lib/levelgrid";
 import { referenceSpriteUrls } from "@/data/assetCatalog";
 import {
     createBreakableRockTileDataUrl,
-    createClockIconDataUrl,
+    createHourglassIconDataUrl,
     createKeyIconDataUrl,
     createLockIconDataUrl,
     createVortexIconDataUrl,
@@ -46,7 +46,7 @@ export const useTileSpriteUrls = (): Record<number, string> =>
             16: createLockIconDataUrl(48, { body: "rgba(185,28,28,0.97)", shackle: "rgba(120,20,20,0.95)", glow: "rgba(220,38,38,0.22)" }) ?? "",
             17: createLockIconDataUrl(48, { body: "rgba(21,128,61,0.97)", shackle: "rgba(16,80,40,0.95)", keyhole: "rgba(255,255,255,0.85)", glow: "rgba(34,197,94,0.22)" }) ?? "",
             19: createVortexIconDataUrl(48) ?? "",
-            20: createClockIconDataUrl(48, { glow: "rgba(239,68,68,0.18)" }) ?? "",
+            20: createHourglassIconDataUrl(48) ?? "",
         }),
         [],
     );

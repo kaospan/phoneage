@@ -6,7 +6,7 @@ import { themes, type ColorTheme } from "@/data/levels";
 import {
   createKeyIconDataUrl,
   createLockIconDataUrl,
-  createClockIconDataUrl,
+  createHourglassIconDataUrl,
   createVortexIconDataUrl,
 } from "@/lib/canvasIcons";
 
@@ -627,7 +627,7 @@ export function GameTop2D({
     [],
   );
   const hourglassUrl = useMemo(
-    () => (typeof window !== "undefined" ? createClockIconDataUrl(128, { glow: "rgba(251,191,36,0.18)" }) : null),
+    () => (typeof window !== "undefined" ? createHourglassIconDataUrl(128) : null),
     [],
   );
   const teleportUrl = useMemo(

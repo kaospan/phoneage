@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import dinotoonUrl from "@/assets/dinotoon.png";
 import type { TutorialDefinition, TutorialSound } from "@/lib/tutorials/tutorialTypes";
 import { Button } from "@/components/ui/button";
@@ -135,6 +136,23 @@ const FingerCursor = () => (
   </svg>
 );
 
+// Mimics the real in-game Replay button so the callout reads as "this exact button", not a
+// generic icon — paired with a pulsing ring and a bouncing finger so it can't be missed.
+const UiCallout = ({ label }: { label: string }) => (
+  <div className="flex h-full w-full flex-col items-center justify-center">
+    <div className="relative">
+      <div className="absolute -inset-3 rounded-2xl bg-amber-300/25 animate-ping" />
+      <div className="relative flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-2.5 text-stone-50 shadow-xl">
+        <RotateCcw className="h-5 w-5 text-amber-300" />
+        <span className="text-sm font-black uppercase tracking-[0.08em]">{label}</span>
+      </div>
+      <div className="absolute left-1/2 top-full -translate-x-1/2 animate-bounce pt-1">
+        <FingerCursor />
+      </div>
+    </div>
+  </div>
+);
+
 // ─── Main overlay ───────────────────────────────────────────────────────────────
 
 interface TutorialOverlayProps {
@@ -197,10 +215,10 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   const cols = tutorial?.miniGrid[0]?.length ?? 0;
 
   const transform = useMemo(() => {
-    if (!step) return "";
+    if (!step?.cameraFocus) return "";
     const cx = (step.cameraFocus.x + 0.5) * CELL_PX;
     const cy = (step.cameraFocus.y + 0.5) * CELL_PX;
-    return `translate(calc(50% - ${cx}px), calc(50% - ${cy}px)) scale(${step.cameraZoom})`;
+    return `translate(calc(50% - ${cx}px), calc(50% - ${cy}px)) scale(${step.cameraZoom ?? 1})`;
   }, [step]);
 
   const transitionMs = step?.slowMotion ? 900 : 320;
@@ -227,71 +245,77 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
           className="relative mt-4 w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl"
           style={{ height: 220 }}
         >
-          <div
-            className="absolute left-0 top-0"
-            style={{
-              width: cols * CELL_PX,
-              height: rows * CELL_PX,
-              transform,
-              transformOrigin: "top left",
-              transition: `transform ${transitionMs}ms ease-in-out`,
-            }}
-          >
-            {tutorial.miniGrid.map((row, y) =>
-              row.map((cellType, x) => {
-                const isHighlighted = step.highlightCells?.some((c) => c.x === x && c.y === y);
-                return (
-                  <div
-                    key={`${x}-${y}`}
-                    className="absolute overflow-hidden"
-                    style={{
-                      left: x * CELL_PX,
-                      top: y * CELL_PX,
-                      width: CELL_PX,
-                      height: CELL_PX,
-                      boxShadow: isHighlighted ? "inset 0 0 0 3px #fde047, 0 0 18px 4px rgba(253,224,71,0.8)" : "inset 0 0 0 1px rgba(0,0,0,0.3)",
-                      transition: "box-shadow 250ms ease-in-out",
-                    }}
-                  >
-                    <TileBg type={cellType} />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <TileIcon type={cellType} />
-                    </div>
-                  </div>
-                );
-              }),
-            )}
-
-            {/* Character */}
+          {step.uiCallout ? (
+            <UiCallout label={step.uiCallout.label} />
+          ) : (
             <div
-              className="absolute flex items-center justify-center"
+              className="absolute left-0 top-0"
               style={{
-                left: step.characterAt.x * CELL_PX,
-                top: step.characterAt.y * CELL_PX,
-                width: CELL_PX,
-                height: CELL_PX,
-                transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                width: cols * CELL_PX,
+                height: rows * CELL_PX,
+                transform,
+                transformOrigin: "top left",
+                transition: `transform ${transitionMs}ms ease-in-out`,
               }}
             >
-              <img src={dinotoonUrl} alt="" className="h-[85%] w-[85%] object-contain" style={{ imageRendering: "auto" }} />
-            </div>
+              {tutorial.miniGrid.map((row, y) =>
+                row.map((cellType, x) => {
+                  const isHighlighted = step.highlightCells?.some((c) => c.x === x && c.y === y);
+                  return (
+                    <div
+                      key={`${x}-${y}`}
+                      className="absolute overflow-hidden"
+                      style={{
+                        left: x * CELL_PX,
+                        top: y * CELL_PX,
+                        width: CELL_PX,
+                        height: CELL_PX,
+                        boxShadow: isHighlighted ? "inset 0 0 0 3px #fde047, 0 0 18px 4px rgba(253,224,71,0.8)" : "inset 0 0 0 1px rgba(0,0,0,0.3)",
+                        transition: "box-shadow 250ms ease-in-out",
+                      }}
+                    >
+                      <TileBg type={cellType} />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <TileIcon type={cellType} />
+                      </div>
+                    </div>
+                  );
+                }),
+              )}
 
-            {/* Animated finger cursor */}
-            {step.fingerAt && (
-              <div
-                className="absolute flex items-center justify-center"
-                style={{
-                  left: step.fingerAt.x * CELL_PX,
-                  top: step.fingerAt.y * CELL_PX,
-                  width: CELL_PX,
-                  height: CELL_PX,
-                  transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
-                }}
-              >
-                <FingerCursor />
-              </div>
-            )}
-          </div>
+              {/* Character */}
+              {step.characterAt && (
+                <div
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    left: step.characterAt.x * CELL_PX,
+                    top: step.characterAt.y * CELL_PX,
+                    width: CELL_PX,
+                    height: CELL_PX,
+                    transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                  }}
+                >
+                  <img src={dinotoonUrl} alt="" className="h-[85%] w-[85%] object-contain" style={{ imageRendering: "auto" }} />
+                </div>
+              )}
+
+              {/* Animated finger cursor */}
+              {step.fingerAt && (
+                <div
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    left: step.fingerAt.x * CELL_PX,
+                    top: step.fingerAt.y * CELL_PX,
+                    width: CELL_PX,
+                    height: CELL_PX,
+                    transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                  }}
+                >
+                  <FingerCursor />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mt-3 flex items-center gap-2">

@@ -12,20 +12,25 @@ export type TutorialId =
 export type TutorialSound = "tap" | "glide" | "unlock" | "collect" | "teleport" | "break" | "chime";
 
 export interface TutorialStep {
-  /** Character's cell in the mini demo grid for this step. */
-  characterAt: { x: number; y: number };
+  /** Character's cell in the mini demo grid for this step. Omit for a uiCallout step. */
+  characterAt?: { x: number; y: number };
   /** Where the animated finger/pointer taps or rests during this step; omitted to hide it. */
   fingerAt?: { x: number; y: number };
   /** Cells to highlight with a glowing outline during this step. */
   highlightCells?: Array<{ x: number; y: number }>;
-  /** Camera focus point (mini-grid cell coordinates) and zoom level (1 = fit whole board). */
-  cameraFocus: { x: number; y: number };
-  cameraZoom: number;
+  /** Camera focus point (mini-grid cell coordinates) and zoom level (1 = fit whole board). Omit for a uiCallout step. */
+  cameraFocus?: { x: number; y: number };
+  cameraZoom?: number;
   durationMs: number;
   slowMotion?: boolean;
   sound?: TutorialSound;
   /** Optional secondary line shown only for this step (e.g. "Tap again to redirect"). */
   caption?: string;
+  /**
+   * Replaces the mini demo board with a callout pointing at a real HUD control instead of a
+   * grid cell — used for mechanics that live outside the level grid (e.g. the Replay button).
+   */
+  uiCallout?: { icon: "restart"; label: string };
 }
 
 export interface TutorialDefinition {
