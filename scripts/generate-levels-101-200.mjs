@@ -1,14 +1,26 @@
 /**
- * Procedurally generates levels 101-200, verifying every candidate with the real in-game
- * solver (via a headless browser calling window.solveGrid) before accepting it. Nothing is
- * accepted on faith — every generated level is guaranteed solvable because the solver says so.
+ * v2 — Procedurally generates levels 101-200 as "room archipelago" puzzles: small floor rooms
+ * scattered across a void-heavy canvas, connected only by arrow tiles that must be ridden or
+ * REMOTELY relocated (the game's actual signature mechanic — see e.g. level 17's solution,
+ * which opens with four consecutive remote-arrow moves before the player takes a single step).
+ * v1 built fully-connected mazes, which reduced every level to plain pathfinding; this version
+ * is built from real level 1-100 solutions instead (see reports/final-merged.json).
  *
- * Difficulty ramps in five tiers by introducing mechanics progressively:
- *   101-120  pure maze (floor + stone)                         target moves ~10-22
- *   121-140  + directional arrows bridging void gaps            target moves ~18-32
- *   141-160  + breakable rocks                                  target moves ~24-42
- *   161-180  + one red key/lock chokepoint                      target moves ~32-58
- *   181-200  + red+green key/lock, denser arrows, biggest maze  target moves ~46-85
+ * Every candidate is still verified by the real in-game solver (window.solveGrid) before being
+ * accepted — nothing is accepted on faith.
+ *
+ * Each hop between rooms is either "forward" (arrow lives in the room being left, wide gap,
+ * personally ridden) or "reversed" (arrow lives in the room being ENTERED, pointing back, gap
+ * forced to exactly 1 cell) — a reversed hop's arrow is physically unreachable by the player
+ * until it's remotely relocated into the gap first, so it genuinely requires the remote-move
+ * mechanic rather than just offering it as an option.
+ *
+ * Difficulty ramps by adding rooms/hops and, from tier 4, key/lock gates on room entrances:
+ *   101-120  2-3 rooms, forward hops only (approachable)         target moves ~10-22
+ *   121-140  3-4 rooms, forward + reversed hops mixed             target moves ~18-32
+ *   141-160  4 rooms, breakable rocks inside rooms                target moves ~24-42
+ *   161-180  4-5 rooms, one red key/lock gating a room entrance   target moves ~32-58
+ *   181-200  5-6 rooms, red+green locks, omni arrow on last hop   target moves ~46-85
  *
  * Usage: node scripts/generate-levels-101-200.mjs [--start=101] [--end=200] [--seed=42] [--out=preview.json]
  */
@@ -29,11 +41,11 @@ argv.forEach((arg) => {
 });
 const RANGE_START = Number(argMap.get('start') ?? 101);
 const RANGE_END = Number(argMap.get('end') ?? 200);
-const BASE_SEED = Number(argMap.get('seed') ?? 1337);
-const OUT_PATH = argMap.get('out') ?? null; // if set, writes a preview JSON instead of touching promoted-levels.json
+const BASE_SEED = Number(argMap.get('seed') ?? 2024);
+const OUT_PATH = argMap.get('out') ?? null;
 
 // ---------------------------------------------------------------------------
-// Seeded RNG (deterministic across runs for a given seed)
+// Seeded RNG
 // ---------------------------------------------------------------------------
 function mulberry32(seed) {
   let s = seed | 0;
@@ -44,6 +56,7 @@ function mulberry32(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+const randInt = (rng, min, max) => min + Math.floor(rng() * (max - min + 1));
 const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
 const shuffle = (rng, arr) => {
   const out = arr.slice();
@@ -55,163 +68,34 @@ const shuffle = (rng, arr) => {
 };
 
 // ---------------------------------------------------------------------------
-// Maze geometry: 11 x 20 canvas, logical maze cells on odd coordinates
+// Canvas + room construction
 // ---------------------------------------------------------------------------
 const ROWS = 11;
 const COLS = 20;
-const LROWS = 5; // odd y in [1,9]
-const LCOLS = 9; // odd x in [1,17]
-const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-const logicalToGrid = (lx, ly) => ({ x: 1 + lx * 2, y: 1 + ly * 2 });
-const idxOf = (lx, ly) => ly * LCOLS + lx;
-const lxOf = (idx) => idx % LCOLS;
-const lyOf = (idx) => Math.floor(idx / LCOLS);
-
-function carveMazeTree(rng) {
-  const N = LROWS * LCOLS;
-  const adj = Array.from({ length: N }, () => []);
-  const visited = new Array(N).fill(false);
-  const startIdx = Math.floor(rng() * N);
-  visited[startIdx] = true;
-  const stack = [startIdx];
-  while (stack.length) {
-    const cur = stack[stack.length - 1];
-    const cx = lxOf(cur), cy = lyOf(cur);
-    const candidates = [];
-    for (const [dx, dy] of DIRS4) {
-      const nx = cx + dx, ny = cy + dy;
-      if (nx < 0 || nx >= LCOLS || ny < 0 || ny >= LROWS) continue;
-      const ni = idxOf(nx, ny);
-      if (!visited[ni]) candidates.push(ni);
-    }
-    if (candidates.length === 0) { stack.pop(); continue; }
-    const next = pick(rng, candidates);
-    visited[next] = true;
-    adj[cur].push(next);
-    adj[next].push(cur);
-    stack.push(next);
-  }
-  return adj;
-}
-
-function addLoopEdges(adj, count, rng) {
-  const N = adj.length;
-  let added = 0, attempts = 0;
-  while (added < count && attempts < count * 20) {
-    attempts++;
-    const a = Math.floor(rng() * N);
-    const ax = lxOf(a), ay = lyOf(a);
-    const [dx, dy] = pick(rng, DIRS4);
-    const bx = ax + dx, by = ay + dy;
-    if (bx < 0 || bx >= LCOLS || by < 0 || by >= LROWS) continue;
-    const b = idxOf(bx, by);
-    if (adj[a].includes(b)) continue;
-    adj[a].push(b); adj[b].push(a);
-    added++;
-  }
-}
-
-function bfsDistances(adj, src) {
-  const dist = new Array(adj.length).fill(-1);
-  dist[src] = 0;
-  const q = [src]; let qi = 0;
-  while (qi < q.length) {
-    const u = q[qi++];
-    for (const v of adj[u]) if (dist[v] === -1) { dist[v] = dist[u] + 1; q.push(v); }
-  }
-  return dist;
-}
-
-/** Picks a start/goal pair whose tree-distance is close to targetDist, sampling a handful of far-apart candidates. */
-function pickStartGoal(adj, targetDist, rng) {
-  const N = adj.length;
-  const d0 = bfsDistances(adj, 0);
-  let aIdx = 0, aBest = -1;
-  for (let i = 0; i < N; i++) if (d0[i] > aBest) { aBest = d0[i]; aIdx = i; }
-  const dA = bfsDistances(adj, aIdx);
-  // Collect candidates across a spread of distances from aIdx, pick whichever is closest to target.
-  let bestIdx = 0, bestGap = Infinity;
-  const candidates = [];
-  for (let i = 0; i < N; i++) if (dA[i] > 0) candidates.push(i);
-  for (const c of shuffle(rng, candidates).slice(0, Math.min(40, candidates.length))) {
-    const gap = Math.abs(dA[c] - targetDist);
-    if (gap < bestGap) { bestGap = gap; bestIdx = c; }
-  }
-  return { startIdx: aIdx, goalIdx: bestIdx, treeDist: dA[bestIdx], dFromStart: dA };
-}
-
-function treePath(adj, fromIdx, toIdx) {
-  const N = adj.length;
-  const parent = new Array(N).fill(-1);
-  const visited = new Array(N).fill(false);
-  visited[fromIdx] = true;
-  const q = [fromIdx]; let qi = 0;
-  while (qi < q.length) {
-    const u = q[qi++];
-    if (u === toIdx) break;
-    for (const v of adj[u]) if (!visited[v]) { visited[v] = true; parent[v] = u; q.push(v); }
-  }
-  const path = [];
-  let cur = toIdx;
-  while (cur !== -1) { path.push(cur); if (cur === fromIdx) break; cur = parent[cur]; }
-  path.reverse();
-  return path;
-}
-
-/** BFS reachability from `from`, treating the edge (excludeA-excludeB) as removed. */
-function reachableExcludingEdge(adj, from, excludeA, excludeB) {
-  const N = adj.length;
-  const visited = new Array(N).fill(false);
-  visited[from] = true;
-  const q = [from]; let qi = 0;
-  while (qi < q.length) {
-    const u = q[qi++];
-    for (const v of adj[u]) {
-      if ((u === excludeA && v === excludeB) || (u === excludeB && v === excludeA)) continue;
-      if (!visited[v]) { visited[v] = true; q.push(v); }
-    }
-  }
-  return visited;
-}
-
-function buildFloorGrid(adj) {
-  const grid = Array.from({ length: ROWS }, () => new Array(COLS).fill(5)); // void
-  for (let idx = 0; idx < adj.length; idx++) {
-    const p = logicalToGrid(lxOf(idx), lyOf(idx));
-    grid[p.y][p.x] = 0;
-    for (const v of adj[idx]) {
-      if (v < idx) continue;
-      const pv = logicalToGrid(lxOf(v), lyOf(v));
-      const mx = (p.x + pv.x) / 2, my = (p.y + pv.y) / 2;
-      grid[my][mx] = 0;
-    }
-  }
-  // Stone hugging the carved region so it reads as solid maze walls, not empty space.
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (grid[y][x] !== 5) continue;
-      let adjFloor = false;
-      for (const [dx, dy] of DIRS4) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
-        if (grid[ny][nx] === 0) { adjFloor = true; break; }
-      }
-      if (adjFloor) grid[y][x] = 2; // stone
-    }
-  }
-  return grid;
-}
-
-const cellAt = (idx) => logicalToGrid(lxOf(idx), lyOf(idx));
-const midCellOf = (aIdx, bIdx) => {
-  const pa = cellAt(aIdx), pb = cellAt(bIdx);
-  return { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+const setStoneIfVoid = (grid, x, y) => {
+  if (y < 0 || y >= ROWS || x < 0 || x >= COLS) return;
+  if (grid[y][x] === 5) grid[y][x] = 2;
 };
 
-// ---------------------------------------------------------------------------
-// Level generation per tier
-// ---------------------------------------------------------------------------
+/** Fills a room's interior with floor and draws a stone ring around it, leaving gaps open
+ *  at the given bridge rows (left/right sides) and/or bottom columns, so incoming/outgoing
+ *  glides (or a relay leg dropping down to a corridor) can pass through. */
+function stampRoom(grid, room, openLeftRow, openRightRow, openBottomCols = []) {
+  const { x0, y0, w, h } = room;
+  for (let y = y0; y < y0 + h; y++) {
+    for (let x = x0; x < x0 + w; x++) grid[y][x] = 0;
+  }
+  for (let x = x0 - 1; x <= x0 + w; x++) {
+    setStoneIfVoid(grid, x, y0 - 1);
+    if (!openBottomCols.includes(x)) setStoneIfVoid(grid, x, y0 + h);
+  }
+  for (let y = y0; y < y0 + h; y++) {
+    if (y !== openLeftRow) setStoneIfVoid(grid, x0 - 1, y);
+    if (y !== openRightRow) setStoneIfVoid(grid, x0 + w, y);
+  }
+}
+
 function tierFor(id) {
   if (id <= 120) return 1;
   if (id <= 140) return 2;
@@ -220,108 +104,186 @@ function tierFor(id) {
   return 5;
 }
 
+// The 20-column canvas physically caps how many rooms fit with genuine void gaps between them
+// (a relay hop's corridor alone needs ~9-11 columns) — 2-4 rooms is the realistic ceiling, not
+// the 5-6 v1 assumed. Difficulty past that comes from room size (more internal walking), how
+// many of the available hops are relays instead of simple rides, and lock/rock density — not
+// from an ever-climbing move count chasing a target the geometry can't support.
 function targetMovesFor(id) {
-  // Smooth ramp 101 -> 200, roughly 10 -> 90.
   const t = (id - 101) / (200 - 101);
-  return Math.round(10 + t * 80);
+  return Math.round(10 + t * 22);
 }
 
-/** Builds one candidate grid for the given level id/seed. Returns null if geometry doesn't allow the requested mechanics. */
+const roomCountForTier = (tier, rng) => {
+  switch (tier) {
+    case 1: return 2;
+    case 2: return randInt(rng, 2, 3);
+    case 3: return 3;
+    case 4: return randInt(rng, 3, 4);
+    default: return randInt(rng, 3, 4);
+  }
+};
+
+const roomSizeForTier = (tier, rng) => ({
+  w: randInt(rng, 3, tier >= 4 ? 6 : tier >= 2 ? 5 : 4),
+  h: randInt(rng, 3, tier >= 4 ? 6 : tier >= 2 ? 5 : 4),
+});
+
+/**
+ * A relay hop is a faithful reproduction of how the real levels use remote arrow moves (see
+ * e.g. level 2's solution): the player personally rides a LOCAL arrow down out of the room
+ * into a corridor below, which is a real glide (their own move) that leaves a "trail" marking
+ * where they land. That trail cell now blocks line-of-sight for a SEPARATE remote arrow parked
+ * further down the corridor — remotely triggering it sends it sliding until it hits that trail
+ * and parks right next to the player. Only then can they step onto it and (since it's an omni
+ * arrow) glide onward to a leg that climbs back up into the next room. Skipping the remote
+ * trigger leaves the player stranded — there is no walking path across void, ever, in this
+ * game, so this genuinely requires the mechanic rather than just permitting it.
+ */
+function buildRelayHop(grid, room, nextRoom, bandY0, bandHeight, rng, usedCells) {
+  const corridorGapY = bandY0 + bandHeight; // void row directly below the rooms
+  const corridorY = corridorGapY + 1; // where the player's local glide lands
+  const stoneBlockerY = corridorY + 1; // stops that glide exactly at corridorY
+  if (stoneBlockerY >= ROWS - 1) return false;
+
+  const localArrowX = room.x0 + room.w - 1;
+  setStoneIfVoid(grid, localArrowX, stoneBlockerY);
+  grid[bandY0 + bandHeight - 1][localArrowX] = 9; // down — lives in the room's own bottom row
+  usedCells.add(`${localArrowX},${bandY0 + bandHeight - 1}`);
+
+  const legX = nextRoom.x0;
+  if (legX <= localArrowX + 2) return false; // not enough room for the remote arrow between them
+  grid[corridorGapY][legX] = 0;
+  grid[corridorY][legX] = 0;
+
+  const remoteX = randInt(rng, localArrowX + 2, legX - 1);
+  grid[corridorY][remoteX] = 13; // omni — parked in the corridor, remote-only reachable
+  usedCells.add(`${remoteX},${corridorY}`);
+  return true;
+}
+
+/** Builds one candidate level for the given id/seed. Returns null if room layout doesn't fit. */
 function buildCandidate(id, rng) {
   const tier = tierFor(id);
-  const target = targetMovesFor(id);
-  const adj = carveMazeTree(rng);
+  const numRooms = roomCountForTier(tier, rng);
 
-  if (tier <= 3) addLoopEdges(adj, tier === 1 ? Math.floor(rng() * 3) : 2 + Math.floor(rng() * 4), rng);
+  // Fixed near the top of the canvas so every room has guaranteed room below it for a relay
+  // hop's corridor (see buildRelayHop) without needing per-level bounds-juggling. Taller for
+  // higher tiers so there's more internal walking distance, since the 20-column canvas caps
+  // room *count* well before it caps room *size*.
+  const bandHeight = randInt(rng, 3, tier >= 4 ? 6 : tier >= 2 ? 5 : 3);
+  const bandY0 = 1;
 
-  // Each logical maze-hop costs ~2 actual grid moves (the passage cell, then the next cell),
-  // so target the tree-distance in logical hops, not raw moves.
-  const { startIdx, goalIdx, dFromStart } = pickStartGoal(adj, target / 2, rng);
-  const path = treePath(adj, startIdx, goalIdx); // path of logical-cell indices along the tree
+  // Lay rooms left-to-right. Relay hops need a wider gap (room for the corridor's remote arrow).
+  const hopIsRelay = [];
+  for (let i = 0; i < numRooms - 1; i++) hopIsRelay.push(tier >= 2 && rng() < 0.6);
 
-  const grid = buildFloorGrid(adj);
+  const rooms = [];
+  let cursorX = 1;
+  for (let i = 0; i < numRooms; i++) {
+    const w = roomSizeForTier(tier, rng).w;
+    if (cursorX + w > COLS - 1) break;
+    rooms.push({ x0: cursorX, y0: bandY0, w, h: bandHeight });
+    const gap = hopIsRelay[i] ? randInt(rng, 5, 7) : randInt(rng, 3, 6);
+    cursorX += w + gap;
+  }
+  if (rooms.length < 2) return null;
+  hopIsRelay.length = rooms.length - 1;
 
-  // Mark start (18) and goal (3) tiles.
-  const startPos = cellAt(startIdx);
-  const goalPos = cellAt(goalIdx);
-  grid[startPos.y][startPos.x] = 18;
-  grid[goalPos.y][goalPos.x] = 3;
+  const grid = Array.from({ length: ROWS }, () => new Array(COLS).fill(5));
+  const usedCells = new Set();
+  const isFreeFloor = (x, y) => grid[y]?.[x] === 0 && !usedCells.has(`${x},${y}`);
 
-  const usedCells = new Set([`${startPos.x},${startPos.y}`, `${goalPos.x},${goalPos.y}`]);
-  const isFree = (x, y) => grid[y]?.[x] === 0 && !usedCells.has(`${x},${y}`);
+  // Simple hops connect at a shared row (top of the band); relay hops connect via each room's
+  // own bottom-row local arrow / corridor leg (see buildRelayHop), so no shared row is needed.
+  const bridgeRow = bandY0;
+  for (let i = 0; i < rooms.length; i++) {
+    const openLeft = i > 0 && !hopIsRelay[i - 1] ? bridgeRow : undefined;
+    const openRight = i < rooms.length - 1 && !hopIsRelay[i] ? bridgeRow : undefined;
+    const openBottomCols = [];
+    if (i > 0 && hopIsRelay[i - 1]) openBottomCols.push(rooms[i].x0); // incoming relay leg
+    if (i < rooms.length - 1 && hopIsRelay[i]) openBottomCols.push(rooms[i].x0 + rooms[i].w - 1); // outgoing local arrow
+    stampRoom(grid, rooms[i], openLeft, openRight, openBottomCols);
+  }
 
-  // --- Tier 2+: arrows bridging void gaps, placed on straight interior runs of the path ---
-  if (tier >= 2) {
-    const arrowBudget = tier === 2 ? 1 + Math.floor(rng() * 2) : tier === 3 ? 1 + Math.floor(rng() * 2) : 2 + Math.floor(rng() * 3);
-    let placed = 0;
-    const straightSpots = [];
-    for (let i = 1; i < path.length - 1; i++) {
-      const prev = cellAt(path[i - 1]), cur = cellAt(path[i]), next = cellAt(path[i + 1]);
-      const d1x = cur.x - prev.x, d1y = cur.y - prev.y;
-      const d2x = next.x - cur.x, d2y = next.y - cur.y;
-      if (d1x === d2x && d1y === d2y && isFree(cur.x, cur.y)) {
-        straightSpots.push({ cur, dir: { dx: d2x > 0 ? 1 : d2x < 0 ? -1 : 0, dy: d2y > 0 ? 1 : d2y < 0 ? -1 : 0 } });
+  for (let i = 0; i < rooms.length - 1; i++) {
+    const isLastHop = i === rooms.length - 2;
+    if (hopIsRelay[i]) {
+      const ok = buildRelayHop(grid, rooms[i], rooms[i + 1], bandY0, bandHeight, rng, usedCells);
+      if (!ok) return null;
+    } else {
+      const room = rooms[i];
+      const x = room.x0 + room.w - 1;
+      const arrowType = tier === 5 && isLastHop && rng() < 0.5 ? 13 : 8; // 13 = omni, 8 = right
+      grid[bridgeRow][x] = arrowType;
+      usedCells.add(`${x},${bridgeRow}`);
+    }
+  }
+
+  // Tier 3+: breakable rocks scattered inside rooms for texture.
+  if (tier >= 3) {
+    for (const room of rooms) {
+      if (rng() >= 0.5) continue;
+      const x = randInt(rng, room.x0, room.x0 + room.w - 1);
+      const y = randInt(rng, room.y0, room.y0 + room.h - 1);
+      if (!isFreeFloor(x, y)) continue;
+      grid[y][x] = 6;
+      usedCells.add(`${x},${y}`);
+    }
+  }
+
+  // Player start in room 0, goal cave in the last room — pick cells away from the bridge edges.
+  const farCell = (room, awayFromRight) => {
+    const x = awayFromRight ? room.x0 : room.x0 + room.w - 1;
+    const y = room.y0 + randInt(rng, 0, room.h - 1);
+    return { x, y };
+  };
+  const startRoom = rooms[0];
+  const goalRoom = rooms[rooms.length - 1];
+  const playerStart = farCell(startRoom, true);
+  const cavePos = farCell(goalRoom, false);
+  if (!isFreeFloor(playerStart.x, playerStart.y) || !isFreeFloor(cavePos.x, cavePos.y) || (playerStart.x === cavePos.x && playerStart.y === cavePos.y)) {
+    return null;
+  }
+  usedCells.add(`${playerStart.x},${playerStart.y}`);
+  grid[cavePos.y][cavePos.x] = 3;
+  usedCells.add(`${cavePos.x},${cavePos.y}`);
+
+  // Tier 4+: gate a room entrance with a lock; the matching key sits in an earlier room.
+  // Only rooms reached via a SIMPLE hop have a single-cell doorway a lock can sit on cleanly —
+  // a relay hop's entrance is the two-cell corridor leg, which a lock can't cleanly gate.
+  const simpleEntranceRoomIndices = [];
+  for (let i = 1; i < rooms.length; i++) if (!hopIsRelay[i - 1]) simpleEntranceRoomIndices.push(i);
+  const lockRooms = [];
+  if (tier >= 4 && simpleEntranceRoomIndices.length >= 1) {
+    lockRooms.push({ roomIndex: pick(rng, simpleEntranceRoomIndices), color: 'red' });
+  }
+  if (tier >= 5 && simpleEntranceRoomIndices.length >= 2) {
+    const rest = simpleEntranceRoomIndices.filter((i) => i !== lockRooms[0].roomIndex);
+    if (rest.length > 0) lockRooms.push({ roomIndex: pick(rng, rest), color: 'green' });
+  }
+  for (const { roomIndex, color } of lockRooms) {
+    const room = rooms[roomIndex];
+    const entranceY = bridgeRow;
+    const entranceX = room.x0;
+    if (!isFreeFloor(entranceX, entranceY)) continue;
+    const keyRoomIndex = randInt(rng, 0, roomIndex - 1);
+    const keyRoom = rooms[keyRoomIndex];
+    const keyCandidates = [];
+    for (let y = keyRoom.y0; y < keyRoom.y0 + keyRoom.h; y++) {
+      for (let x = keyRoom.x0; x < keyRoom.x0 + keyRoom.w; x++) {
+        if (isFreeFloor(x, y)) keyCandidates.push({ x, y });
       }
     }
-    for (const spot of shuffle(rng, straightSpots)) {
-      if (placed >= arrowBudget) break;
-      if (!isFree(spot.cur.x, spot.cur.y)) continue;
-      const nx = spot.cur.x + spot.dir.dx, ny = spot.cur.y + spot.dir.dy;
-      if (grid[ny]?.[nx] !== 0) continue;
-      const arrowType = spot.dir.dx === 1 ? 8 : spot.dir.dx === -1 ? 10 : spot.dir.dy === 1 ? 9 : 7;
-      const finalType = tier === 5 && rng() < 0.35 ? 13 : arrowType; // occasional omni arrows in the hardest tier
-      grid[spot.cur.y][spot.cur.x] = finalType;
-      grid[ny][nx] = 5; // carve a 1-cell void gap right after the arrow
-      usedCells.add(`${spot.cur.x},${spot.cur.y}`);
-      placed++;
-    }
-  }
-
-  // --- Tier 3+: breakable rocks sprinkled on the path for texture ---
-  if (tier >= 3) {
-    const rockBudget = 1 + Math.floor(rng() * 3);
-    let placed = 0;
-    for (const idx of shuffle(rng, path.slice(1, -1))) {
-      if (placed >= rockBudget) break;
-      const p = cellAt(idx);
-      if (!isFree(p.x, p.y)) continue;
-      grid[p.y][p.x] = 6;
-      usedCells.add(`${p.x},${p.y}`);
-      placed++;
-    }
-  }
-
-  // --- Tier 4+: one red key/lock chokepoint on the path ---
-  const lockEdges = [];
-  if (tier >= 4 && path.length >= 6) {
-    const mid = Math.floor(path.length * (0.45 + rng() * 0.2));
-    lockEdges.push({ a: path[mid - 1], b: path[mid], color: 'red', keyCell: 16, lockCell: 14 });
-  }
-  // --- Tier 5: a second, green lock further along the path ---
-  if (tier >= 5 && path.length >= 10) {
-    const mid2 = Math.floor(path.length * (0.72 + rng() * 0.15));
-    lockEdges.push({ a: path[mid2 - 1], b: path[mid2], color: 'green', keyCell: 17, lockCell: 15 });
-  }
-
-  for (const edge of lockEdges) {
-    const lockPos = midCellOf(edge.a, edge.b);
-    if (grid[lockPos.y][lockPos.x] !== 0) continue; // corridor cell already repurposed by an arrow/rock; skip this lock
-    const sideOfA = reachableExcludingEdge(adj, edge.a, edge.a, edge.b);
-    const keyCandidates = [];
-    for (let idx = 0; idx < adj.length; idx++) {
-      if (!sideOfA[idx]) continue;
-      const p = cellAt(idx);
-      if (isFree(p.x, p.y)) keyCandidates.push(p);
-    }
-    if (keyCandidates.length === 0) continue; // nowhere safe to put the key; skip this lock
+    if (keyCandidates.length === 0) continue;
     const keyPos = pick(rng, keyCandidates);
-    grid[lockPos.y][lockPos.x] = edge.lockCell === 14 ? 16 : 17; // 16=red lock, 17=green lock
-    grid[keyPos.y][keyPos.x] = edge.keyCell === 16 ? 14 : 15; // 14=red key, 15=green key
-    usedCells.add(`${lockPos.x},${lockPos.y}`);
+    grid[entranceY][entranceX] = color === 'red' ? 16 : 17;
+    grid[keyPos.y][keyPos.x] = color === 'red' ? 14 : 15;
+    usedCells.add(`${entranceX},${entranceY}`);
     usedCells.add(`${keyPos.x},${keyPos.y}`);
   }
 
-  return { grid, playerStart: startPos, cavePos: goalPos, tier, target };
+  return { grid, playerStart, cavePos, tier, rooms: rooms.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -349,7 +311,7 @@ async function withSolverPage(fn) {
 async function solve(page, grid, playerStart, cavePos) {
   return page.evaluate(
     ([grid, playerStart, cavePos]) =>
-      window.solveGrid(grid, playerStart, cavePos, { maxMsPerLevel: 6000, maxNodesPerLevel: 120000, maxDepth: 220 }),
+      window.solveGrid(grid, playerStart, cavePos, { maxMsPerLevel: 8000, maxNodesPerLevel: 180000, maxDepth: 260 }),
     [grid, playerStart, cavePos],
   );
 }
@@ -363,24 +325,29 @@ async function main() {
     for (let id = RANGE_START; id <= RANGE_END; id++) {
       const target = targetMovesFor(id);
       let best = null;
-      const maxAttempts = 24;
+      const maxAttempts = 30;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const rng = mulberry32(BASE_SEED * 1000003 + id * 97 + attempt);
         const candidate = buildCandidate(id, rng);
+        if (!candidate) continue;
         const solution = await solve(page, candidate.grid, candidate.playerStart, candidate.cavePos);
         if (!solution.solved) continue;
         const gap = Math.abs(solution.moves - target);
-        if (!best || gap < best.gap) {
-          best = { ...candidate, moves: solution.moves, gap };
+        const remoteMoves = solution.actions.filter((a) => a.startsWith('A(')).length;
+        const meetsRemote = candidate.tier < 2 || remoteMoves > 0;
+        const better = !best || (meetsRemote && !best.meetsRemote) || (meetsRemote === best.meetsRemote && gap < best.gap);
+        if (better) {
+          best = { ...candidate, moves: solution.moves, gap, remoteMoves, meetsRemote };
         }
-        // Accept early once close enough — no need to burn the whole attempt budget.
-        if (gap <= Math.max(3, target * 0.2)) break;
+        if (meetsRemote && gap <= Math.max(3, target * 0.25)) break;
       }
       if (!best) {
         console.error(`Level ${id}: FAILED to find any solvable candidate after ${maxAttempts} attempts`);
         continue;
       }
-      console.log(`Level ${id} [tier ${best.tier}]: target ${target} moves, got ${best.moves} moves (gap ${best.gap})`);
+      console.log(
+        `Level ${id} [tier ${best.tier}, ${best.rooms} rooms]: target ${target}mv, got ${best.moves}mv (gap ${best.gap}), ${best.remoteMoves} remote-arrow moves`,
+      );
       results.push({
         id,
         grid: best.grid,
@@ -389,6 +356,7 @@ async function main() {
         tier: best.tier,
         targetMoves: target,
         actualMoves: best.moves,
+        remoteMoves: best.remoteMoves,
       });
     }
   });
@@ -399,7 +367,6 @@ async function main() {
     return;
   }
 
-  // Merge into promoted-levels.json, replacing any existing entries for these ids.
   const promotedPath = path.resolve(ROOT, 'src/data/promoted-levels.json');
   const existing = JSON.parse(readFileSync(promotedPath, 'utf8'));
   const filtered = existing.filter((l) => l.id < RANGE_START || l.id > RANGE_END);
@@ -413,7 +380,9 @@ async function main() {
   writeFileSync(promotedPath, JSON.stringify(merged, null, 2));
   console.log(`\nWrote ${results.length} generated levels into ${promotedPath}`);
 
-  const summary = results.map((r) => `L${r.id} [T${r.tier}] ${r.actualMoves}mv (target ${r.targetMoves})`).join('\n');
+  const remoteUsers = results.filter((r) => r.remoteMoves > 0).length;
+  console.log(`\nLevels using at least one remote-arrow move: ${remoteUsers} / ${results.length}`);
+  const summary = results.map((r) => `L${r.id} [T${r.tier}] ${r.actualMoves}mv (target ${r.targetMoves}), ${r.remoteMoves} remote`).join('\n');
   console.log('\n--- Summary ---\n' + summary);
 }
 
