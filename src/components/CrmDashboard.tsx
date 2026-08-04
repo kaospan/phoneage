@@ -13,6 +13,12 @@ import { RefreshCw, Circle } from "lucide-react";
 
 const PRESENCE_CHANNEL = "game-presence";
 
+// A session's ended_at can stay null forever if the tab was closed, the browser crashed, or
+// the player navigated away mid-level — there's no reliable "on unload" close callback. Without
+// a cap, counting such an orphaned row as (now - started_at) makes its "duration" grow without
+// bound every time the CRM is viewed, long after the player actually stopped playing.
+const ORPHANED_SESSION_CAP_MS = 20 * 60 * 1000;
+
 interface ProfileRow {
     id: string;
     email: string | null;
@@ -167,8 +173,9 @@ export function CrmDashboard() {
             const s = map.get(sess.user_id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0, totalPlayMs: 0 };
             s.totalAttempts += 1;
             s.totalMoves += sess.moves ?? 0;
-            const endMs = sess.ended_at ? new Date(sess.ended_at).getTime() : now;
-            s.totalPlayMs += Math.max(0, endMs - new Date(sess.started_at).getTime());
+            const startMs = new Date(sess.started_at).getTime();
+            const endMs = sess.ended_at ? new Date(sess.ended_at).getTime() : Math.min(now, startMs + ORPHANED_SESSION_CAP_MS);
+            s.totalPlayMs += Math.max(0, endMs - startMs);
             map.set(sess.user_id, s);
         }
         return map;

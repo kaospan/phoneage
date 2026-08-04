@@ -678,13 +678,34 @@ export type KeyIconOptions = {
   metalDark?: string;
 };
 
+const parseRgba = (input: string): { r: number; g: number; b: number; a: number } => {
+  const m = input.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)/);
+  if (!m) return { r: 200, g: 200, b: 200, a: 1 };
+  return { r: Number(m[1]), g: Number(m[2]), b: Number(m[3]), a: m[4] !== undefined ? Number(m[4]) : 1 };
+};
+
+const lighten = (rgba: string, amount: number): string => {
+  const { r, g, b, a } = parseRgba(rgba);
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  return `rgba(${mix(r)},${mix(g)},${mix(b)},${a})`;
+};
+
+const darken = (rgba: string, amount: number): string => {
+  const { r, g, b, a } = parseRgba(rgba);
+  const mix = (c: number) => Math.round(c * (1 - amount));
+  return `rgba(${mix(r)},${mix(g)},${mix(b)},${a})`;
+};
+
 function getKeyDefaults(opts?: KeyIconOptions): Required<KeyIconOptions> {
+  const accent = opts?.accent ?? "rgba(239,68,68,0.98)"; // red-500
   return {
-    accent: opts?.accent ?? "rgba(239,68,68,0.98)", // red-500
+    accent,
     glow: opts?.glow ?? "rgba(239,68,68,0.18)",
     outline: opts?.outline ?? "rgba(15,23,42,0.55)",
-    metalLight: opts?.metalLight ?? "rgba(255,244,200,0.98)",
-    metalDark: opts?.metalDark ?? "rgba(180,120,20,0.98)",
+    // Derived from accent (rather than a fixed gold) so red vs green keys read as
+    // clearly different-colored metal, not just "gold key with a tiny colored dot".
+    metalLight: opts?.metalLight ?? lighten(accent, 0.55),
+    metalDark: opts?.metalDark ?? darken(accent, 0.35),
   };
 }
 
@@ -735,7 +756,7 @@ export function drawKeyTopDown(ctx: CanvasRenderingContext2D, size: number, opts
 
   const metalGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
   metalGrad.addColorStop(0, metalLight);
-  metalGrad.addColorStop(0.6, "rgba(245,200,95,0.98)");
+  metalGrad.addColorStop(0.6, accent);
   metalGrad.addColorStop(1, metalDark);
 
   ctx.strokeStyle = outline;

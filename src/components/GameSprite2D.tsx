@@ -8,6 +8,33 @@ import { detectGridLines } from "@/components/level-mapper/gridDetection";
 import { getAlignmentHints } from "@/components/level-mapper/alignmentProfile";
 import { normalizeMapperImage } from "@/components/level-mapper/imageNormalization";
 import playerSpriteUrl from "@/assets/dino.png";
+import globalFloorUrl from "@/assets/tile-sprites/floor.png";
+import globalWallUrl from "@/assets/tile-sprites/wall.png";
+import globalStoneUrl from "@/assets/tile-sprites/stone.png";
+import globalArrowUpUrl from "@/assets/tile-sprites/arrow-up.png";
+import globalArrowRightUrl from "@/assets/tile-sprites/arrow-right.png";
+import globalArrowDownUrl from "@/assets/tile-sprites/arrow-down.png";
+import globalArrowLeftUrl from "@/assets/tile-sprites/arrow-left.png";
+import globalArrowVerticalUrl from "@/assets/tile-sprites/arrow-vertical.png";
+import globalArrowHorizontalUrl from "@/assets/tile-sprites/arrow-horizontal.png";
+import globalArrowOmniUrl from "@/assets/tile-sprites/arrow-omni.png";
+
+// Real tile crops harvested once from the levels 1-100 screenshots (which do have per-level
+// background art). Used as a universal fallback so levels 101-200 (which have no screenshot at
+// all) still show authentic textures instead of flat color blocks, and as a last-resort fallback
+// for any level whose per-level atlas/reference sprites don't cover a given tile type.
+const GLOBAL_TILE_SPRITE_URLS: Record<number, string> = {
+  0: globalFloorUrl,
+  1: globalWallUrl,
+  2: globalStoneUrl,
+  7: globalArrowUpUrl,
+  8: globalArrowRightUrl,
+  9: globalArrowDownUrl,
+  10: globalArrowLeftUrl,
+  11: globalArrowVerticalUrl,
+  12: globalArrowHorizontalUrl,
+  13: globalArrowOmniUrl,
+};
 
 type PlayerFacing = "up" | "right" | "down" | "left";
 
@@ -767,6 +794,7 @@ export function GameSprite2D({
                   effectiveTileType === 6 && breakableRockFallbackUrl ? `url(${breakableRockFallbackUrl})` :
                   atlasSprite ? `url(${atlasSprite})` :
                   (canUseRefSprite && refSprite) ? `url(${refSprite})` :
+                  GLOBAL_TILE_SPRITE_URLS[effectiveTileType] ? `url(${GLOBAL_TILE_SPRITE_URLS[effectiveTileType]})` :
                   effectiveTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
                   effectiveTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
                   effectiveTileType === 16 && redLockFallbackUrl ? `url(${redLockFallbackUrl})` :
