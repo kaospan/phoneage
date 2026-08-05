@@ -2768,10 +2768,17 @@ export const PuzzleGame = () => {
           variant="outline"
           size="sm"
           disabled={isComplete || localPlayer?.isGliding}
-          className="h-9 w-9 p-0 text-base font-semibold hover:bg-primary/20"
+          className={
+            isMobilePortrait
+              ? "h-9 w-9 p-0 text-base font-semibold hover:bg-primary/20"
+              : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20"
+          }
           title="Restart level (R)"
         >
-          ↻
+          <span aria-hidden>↻</span>
+          {/* Icon-only on mobile portrait to save HUD space; spelled out on desktop, where the
+              restart button was easy to miss among the other icon-only controls. */}
+          {!isMobilePortrait && <span className="text-sm">Restart Level</span>}
         </Button>
 
         {campaignDialog}
