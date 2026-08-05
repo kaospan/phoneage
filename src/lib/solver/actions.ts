@@ -2,8 +2,10 @@ import { getArrowDirections, isArrowCell } from "@/game/arrows";
 import { computePlayerGlidePath, computeRemoteArrowGlidePath } from "@/game/glide";
 import { getNextTeleport, TELEPORT_CELL } from "@/game/teleport";
 import type { CellType, KeyInventory, Position } from "@/game/types";
-import { cloneBreakables, cloneGrid, cloneInventory, DIR_LABELS, DIR_VECTORS, DIRS, SolveState, stateKey } from "./state";
+import { cloneBreakables, cloneGrid, cloneInventory } from "./utils";
+import { DIR_LABELS, DIR_VECTORS, DIRS, SolveState, stateKey } from "./state";
 import type { Action, DirKey } from "./state";
+import { manhattanToGoal } from "./heuristics";
 
 const isKeyCell = (cell: CellType) => cell === 14 || cell === 15;
 const isLockCell = (cell: CellType) => cell === 16 || cell === 17;

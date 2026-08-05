@@ -4,7 +4,9 @@ import type { CellType, KeyInventory, Position } from "@/game/types";
 import { createEmptyTrace } from "./trace";
 import { generateSuccessors } from "./actions";
 import type { Action, SolveState } from "./state";
-import { cloneGrid, cloneInventory, cloneBreakables, manhattanToGoal, stateKey } from "./utils";
+import { cloneGrid, cloneInventory, cloneBreakables } from "./utils";
+import { manhattanToGoal } from "./heuristics";
+import { stateKey } from "./state";
 import type { SolveOptions, LevelSolution } from "./types";
 import type { SolverTrace, TraceActionRecord, TraceNode } from "./trace";
 

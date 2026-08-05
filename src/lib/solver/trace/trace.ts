@@ -1,4 +1,8 @@
 import type { CellType, KeyInventory, Position } from "@/game/types";
+import type { Action, DirKey, SolveState } from "../state";
+import { applyAction } from "../actions";
+import { parseActionString } from "../replay";
+import { cloneInventory, manhattanToGoal } from "../utils";
 
 export interface TraceActionRecord {
   description: string;
@@ -8,6 +12,12 @@ export interface TraceActionRecord {
   resultStateId?: number;
 }
 
+export interface CollisionRecord {
+  fromNode: number;
+  toNode: number;
+  actionString: string;
+}
+
 export interface TraceNode {
   id: number;
   parentId: number | null;
@@ -15,9 +25,6 @@ export interface TraceNode {
   stateKey: string;
   playerPos: Position;
   inventory: KeyInventory;
-  grid: CellType[][];
-  baseGrid: CellType[][];
-  breakableRockStates: Map<string, boolean>;
   depth: number;
   expansionOrder: number | undefined;
   attemptedActions: TraceActionRecord[];
@@ -45,7 +52,9 @@ export interface SolverTrace {
   nodesExpanded: number;
   statesGenerated: number;
   ms: number;
-  collisions: Map<number, number>;
+  collisions: CollisionRecord[];
+  deadEnds: number[];
+  closestManhattan: number;
 }
 
 export function createEmptyTrace(): SolverTrace {
@@ -66,6 +75,40 @@ export function createEmptyTrace(): SolverTrace {
     nodesExpanded: 0,
     statesGenerated: 0,
     ms: 0,
-    collisions: new Map(),
+    collisions: [],
+    deadEnds: [],
+    closestManhattan: Infinity,
   };
+}
+
+export function reconstructState(trace: SolverTrace, nodeId: number): SolveState | null {
+  const node = trace.nodes.get(nodeId);
+  if (!node) return null;
+
+  const path: Action[] = [];
+  let cur = nodeId;
+  while (cur !== undefined && cur !== trace.startStateId) {
+    const n = trace.nodes.get(cur);
+    if (!n) break;
+    const action = parseActionString(n.action);
+    if (!action) break;
+    path.unshift(action);
+    cur = n.parentId ?? trace.startStateId;
+  }
+
+  let state: SolveState = {
+    grid: trace.startGrid.map((r) => r.slice()) as CellType[][],
+    baseGrid: trace.startGrid.map((r) => r.slice()) as CellType[][],
+    playerPos: { ...trace.startPlayerPos },
+    inventory: { ...trace.startInventory },
+    breakableRockStates: new Map(),
+  };
+
+  for (const action of path) {
+    const result = applyAction(state, action);
+    if (!result.ok || !result.state) return null;
+    state = result.state;
+  }
+
+  return state;
 }
