@@ -11,31 +11,43 @@ const CELL_COLORS: Record<number, string> = {
 export function generateSolverTraceHTML(trace: SolverTrace): string {
   const nodes = Array.from(trace.nodes.values());
   const goalSet = new Set(trace.goalCaves.map((g) => `${g.x},${g.y}`));
-  const furthest = trace.furthestStateId ?? trace.startStateId;
+  const furthest =
+    trace.furthestStateId !== null
+      ? trace.furthestStateId
+      : nodes[nodes.length - 1]?.id ?? trace.startStateId;
   const initial = trace.lastExpandedStateId ?? furthest ?? trace.startStateId;
 
+  const importantNodes = new Set<number>([
+    trace.startStateId,
+    furthest,
+    initial,
+    ...(trace.lastExpandedStateId != null ? [trace.lastExpandedStateId] : []),
+  ]);
   for (const node of nodes) {
-    if (!node.renderedState) {
+    if (importantNodes.has(node.id) && !node.renderedState) {
       node.renderedState = reconstructState(trace, node.id);
     }
   }
 
-  const nodesJson = JSON.stringify(nodes.map((n) => ({
-    id: n.id,
-    parentId: n.parentId,
-    action: n.action,
-    depth: n.depth,
-    expansionOrder: n.expansionOrder,
-    playerPos: n.playerPos,
-    inventory: n.inventory,
-    grid: n.renderedState?.grid ?? n.playerPos,
-    baseGrid: n.renderedState?.baseGrid,
-    breakableRockStates: n.renderedState?.breakableRockStates
-      ? Array.from(n.renderedState.breakableRockStates.entries())
-      : [],
-    attemptedActions: n.attemptedActions,
-    distanceToGoal: n.distanceToGoal,
-  })));
+  const nodesJson = JSON.stringify(nodes.map((n) => {
+    const state = n.renderedState;
+    return {
+      id: n.id,
+      parentId: n.parentId,
+      action: n.action,
+      depth: n.depth,
+      expansionOrder: n.expansionOrder,
+      playerPos: n.playerPos,
+      inventory: n.inventory,
+      grid: state?.grid ?? [],
+      baseGrid: state?.baseGrid ?? [],
+      breakableRockStates: state?.breakableRockStates
+        ? Array.from(state.breakableRockStates.entries())
+        : [],
+      attemptedActions: n.attemptedActions,
+      distanceToGoal: n.distanceToGoal,
+    };
+  }));
 
   const html = `<!DOCTYPE html>
 <html lang="en">
