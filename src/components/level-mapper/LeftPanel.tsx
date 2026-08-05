@@ -14,7 +14,14 @@ import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid }
 import { MapperPanelFrame, MapperResizeHandle, MapperSection } from './MapperChrome';
 import { getAdminMode, setAdminMode } from '@/lib/adminMode';
 import { getRecordMovesEnabled, setRecordMovesEnabled } from '@/lib/moveRecording';
-import { VIEW_MODES, type ViewMode, getDisabledViewModes, setViewModeSkipped } from '@/lib/viewModePrefs';
+import {
+    VIEW_MODES,
+    type ViewMode,
+    DISABLED_VIEW_MODES_UPDATED_EVENT,
+    getDisabledViewModes,
+    setViewModeSkipped,
+    subscribeToDisabledViewModes,
+} from '@/lib/viewModePrefs';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -80,6 +87,15 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const [adminModeEnabled, setAdminModeEnabled] = useState(() => getAdminMode());
     const [recordMovesOn, setRecordMovesOn] = useState(() => getRecordMovesEnabled());
     const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => new Set(getDisabledViewModes()));
+    useEffect(() => {
+        const refresh = () => setDisabledViewModes(new Set(getDisabledViewModes()));
+        window.addEventListener(DISABLED_VIEW_MODES_UPDATED_EVENT, refresh);
+        const unsubscribe = subscribeToDisabledViewModes();
+        return () => {
+            window.removeEventListener(DISABLED_VIEW_MODES_UPDATED_EVENT, refresh);
+            unsubscribe();
+        };
+    }, []);
 
     const currentLevel = importLevelIndex !== null ? allLevels[importLevelIndex] ?? null : null;
     const currentLevelTitle = currentLevel ? `Level ${currentLevel.id}` : 'Level Mapper';
@@ -520,16 +536,32 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                                 checked={checked}
                                                 onCheckedChange={(value) => {
                                                     const skip = value === false;
-                                                    setViewModeSkipped(mode, skip);
+                                                    // Optimistic — reverted below if the write doesn't actually
+                                                    // persist (e.g. this account lost admin status mid-session).
                                                     setDisabledViewModes((prev) => {
                                                         const next = new Set(prev);
                                                         if (skip) next.add(mode);
                                                         else next.delete(mode);
                                                         return next;
                                                     });
-                                                    toast.success(`${VIEW_MODE_TOGGLE_LABELS[mode]} ${skip ? 'removed from' : 'restored to'} the game's view rotation.`, {
-                                                        position: 'bottom-right',
-                                                        duration: 2200,
+                                                    void setViewModeSkipped(mode, skip).then((ok) => {
+                                                        if (ok) {
+                                                            toast.success(`${VIEW_MODE_TOGGLE_LABELS[mode]} ${skip ? 'removed from' : 'restored to'} the game's view rotation for every player.`, {
+                                                                position: 'bottom-right',
+                                                                duration: 2200,
+                                                            });
+                                                        } else {
+                                                            setDisabledViewModes((prev) => {
+                                                                const next = new Set(prev);
+                                                                if (skip) next.delete(mode);
+                                                                else next.add(mode);
+                                                                return next;
+                                                            });
+                                                            toast.error(`Couldn't update ${VIEW_MODE_TOGGLE_LABELS[mode]} — try again.`, {
+                                                                position: 'bottom-right',
+                                                                duration: 2600,
+                                                            });
+                                                        }
                                                     });
                                                 }}
                                             />

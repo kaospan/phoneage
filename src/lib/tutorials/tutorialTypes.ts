@@ -8,7 +8,8 @@ export type TutorialId =
   | "teleport"
   | "key-lock"
   | "breakable-rock"
-  | "bonus-time";
+  | "bonus-time"
+  | "stuck-reminder";
 
 export type TutorialSound = "tap" | "glide" | "unlock" | "collect" | "teleport" | "break" | "chime";
 

@@ -12,7 +12,9 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
   {
     id: "basics",
     title: "Getting Started",
-    text: "Walk across the floor to the ladder. Swipe or use arrow keys to move — stone blocks the way.",
+    // Kept short on purpose: this is also the fallback caption for the quick walking-tap beats
+    // below that have no caption of their own — a long paragraph there would fly by unread.
+    text: "Reach the ladder — stone blocks the way.",
     triggerCellTypes: [0, 2, 3],
     miniGrid: [
       [2, 2, 2, 2, 2, 2],
@@ -79,7 +81,11 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
   {
     id: "arrow-single",
     title: "Arrow Tile",
-    text: "Once you step onto an arrow, you'll keep gliding that direction until something stops you. You can also tap an arrow from a distance to grab and slide it elsewhere.",
+    // Short on purpose — it's also the fallback caption for the step-onto-arrow tap beat below,
+    // which has no caption of its own. The full explanation is already spread across that step's
+    // sibling captions ("...until something stops you", "tap to grab", "glides on"), so nothing
+    // here needs to repeat it at length.
+    text: "Arrows glide you until something stops you.",
     triggerCellTypes: [7, 8, 9, 10],
     miniGrid: [
       [2, 2, 2, 2, 2, 2],
@@ -141,7 +147,7 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
   {
     id: "arrow-multi",
     title: "Multi-Directional Arrow",
-    text: "Multi-way arrows glide wherever you press — the same tile can send you several directions. They can be grabbed and slid from a distance, too.",
+    text: "This arrow can send you any direction.",
     triggerCellTypes: [11, 12, 13],
     miniGrid: [
       [2, 2, 2, 0, 2, 2, 2],
@@ -279,7 +285,7 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
   {
     id: "breakable-rock",
     title: "Breakable Rock",
-    text: "Step into a cracked rock to smash through it — it stays open after.",
+    text: "It stays open once broken.",
     triggerCellTypes: [6],
     miniGrid: [
       [2, 2, 2, 2, 2],
@@ -316,7 +322,7 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
   {
     id: "key-lock",
     title: "Keys & Locks",
-    text: "Collect a key to unlock the matching lock — you'll need it to pass.",
+    text: "Matching colors unlock together.",
     triggerCellTypes: [14, 15, 16, 17],
     miniGrid: [
       [2, 2, 2, 2, 2, 2, 2],
@@ -368,7 +374,7 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
   {
     id: "teleport",
     title: "Teleport",
-    text: "Step onto a teleport pad to instantly travel to its matching pad.",
+    text: "Linked pads swap you instantly.",
     triggerCellTypes: [19],
     miniGrid: [
       [2, 2, 2, 2, 2, 2, 2, 2],
@@ -412,7 +418,7 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
   {
     id: "bonus-time",
     title: "Bonus Time",
-    text: "Collect the hourglass to add extra seconds to the level's countdown timer.",
+    text: "Free seconds on the clock.",
     triggerCellTypes: [20],
     miniGrid: [
       [2, 2, 2, 2, 2],
@@ -443,6 +449,25 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
         cameraFocus: { x: 3, y: 1 },
         cameraZoom: 1.2,
         durationMs: 500,
+      },
+    ],
+  },
+  {
+    // Never cell-type-triggered — forced directly (see the stuck-detection effect in
+    // PuzzleGame.tsx) the moment the player's own position lands on a void tile, which is
+    // always an unrecoverable dead end (void is impassable to normal walking, see
+    // movement.ts) — first reachable on level 3, where a glide with nothing stopping it partway
+    // can run the player the entire length of an empty gap.
+    id: "stuck-reminder",
+    title: "Stuck?",
+    text: "Void tiles are a dead end — nothing can walk on or off one.",
+    triggerCellTypes: [],
+    miniGrid: [[0]],
+    steps: [
+      {
+        uiCallout: { icon: "restart", label: "Replay" },
+        durationMs: 2600,
+        caption: "That move left you stranded with no way to reach the cave. Tap ↻ Replay to restart the level instantly, no penalty.",
       },
     ],
   },

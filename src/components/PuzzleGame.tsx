@@ -81,6 +81,12 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { CampaignDialog } from "./CampaignDialog";
 import { CampaignJourneyOverlay } from "./CampaignJourneyOverlay";
 import { hasSeenCampaignIntro, markCampaignIntroSeen } from "@/lib/campaignIntroSeen";
+import { getRemoteArrowHintDone, setRemoteArrowHintDone } from "@/lib/interactiveHints";
+import {
+  DISABLED_VIEW_MODES_UPDATED_EVENT,
+  getDisabledViewModes,
+  subscribeToDisabledViewModes,
+} from "@/lib/viewModePrefs";
 import { HowToPlayDialog } from "./HowToPlayDialog";
 import { TouchControls } from "./TouchControls";
 import { getLevelImageUrl } from "@/components/level-mapper/levelImageStore";
@@ -444,31 +450,21 @@ export const PuzzleGame = () => {
     }
     return "top";
   });
-  // Which camera modes the view-cycle button skips — set by admins in the Mapper, not by the
-  // player (there's no in-game control for this anymore). Synced live via the "storage" event
-  // so a change made in another tab (e.g. the Mapper) takes effect without a reload.
-  const parseDisabledViewModes = (raw: string | null): Set<ViewMode> => {
-    if (!raw) return new Set();
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return new Set();
-      return new Set(parsed.filter((m): m is ViewMode => (VIEW_MODES as readonly string[]).includes(m)));
-    } catch {
-      return new Set();
-    }
-  };
-  const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => {
-    if (typeof window === "undefined") return new Set();
-    return parseDisabledViewModes(localStorage.getItem("stone-age-disabled-view-modes"));
-  });
+  // Which camera modes the view-cycle button skips — a universal, admin-only, Supabase-backed
+  // setting (see viewModePrefs.ts + schema_disabled_view_modes.sql) that affects every player,
+  // not just the admin's own browser. Kept fresh via a Realtime subscription so a change made in
+  // the Mapper takes effect for everyone already playing, without a reload.
+  const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(
+    () => new Set(getDisabledViewModes())
+  );
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== "stone-age-disabled-view-modes") return;
-      setDisabledViewModes(parseDisabledViewModes(e.newValue));
+    const refresh = () => setDisabledViewModes(new Set(getDisabledViewModes()));
+    window.addEventListener(DISABLED_VIEW_MODES_UPDATED_EVENT, refresh);
+    const unsubscribe = subscribeToDisabledViewModes();
+    return () => {
+      window.removeEventListener(DISABLED_VIEW_MODES_UPDATED_EVENT, refresh);
+      unsubscribe();
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
   }, []);
   const cyclableViewModes = useMemo(() => {
     const remaining = VIEW_MODES.filter((m) => !disabledViewModes.has(m));
@@ -739,6 +735,12 @@ export const PuzzleGame = () => {
   const [tutorialQueue, setTutorialQueue] = useState<TutorialDefinition[]>([]);
   const [tutorialsEnabled, setTutorialsEnabledState] = useState(() => getTutorialsEnabled());
   const isTutorialActive = tutorialQueue.length > 0;
+  // Hands-on follow-up to the arrow-single/arrow-remote animated tutorials: once those are
+  // dismissed, walks the player through the same 3 actions on the REAL board — select an arrow
+  // remotely, move it, then switch control back — advancing only once each is actually done.
+  // One-time (see interactiveHints.ts), scoped to the first couple of levels.
+  const [remoteArrowHintStage, setRemoteArrowHintStage] = useState<"select" | "move" | "deselect" | null>(null);
+  const remoteArrowHintMoveOriginRef = useRef<{ x: number; y: number } | null>(null);
   const [musicEnabled, setMusicEnabledState] = useState(() => getMusicEnabled());
   const musicElRef = useRef<HTMLAudioElement | null>(null);
 
@@ -898,9 +900,107 @@ export const PuzzleGame = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderGrid, currentLevel?.id, tutorialsEnabled, isReplaying]);
 
+  // A player standing on a void tile is always stuck — void can't be walked on or off (see
+  // movement.ts's "Fire, water, void impassable" rule), only reached via a glide that ran out of
+  // room before hitting a real stopping point. First possible on level 3. One-time nudge toward
+  // Replay rather than leaving them to figure out the softlock on their own.
+  useEffect(() => {
+    if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
+    if (!currentLevel || currentLevel.id !== 3 || renderGrid.length === 0) return;
+    if (isBuilding || isComplete || isTimeUp) return;
+    if (getSeenTutorials().has("stuck-reminder")) return;
+    const pos = renderPlayers.find((p) => p.isLocal)?.pos;
+    if (!pos) return;
+    if (renderGrid[pos.y]?.[pos.x] !== 5) return;
+    const def = getTutorialDefinition("stuck-reminder");
+    if (def) setTutorialQueue([def]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderGrid, renderPlayers, currentLevel?.id, tutorialsEnabled, isReplaying, isTutorialActive, isBuilding, isComplete, isTimeUp]);
+
   const handleTutorialsDone = useCallback((shown: TutorialDefinition[]) => {
     for (const t of shown) markTutorialSeen(t.id);
     setTutorialQueue([]);
+  }, []);
+
+  // Re-arm the hands-on hint fresh on every level change rather than letting a stale stage from
+  // the previous level linger (e.g. player cleared level 1 mid-hint without finishing it).
+  useEffect(() => {
+    setRemoteArrowHintStage(null);
+    remoteArrowHintMoveOriginRef.current = null;
+  }, [currentLevel?.id]);
+
+  // Starts the hands-on walkthrough once any animated tutorial for the level has been dismissed
+  // — real board, real arrow, real controls, not the mini demo grid. Requires an arrow that can
+  // ACTUALLY be remotely relayed (attemptRemoteArrowMove succeeds in at least one of its own
+  // valid directions), not just any arrow tile — a single-direction arrow boxed in immediately
+  // adjacent to void/stone in its only direction can never be moved remotely, and pointing the
+  // walkthrough at one of those would leave "move it" stuck forever with nothing the player does
+  // ever working.
+  useEffect(() => {
+    if (remoteArrowHintStage !== null) return;
+    if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
+    if (!currentLevel || currentLevel.id > 2 || renderGrid.length === 0) return;
+    if (isBuilding || isComplete || isTimeUp) return;
+    if (getRemoteArrowHintDone()) return;
+    const sim = simRef.current;
+    const baseGrid = sim?.baseGrid ?? renderGrid;
+    const breakableRockStates = sim?.breakableRockStates ?? new Map();
+    const hasMovableArrow = renderGrid.some((row, y) =>
+      row.some((cell, x) => {
+        const type = cell as CellType;
+        if (!isArrowCell(type)) return false;
+        // playerPos is required by GameState but unused by attemptRemoteArrowMove itself, so a
+        // placeholder is fine here — localPlayerPos isn't declared until further down the
+        // component and pulling it in as a dependency isn't needed for this check anyway.
+        const testState: GameState = {
+          grid: renderGrid,
+          baseGrid,
+          playerPos: { x: 0, y: 0 },
+          inventory: EMPTY_KEYS,
+          selectedArrow: { x, y },
+          breakableRockStates,
+          isGliding: false,
+          isComplete: false,
+        };
+        return getArrowDirections(type).some((dir) => attemptRemoteArrowMove(testState, dir.dx, dir.dy).glidePath);
+      })
+    );
+    if (!hasMovableArrow) return;
+    setRemoteArrowHintStage("select");
+  }, [remoteArrowHintStage, tutorialsEnabled, isReplaying, isTutorialActive, currentLevel, renderGrid, isBuilding, isComplete, isTimeUp]);
+
+  // Advances the walkthrough purely off real selectedArrow transitions — no separate detection
+  // logic needed since selecting/moving/deselecting an arrow already flows through this state.
+  useEffect(() => {
+    if (remoteArrowHintStage === "select") {
+      if (selectedArrow) {
+        remoteArrowHintMoveOriginRef.current = { ...selectedArrow };
+        setRemoteArrowHintStage("move");
+      }
+      return;
+    }
+    if (remoteArrowHintStage === "move") {
+      if (!selectedArrow) {
+        // Deselected before actually moving it (e.g. tapped it again right away) — let them
+        // try again rather than treating that as having learned the "move" step.
+        setRemoteArrowHintStage("select");
+        return;
+      }
+      const origin = remoteArrowHintMoveOriginRef.current;
+      if (origin && (selectedArrow.x !== origin.x || selectedArrow.y !== origin.y)) {
+        setRemoteArrowHintStage("deselect");
+      }
+      return;
+    }
+    if (remoteArrowHintStage === "deselect" && !selectedArrow) {
+      setRemoteArrowHintStage(null);
+      setRemoteArrowHintDone(true);
+    }
+  }, [selectedArrow, remoteArrowHintStage]);
+
+  const dismissRemoteArrowHint = useCallback(() => {
+    setRemoteArrowHintStage(null);
+    setRemoteArrowHintDone(true);
   }, []);
 
   const handleToggleTutorialsEnabled = useCallback((checked: boolean) => {
@@ -3933,6 +4033,28 @@ export const PuzzleGame = () => {
         )}
         {isTutorialActive && (
           <TutorialOverlay queue={tutorialQueue} onDone={handleTutorialsDone} />
+        )}
+        {remoteArrowHintStage && !isTutorialActive && !isComplete && !isTimeUp && (
+          <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+5.25rem)] z-[65] flex justify-center px-4">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-amber-300/40 bg-stone-950/92 px-4 py-2.5 text-stone-50 shadow-2xl backdrop-blur-md">
+              <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-300" />
+              <span className="text-sm font-semibold">
+                {remoteArrowHintStage === "select"
+                  ? "Tap an arrow tile to select it — you don't need to stand next to it."
+                  : remoteArrowHintStage === "move"
+                    ? "Now use your movement controls to slide it."
+                    : "Tap the arrow again (or your dinosaur) to switch control back."}
+              </span>
+              <button
+                onClick={dismissRemoteArrowHint}
+                aria-label="Dismiss hint"
+                title="Dismiss hint"
+                className="ml-1 shrink-0 text-stone-400 hover:text-stone-100"
+              >
+                ×
+              </button>
+            </div>
+          </div>
         )}
         {hudMessage && !isComplete && !isTimeUp && (
           <div
