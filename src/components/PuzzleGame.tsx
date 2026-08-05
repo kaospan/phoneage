@@ -879,23 +879,49 @@ export const PuzzleGame = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderGrid, currentLevel?.id, tutorialsEnabled, isReplaying]);
 
-  // A player standing on a void tile is always stuck — void can't be walked on or off (see
-  // movement.ts's "Fire, water, void impassable" rule), only reached via a glide that ran out of
-  // room before hitting a real stopping point. Possible on any level with the right layout
-  // (first reachable on level 3), so this isn't pinned to one — same one-time-ever gate as every
-  // other tutorial (still reachable afterward via the "?" Watch Again menu).
+  // Truly stuck = none of the 4 directions produce a real move (walk or glide) from the player's
+  // current tile — checked directly against the real move rules rather than special-casing "on a
+  // void tile", since void is only a dead end when nothing walkable is adjacent to it (e.g. a
+  // glide that ran out of room), not always. Each probe runs against a throwaway clone of the
+  // grid/rock-state/inventory — attemptPlayerMove has real side effects (breaking a rock, taking
+  // a key) that must never actually apply just from checking whether a move would succeed.
+  // Drives both the (one-time-ever) "Stuck?" tutorial below and a recurring, un-gated pulse on
+  // the Restart Level button every time this happens, not just the first.
+  const isPlayerStuck = useMemo(() => {
+    if (!currentLevel || renderGrid.length === 0) return false;
+    if (isBuilding || isComplete || isTimeUp || isReplaying || isTutorialActive) return false;
+    const localPlayer = renderPlayers.find((p) => p.isLocal);
+    if (!localPlayer) return false;
+    const sim = simRef.current;
+    const baseGrid = sim?.baseGrid ?? renderGrid;
+    const breakableRockStates = sim?.breakableRockStates ?? new Map();
+    const cloneGrid = (g: CellType[][]) => g.map((row) => [...row]);
+    const DIRECTIONS = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+    const hasAnyMove = DIRECTIONS.some(({ dx, dy }) => {
+      const probeState: GameState = {
+        grid: cloneGrid(renderGrid),
+        baseGrid: cloneGrid(baseGrid),
+        playerPos: localPlayer.pos,
+        inventory: { ...localPlayer.keys },
+        selectedArrow: null,
+        breakableRockStates: new Map(breakableRockStates),
+        isGliding: false,
+        isComplete: false,
+      };
+      const outcome = attemptPlayerMove(probeState, dx, dy);
+      return !!(outcome.newPlayerPos || outcome.glidePath);
+    });
+    return !hasAnyMove;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderGrid, renderPlayers, currentLevel?.id, isBuilding, isComplete, isTimeUp, isReplaying, isTutorialActive]);
+
   useEffect(() => {
     if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
-    if (!currentLevel || renderGrid.length === 0) return;
-    if (isBuilding || isComplete || isTimeUp) return;
+    if (!isPlayerStuck) return;
     if (getSeenTutorials().has("stuck-reminder")) return;
-    const pos = renderPlayers.find((p) => p.isLocal)?.pos;
-    if (!pos) return;
-    if (renderGrid[pos.y]?.[pos.x] !== 5) return;
     const def = getTutorialDefinition("stuck-reminder");
     if (def) setTutorialQueue([def]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderGrid, renderPlayers, currentLevel?.id, tutorialsEnabled, isReplaying, isTutorialActive, isBuilding, isComplete, isTimeUp]);
+  }, [isPlayerStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
 
   const handleTutorialsDone = useCallback((shown: TutorialDefinition[]) => {
     for (const t of shown) markTutorialSeen(t.id);
@@ -2847,11 +2873,15 @@ export const PuzzleGame = () => {
           variant="outline"
           size="sm"
           disabled={isComplete || localPlayer?.isGliding}
-          className={
+          className={[
             isMobilePortrait
               ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
-              : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20"
-          }
+              : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
+            // Subtle recurring nudge toward the way out whenever no move is currently possible
+            // — not gated to "first time ever" like the Stuck? tutorial, since it should still
+            // catch the eye every time this happens, not just once per player.
+            isPlayerStuck ? "animate-stuck-hint-pulse" : "",
+          ].join(" ")}
           title="Restart level (R)"
         >
           {/* Icon-only on mobile (no room for a label there), but enlarged and amber-accented so
@@ -2949,16 +2979,22 @@ export const PuzzleGame = () => {
           </Button>
         )}
 
-        <Button
-          onClick={() => void toggleFullscreenMode()}
-          variant="ghost"
-          size="sm"
-          className="h-9 px-2 text-base font-bold hover:bg-primary/20"
-          title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
-          aria-pressed={isFullscreenMode}
-        >
-          ⛶
-        </Button>
+        {/* In landscape/desktop this same control is rendered separately, outside the scrollable
+            cluster this list sits in (see the standalone Expand button below) — keeping a copy
+            here too would either duplicate it or get scrolled out of reach. Mobile portrait has
+            no such duplicate, so it stays here for that layout. */}
+        {isMobilePortrait && (
+          <Button
+            onClick={() => void toggleFullscreenMode()}
+            variant="ghost"
+            size="sm"
+            className="h-9 px-2 text-base font-bold hover:bg-primary/20"
+            title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
+            aria-pressed={isFullscreenMode}
+          >
+            ⛶
+          </Button>
+        )}
 
         {!isFullscreenMode && (cameraOffset.x !== 0 || cameraOffset.z !== 0) && (
           <Button
@@ -3150,7 +3186,7 @@ export const PuzzleGame = () => {
                     >
                       <RotateCcw className="h-5 w-5 text-stone-200" />
                       <div>
-                        <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Replay</div>
+                        <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Restart Level</div>
                         <div className="mt-1 text-sm font-semibold">Restart Stage</div>
                       </div>
                     </button>
@@ -3430,8 +3466,25 @@ export const PuzzleGame = () => {
 
             {/* Right HUD cluster — hidden in mobile portrait, where these controls live in the bottom HUD bar instead */}
             {!isMobilePortrait && (
-              <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-[calc(50vw-8px)] overflow-x-auto">
-                {secondaryHudButtons}
+              <div className="flex shrink-0 items-center gap-1.5">
+                <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-[calc(50vw-56px)] overflow-x-auto">
+                  {secondaryHudButtons}
+                </div>
+                {/* Kept OUTSIDE the scrollable cluster above (not just another item in
+                    secondaryHudButtons) so it's never the one that gets scrolled off-screen —
+                    this is what auto-enters fullscreen in landscape, so it needs to stay
+                    reachable to exit again, not disappear off the edge of a cramped toolbar. */}
+                <Button
+                  onClick={() => void toggleFullscreenMode()}
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 shrink-0 rounded-lg border border-amber-300/50 bg-amber-400/15 p-0 text-amber-200 hover:bg-amber-400/25"
+                  title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
+                  aria-pressed={isFullscreenMode}
+                  aria-label={isFullscreenMode ? "Exit fullscreen layout" : "Enter fullscreen layout"}
+                >
+                  <Expand className="h-4 w-4" />
+                </Button>
               </div>
             )}
           </div>
@@ -3522,11 +3575,14 @@ export const PuzzleGame = () => {
                     variant="ghost"
                     size="sm"
                     disabled={isComplete || localPlayer?.isGliding}
-                    className="h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-stone-50 hover:bg-white/10"
+                    className={[
+                      "h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-stone-50 hover:bg-white/10",
+                      isPlayerStuck ? "animate-stuck-hint-pulse" : "",
+                    ].join(" ")}
                     title="Restart level (R)"
                   >
                     <RotateCcw className="mr-2 h-4 w-4" />
-                    Replay
+                    Restart Level
                   </Button>
 
                   <HowToPlayDialog disabled={shouldRotateGate} />
@@ -3713,6 +3769,7 @@ export const PuzzleGame = () => {
                 rotateUpright={isMobilePortrait}
                 theme={currentLevel.theme}
                 idleArrowHintDirections={idleArrowHintDirections}
+                levelId={currentLevel?.id ?? null}
                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];
@@ -3767,6 +3824,7 @@ export const PuzzleGame = () => {
                     rotateUpright={isMobilePortrait}
                     theme={currentLevel.theme}
                     idleArrowHintDirections={idleArrowHintDirections}
+                    levelId={currentLevel?.id ?? null}
                     onArrowClick={(x, y) => {
                       if (localPlayer?.isGliding) return;
                       const cell = renderGrid[y]?.[x];
@@ -4001,7 +4059,7 @@ export const PuzzleGame = () => {
                   onClick={resetLevel}
                   className="bg-red-300 text-stone-950 hover:bg-red-200"
                 >
-                  Replay Level
+                  Restart Level
                 </Button>
               </div>
             </div>
@@ -4074,7 +4132,7 @@ export const PuzzleGame = () => {
                   variant="outline"
                   className="border-white/15 bg-white/5 text-stone-50 hover:bg-white/10"
                 >
-                  Replay
+                  Restart Level
                 </Button>
                 {getRecordedRun(completionSummary.levelId) && (
                   <Button

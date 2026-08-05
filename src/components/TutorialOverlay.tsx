@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import dinotoonUrl from "@/assets/dinotoon.png";
+import { CaveTile } from "@/components/tiles/CaveTile";
+import { CrackedRockTile } from "@/components/tiles/CrackedRockTile";
+import { ArrowBg, ArrowGlyph, ArrowTile } from "@/components/tiles/ArrowTile";
 import { isArrowCell } from "@/game/arrows";
 import type { CellType } from "@/game/types";
 import type { TutorialDefinition, TutorialSound } from "@/lib/tutorials/tutorialTypes";
 import { Button } from "@/components/ui/button";
+import { createVortexIconDataUrl } from "@/lib/canvasIcons";
 
 const CELL_PX = 64;
 
@@ -55,55 +59,45 @@ const playTutorialSound = (sound: TutorialSound | undefined) => {
 
 // ─── Mini-board tile rendering ─────────────────────────────────────────────────
 
-const TileBg = ({ type }: { type: number }) => {
+// Same vortex icon the real game's teleport pad uses (createVortexIconDataUrl is deterministic —
+// see canvasIcons.ts — so this is cached once rather than redrawn on every render).
+let vortexUrl: string | null | undefined;
+const getVortexUrl = (): string | null => {
+  if (vortexUrl === undefined) {
+    vortexUrl = typeof window !== "undefined" ? createVortexIconDataUrl(128) : null;
+  }
+  return vortexUrl;
+};
+
+const TileBg = ({ type, uid }: { type: number; uid: string }) => {
   switch (type) {
     case 0: // floor
       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#d9a55a,#b8823a)" }} />;
     case 2: // stone
       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#5b4d42,#332a22)" }} />;
-    case 3: // cave/goal
-      return (
-        <div className="flex h-full w-full items-center justify-center" style={{ background: "#241a12" }}>
-          <div className="h-3/5 w-3/5 rounded-t-full" style={{ background: "radial-gradient(circle at 50% 30%,#22c55e,#14532d)" }} />
-        </div>
-      );
+    case 3: // cave/goal — the real game's ladder-arch tile, not a placeholder, so this reads as
+      // the same "ladder" players will actually see (see the original complaint this fixed).
+      return <CaveTile uid={uid} isStart={false} />;
+    case 18: // start marker — same arch, unlit (no ladder drawn inside)
+      return <CaveTile uid={uid} isStart />;
     case 5: // void
       return <div className="h-full w-full" style={{ background: "#0a0a0c" }} />;
-    case 6: // breakable rock
-      return (
-        <div className="relative h-full w-full" style={{ background: "linear-gradient(135deg,#8a6238,#5c3f1f)" }}>
-          <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full">
-            <path d="M50,50 L40,20 M50,50 L75,35 M50,50 L65,80 M50,50 L20,65" stroke="rgba(0,0,0,0.7)" strokeWidth="4" fill="none" />
-          </svg>
-        </div>
-      );
-    case 14: case 15: case 16: case 17: case 19: case 20:
+    case 6: // breakable rock — the real game's shattered-facet tile, not a placeholder
+      return <CrackedRockTile uid={uid} />;
+    case 19: // teleport — same purple pad color as the real game's IconTile
+      return <div className="h-full w-full" style={{ background: "rgba(70,0,140,0.78)" }} />;
+    case 14: case 15: case 16: case 17: case 20:
       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#c8a455,#8a6a2f)" }} />;
-    default: // arrow tiles share a warm background
+    default:
+      // Arrows use the real game's own amber tile background, not a placeholder gradient.
+      if (isArrowCell(type as CellType)) return <ArrowBg uid={uid} />;
       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#c8a455,#8a6a2f)" }} />;
   }
 };
 
 const TileIcon = ({ type }: { type: number }) => {
-  const arrowRotation: Record<number, number> = { 7: 0, 8: 90, 9: 180, 10: 270 };
-  if (type >= 7 && type <= 10) {
-    return (
-      <svg viewBox="0 0 32 32" className="h-2/3 w-2/3" style={{ transform: `rotate(${arrowRotation[type]}deg)` }}>
-        <path d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z" fill="#f6c84f" stroke="rgba(0,0,0,0.7)" strokeWidth="2" />
-      </svg>
-    );
-  }
-  if (type === 11 || type === 12 || type === 13) {
-    return (
-      <svg viewBox="0 0 32 32" className="h-2/3 w-2/3" style={{ transform: type === 12 ? "rotate(90deg)" : undefined }}>
-        <path
-          d="M13 13 L13 8 L10 8 L16 2 L22 8 L19 8 L19 13 L24 13 L24 10 L30 16 L24 22 L24 19 L19 19 L19 24 L22 24 L16 30 L10 24 L13 24 L13 19 L8 19 L8 22 L2 16 L8 10 L8 13 Z"
-          fill="#f6c84f"
-          stroke="rgba(0,0,0,0.7)"
-          strokeWidth="1.5"
-        />
-      </svg>
-    );
+  if (isArrowCell(type as CellType)) {
+    return <ArrowGlyph type={type} />;
   }
   if (type === 14 || type === 15) {
     return <div className="text-2xl">{type === 14 ? "🗝️" : "🔑"}</div>;
@@ -112,12 +106,9 @@ const TileIcon = ({ type }: { type: number }) => {
     return <div className="text-2xl">🔒</div>;
   }
   if (type === 19) {
-    return (
-      <svg viewBox="0 0 32 32" className="h-2/3 w-2/3">
-        <circle cx="16" cy="16" r="12" fill="none" stroke="#c084fc" strokeWidth="3" />
-        <circle cx="16" cy="16" r="6" fill="#c084fc" opacity="0.7" />
-      </svg>
-    );
+    const url = getVortexUrl();
+    if (!url) return null;
+    return <img src={url} alt="" aria-hidden className="pointer-events-none" style={{ width: "72%", height: "72%", objectFit: "contain" }} />;
   }
   if (type === 20) {
     return <div className="text-2xl">⏳</div>;
@@ -162,28 +153,21 @@ interface TutorialOverlayProps {
   onDone: (shown: TutorialDefinition[]) => void;
 }
 
-// Steps auto-advance (that's the walkthrough animation), but the overlay itself must never
-// disappear on its own — only an explicit click (Skip, Got it, or the ×) may close it. Slowed
-// down from the original pacing so captions have time to actually be read.
-const STEP_DURATION_MULTIPLIER = 1.5;
-// A step's authored durationMs is tuned for its animation (a tap, a glide), not for reading —
-// short "beat" steps with no new caption text stay fast, but any step that puts a fresh sentence
-// on screen gets a floor scaled to its length so it can't fly by before it's readable.
-const CAPTION_READING_MS_BASE = 1000;
-const CAPTION_READING_MS_PER_CHAR = 40;
-
 export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   const [tutorialIndex, setTutorialIndex] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const [awaitingDismiss, setAwaitingDismiss] = useState(false);
+  // While true, the mini-grid renders the PREVIOUS step's positions (see displayStep below) so a
+  // "Replay" click can snap back and re-play the current step's slide-in from the start.
+  const [isRewinding, setIsRewinding] = useState(false);
   const shownRef = useRef<TutorialDefinition[]>([]);
-  const timerRef = useRef<number | null>(null);
+  const replayTimerRef = useRef<number | null>(null);
 
   const tutorial = queue[tutorialIndex] ?? null;
   const step = tutorial?.steps[stepIndex] ?? null;
 
   const finish = () => {
-    if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    if (replayTimerRef.current != null) window.clearTimeout(replayTimerRef.current);
     onDone(shownRef.current);
   };
 
@@ -205,30 +189,45 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   };
 
   const skip = () => {
-    // Skipping still marks every queued tutorial as "shown" — the player has seen the prompt.
+    // Skipping marks every queued tutorial (and all of their steps) as "shown" and closes the
+    // whole overlay in one go — it's an escape hatch out of the entire walkthrough, not just the
+    // single tutorial or step currently on screen.
+    if (replayTimerRef.current != null) window.clearTimeout(replayTimerRef.current);
     shownRef.current = [...queue];
     finish();
   };
 
   // Replays the whole queue from the top without closing the overlay — lets a player who just
   // finished immediately watch it again instead of having to dig it out of the "?" menu later.
+  // Still goes one step at a time (Got it required each time), same as the first time through.
   const replay = () => {
+    setIsRewinding(false);
     setTutorialIndex(0);
     setStepIndex(0);
     setAwaitingDismiss(false);
   };
 
+  // Replays only the step currently on screen: snap back to how things looked just before this
+  // step ran (no transition), then a beat later snap forward again WITH transitions enabled, so
+  // the slide/tap/glide animation visibly plays again from the start.
+  const replayCurrentStep = () => {
+    if (replayTimerRef.current != null) window.clearTimeout(replayTimerRef.current);
+    setIsRewinding(true);
+    replayTimerRef.current = window.setTimeout(() => {
+      setIsRewinding(false);
+      playTutorialSound(step?.sound);
+    }, 70);
+  };
+
+  // Sound plays once when a step first appears — advancing is otherwise entirely manual (Got it).
   useEffect(() => {
     if (!step || awaitingDismiss) return;
     playTutorialSound(step.sound);
-    const readingFloorMs = step.caption
-      ? CAPTION_READING_MS_BASE + step.caption.length * CAPTION_READING_MS_PER_CHAR
-      : 0;
-    const delay = Math.max(step.durationMs * STEP_DURATION_MULTIPLIER, readingFloorMs);
-    timerRef.current = window.setTimeout(advance, delay);
-    return () => { if (timerRef.current != null) window.clearTimeout(timerRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutorialIndex, stepIndex, awaitingDismiss]);
+  }, [tutorialIndex, stepIndex, awaitingDismiss, step]);
+
+  useEffect(() => {
+    return () => { if (replayTimerRef.current != null) window.clearTimeout(replayTimerRef.current); };
+  }, []);
 
   const rows = tutorial?.miniGrid.length ?? 0;
   const cols = tutorial?.miniGrid[0]?.length ?? 0;
@@ -246,14 +245,22 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
     return null;
   }, [tutorial]);
 
+  // The step whose POSITIONS actually get rendered — the previous step's while rewinding (so the
+  // replay has something to animate back from), otherwise the current step.
+  const prevStep = tutorial && stepIndex > 0 ? tutorial.steps[stepIndex - 1] ?? null : null;
+  const displayStep = isRewinding ? prevStep : step;
+
   const transform = useMemo(() => {
-    if (!step?.cameraFocus) return "";
-    const cx = (step.cameraFocus.x + 0.5) * CELL_PX;
-    const cy = (step.cameraFocus.y + 0.5) * CELL_PX;
-    return `translate(calc(50% - ${cx}px), calc(50% - ${cy}px)) scale(${step.cameraZoom ?? 1})`;
-  }, [step]);
+    if (!displayStep?.cameraFocus) return "";
+    const cx = (displayStep.cameraFocus.x + 0.5) * CELL_PX;
+    const cy = (displayStep.cameraFocus.y + 0.5) * CELL_PX;
+    return `translate(calc(50% - ${cx}px), calc(50% - ${cy}px)) scale(${displayStep.cameraZoom ?? 1})`;
+  }, [displayStep]);
 
   const transitionMs = step?.slowMotion ? 900 : 320;
+  // Instant (no transition) while snapping back for a replay; normal speed otherwise.
+  const posTransition = isRewinding ? "none" : `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`;
+  const transformTransition = isRewinding ? "none" : `transform ${transitionMs}ms ease-in-out`;
 
   if (!tutorial || !step) return null;
 
@@ -292,15 +299,15 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                     height: rows * CELL_PX,
                     transform,
                     transformOrigin: "top left",
-                    transition: `transform ${transitionMs}ms ease-in-out`,
+                    transition: transformTransition,
                   }}
                 >
                   {tutorial.miniGrid.map((row, y) =>
                     row.map((cellType, x) => {
-                      const isHighlighted = step.highlightCells?.some((c) => c.x === x && c.y === y);
-                      // When the arrow block is rendered as a sliding sprite (step.arrowAt),
-                      // suppress its static grid icon so it isn't drawn twice.
-                      const arrowSpriteActive = step.arrowAt && arrowCell;
+                      const isHighlighted = displayStep?.highlightCells?.some((c) => c.x === x && c.y === y);
+                      // When the arrow block is rendered as a sliding sprite (arrowAt), suppress
+                      // its static grid icon so it isn't drawn twice.
+                      const arrowSpriteActive = displayStep?.arrowAt && arrowCell;
                       const isMovedArrowCell =
                         arrowSpriteActive && arrowCell && x === arrowCell.x && y === arrowCell.y;
                       return (
@@ -316,7 +323,7 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                             transition: "box-shadow 250ms ease-in-out",
                           }}
                         >
-                          <TileBg type={cellType} />
+                          <TileBg type={cellType} uid={`tut-${x}-${y}`} />
                           {!isMovedArrowCell && (
                             <div className="absolute inset-0 flex items-center justify-center">
                               <TileIcon type={cellType} />
@@ -327,33 +334,34 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                     }),
                   )}
 
-                  {/* Sliding arrow block sprite (e.g. when demonstrating a remote move) */}
-                  {step.arrowAt && arrowCell && (
+                  {/* Sliding arrow block — the whole tile (background + glyph), same as the real
+                      game, so it reads as an actual block traveling, not just a floating icon. */}
+                  {displayStep?.arrowAt && arrowCell && (
                     <div
-                      className="absolute flex items-center justify-center"
+                      className="absolute"
                       style={{
-                        left: step.arrowAt.x * CELL_PX,
-                        top: step.arrowAt.y * CELL_PX,
+                        left: displayStep.arrowAt.x * CELL_PX,
+                        top: displayStep.arrowAt.y * CELL_PX,
                         width: CELL_PX,
                         height: CELL_PX,
-                        transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                        transition: posTransition,
                         pointerEvents: "none",
                       }}
                     >
-                      <TileIcon type={arrowCell.type} />
+                      <ArrowTile uid="tut-arrow-sprite" type={arrowCell.type} />
                     </div>
                   )}
 
                   {/* Character */}
-                  {step.characterAt && (
+                  {displayStep?.characterAt && (
                     <div
                       className="absolute flex items-center justify-center"
                       style={{
-                        left: step.characterAt.x * CELL_PX,
-                        top: step.characterAt.y * CELL_PX,
+                        left: displayStep.characterAt.x * CELL_PX,
+                        top: displayStep.characterAt.y * CELL_PX,
                         width: CELL_PX,
                         height: CELL_PX,
-                        transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                        transition: posTransition,
                       }}
                     >
                       <img src={dinotoonUrl} alt="" className="h-[85%] w-[85%] object-contain" style={{ imageRendering: "auto" }} />
@@ -361,15 +369,15 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                   )}
 
                   {/* Animated finger cursor */}
-                  {step.fingerAt && (
+                  {displayStep?.fingerAt && (
                     <div
                       className="absolute flex items-center justify-center"
                       style={{
-                        left: step.fingerAt.x * CELL_PX,
-                        top: step.fingerAt.y * CELL_PX,
+                        left: displayStep.fingerAt.x * CELL_PX,
+                        top: displayStep.fingerAt.y * CELL_PX,
                         width: CELL_PX,
                         height: CELL_PX,
-                        transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                        transition: posTransition,
                       }}
                     >
                       <FingerCursor />
@@ -411,14 +419,35 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                 </Button>
               </div>
             ) : (
-              <Button
-                onClick={skip}
-                variant="ghost"
-                size="sm"
-                className="mt-4 text-sm text-stone-300 hover:bg-white/10 hover:text-stone-50"
-              >
-                Skip
-              </Button>
+              <>
+                <div className="mt-5 flex items-center gap-3">
+                  <Button
+                    onClick={replayCurrentStep}
+                    disabled={isRewinding}
+                    variant="outline"
+                    size="lg"
+                    className="gap-2 border-white/15 bg-white/5 text-stone-100 hover:bg-white/15"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Replay
+                  </Button>
+                  <Button
+                    onClick={advance}
+                    size="lg"
+                    className="bg-amber-400 px-8 text-base font-black text-stone-950 hover:bg-amber-300"
+                  >
+                    Got it
+                  </Button>
+                </div>
+                <Button
+                  onClick={skip}
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 text-sm text-stone-300 hover:bg-white/10 hover:text-stone-50"
+                >
+                  Skip
+                </Button>
+              </>
             )}
           </div>
         </div>

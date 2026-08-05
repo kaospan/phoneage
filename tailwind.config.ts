@@ -107,6 +107,19 @@ export default {
           "0%, 100%": { boxShadow: "0 0 10px 3px rgba(255,255,255,0.5)" },
           "50%": { boxShadow: "0 0 22px 8px rgba(255,255,255,0.95)" },
         },
+        "goal-intro-glow": {
+          "0%, 100%": { filter: "drop-shadow(0 0 6px rgba(253,224,71,0.35))", transform: "scale(1)" },
+          "50%": { filter: "drop-shadow(0 0 24px rgba(253,224,71,0.95))", transform: "scale(1.07)" },
+        },
+        "climb-out-of-cave": {
+          "0%": { opacity: "0", transform: "translateY(55%) scale(0.55)" },
+          "60%": { opacity: "1", transform: "translateY(-6%) scale(1.05)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "stuck-hint-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(251,191,36,0)" },
+          "50%": { boxShadow: "0 0 0 6px rgba(251,191,36,0.35)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -116,6 +129,9 @@ export default {
         "map-dot-pop": "map-dot-pop 0.45s ease-out backwards",
         "map-trail-flow": "map-trail-flow 1.1s linear infinite",
         "selected-arrow-pulse": "selected-arrow-pulse 1.1s ease-in-out infinite",
+        "goal-intro-glow": "goal-intro-glow 0.85s ease-in-out infinite",
+        "climb-out-of-cave": "climb-out-of-cave 0.8s cubic-bezier(0.34,1.56,0.64,1) backwards",
+        "stuck-hint-pulse": "stuck-hint-pulse 1.6s ease-in-out infinite",
       },
     },
   },

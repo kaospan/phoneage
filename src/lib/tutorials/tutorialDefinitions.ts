@@ -72,9 +72,9 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
         caption: "Reach the ladder to clear the level!",
       },
       {
-        uiCallout: { icon: "restart", label: "Replay" },
+        uiCallout: { icon: "restart", label: "Restart Level" },
         durationMs: 2800,
-        caption: "Heads up: some moves can leave you stuck with no way to finish — the game won't warn you. Remember this ↻ Replay button — it restarts the level instantly, no penalty.",
+        caption: "Heads up: some moves can leave you stuck with no way to finish — the game won't warn you. Remember this ↻ Restart Level button — it restarts the level instantly, no penalty.",
       },
     ],
   },
@@ -85,12 +85,14 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
     // which has no caption of its own. The full explanation is already spread across that step's
     // sibling captions ("...until something stops you", "tap to grab", "glides on"), so nothing
     // here needs to repeat it at length.
-    text: "Arrows glide you until something stops you.",
+    text: "Step onto an arrow and it carries you across the gap to the ladder.",
     triggerCellTypes: [7, 8, 9, 10],
+    // Extended past the original wall dead-end so the step-on-and-glide demo now pays off at an
+    // actual goal — matches what the very first real level asks the player to do.
     miniGrid: [
-      [2, 2, 2, 2, 2, 2],
-      [2, 0, 8, 5, 5, 2],
-      [2, 2, 2, 2, 2, 2],
+      [2, 2, 2, 2, 2, 2, 2],
+      [2, 0, 8, 5, 5, 5, 3],
+      [2, 2, 2, 2, 2, 2, 2],
     ],
     steps: [
       {
@@ -104,20 +106,36 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
       {
         characterAt: { x: 2, y: 1 },
         fingerAt: { x: 2, y: 1 },
+        arrowAt: { x: 2, y: 1 },
         cameraFocus: { x: 2, y: 1 },
         cameraZoom: 1.4,
-        durationMs: 500,
+        durationMs: 700,
         sound: "tap",
+        caption: "Step onto it to launch.",
       },
       {
-        characterAt: { x: 4, y: 1 },
-        highlightCells: [{ x: 3, y: 1 }, { x: 4, y: 1 }],
-        cameraFocus: { x: 3, y: 1 },
-        cameraZoom: 1.4,
+        characterAt: { x: 5, y: 1 },
+        // Trails one cell behind the character rather than matching it exactly — same position
+        // would render the block sprite completely hidden under the dino (they're drawn in the
+        // same cell), so the "block travels with you" motion would be invisible.
+        arrowAt: { x: 4, y: 1 },
+        highlightCells: [{ x: 3, y: 1 }, { x: 4, y: 1 }, { x: 5, y: 1 }],
+        cameraFocus: { x: 4, y: 1 },
+        cameraZoom: 1.3,
         durationMs: 1300,
         slowMotion: true,
         sound: "glide",
-        caption: "...until something stops you.",
+        caption: "It carries you across the gap...",
+      },
+      {
+        characterAt: { x: 6, y: 1 },
+        arrowAt: { x: 5, y: 1 },
+        highlightCells: [{ x: 6, y: 1 }],
+        cameraFocus: { x: 5, y: 1 },
+        cameraZoom: 1.3,
+        durationMs: 1200,
+        sound: "chime",
+        caption: "...right to the ladder. Reach the cave to clear the level!",
       },
       {
         characterAt: { x: 1, y: 1 },
@@ -473,14 +491,14 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
     // can run the player the entire length of an empty gap.
     id: "stuck-reminder",
     title: "Stuck?",
-    text: "Void tiles are a dead end — nothing can walk on or off one.",
+    text: "No moves left from here — restart the level to try again.",
     triggerCellTypes: [],
     miniGrid: [[0]],
     steps: [
       {
-        uiCallout: { icon: "restart", label: "Replay" },
+        uiCallout: { icon: "restart", label: "Restart Level" },
         durationMs: 2600,
-        caption: "That move left you stranded with no way to reach the cave. Tap ↻ Replay to restart the level instantly, no penalty.",
+        caption: "No move from here can reach the cave. Tap ↻ Restart Level to try again instantly, no penalty.",
       },
     ],
   },

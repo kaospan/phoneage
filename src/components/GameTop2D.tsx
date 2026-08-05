@@ -9,6 +9,9 @@ import {
   createHourglassIconDataUrl,
   createVortexIconDataUrl,
 } from "@/lib/canvasIcons";
+import { CaveTile } from "@/components/tiles/CaveTile";
+import { CrackedRockTile } from "@/components/tiles/CrackedRockTile";
+import { ArrowBg, ArrowGlyph } from "@/components/tiles/ArrowTile";
 
 type PlayerFacing = "up" | "right" | "down" | "left";
 
@@ -32,6 +35,8 @@ interface GameTop2DProps {
   theme?: ColorTheme;
   /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
   idleArrowHintDirections?: { dx: number; dy: number }[];
+  /** Identifies the current level so a fresh load (new id) can play its one-shot intro beat. */
+  levelId?: number | string | null;
   onArrowClick?: (x: number, y: number) => void;
   onCancelSelection?: () => void;
 }
@@ -165,135 +170,6 @@ const StoneTile = ({ uid }: { uid: string }) => (
   </svg>
 );
 
-/** Breakable rock — warmer, clearly cracked, distinct from solid stone */
-const BreakableRockTile = ({ uid }: { uid: string }) => (
-  <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
-    <defs>
-      <linearGradient id={`brg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#A88050" />
-        <stop offset="50%" stopColor="#8A6238" />
-        <stop offset="100%" stopColor="#62421E" />
-      </linearGradient>
-    </defs>
-    <rect width="100" height="100" fill={`url(#brg${uid})`} />
-    {/* Bevel */}
-    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.12)" />
-    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.08)" />
-    <polygon points="100,100 0,100 14,87 86,87" fill="rgba(0,0,0,0.28)" />
-    <polygon points="100,100 100,0 87,14 87,86" fill="rgba(0,0,0,0.20)" />
-    {/* Impact centre — dark pit */}
-    <circle cx="50" cy="50" r="5" fill="rgba(0,0,0,0.35)" />
-    {/* Crack lines — zigzag for realism */}
-    <polyline points="50,50 45,38 38,28 30,14" fill="none" stroke="rgba(15,8,2,0.92)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    <polyline points="50,50 62,44 75,30 86,18" fill="none" stroke="rgba(15,8,2,0.85)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    <polyline points="50,50 60,58 74,64 88,70" fill="none" stroke="rgba(15,8,2,0.92)" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-    <polyline points="50,50 52,66 56,78 54,92" fill="none" stroke="rgba(15,8,2,0.80)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    <polyline points="50,50 36,58 22,70 14,82" fill="none" stroke="rgba(15,8,2,0.88)" strokeWidth="2.0" strokeLinecap="round" strokeLinejoin="round" />
-    <polyline points="50,50 38,44 28,36 18,32" fill="none" stroke="rgba(15,8,2,0.75)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-    {/* Crack bright edge — light catching the split */}
-    <polyline points="50,50 45,38 38,28 30,14" fill="none" stroke="rgba(255,220,150,0.25)" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" />
-    <polyline points="50,50 60,58 74,64 88,70" fill="none" stroke="rgba(255,220,150,0.22)" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="1.5" />
-  </svg>
-);
-
-/** Cave entrance — dark archway; exit shows a modern green ladder descending into the cave */
-const CaveTile = ({ uid, isStart = false, rotate }: { uid: string; isStart?: boolean; rotate?: boolean }) => (
-  <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block", transform: rotate ? "rotate(90deg)" : undefined }}>
-    <defs>
-      {/* Rocky frame gradient */}
-      <linearGradient id={`cvf${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#524030" />
-        <stop offset="100%" stopColor="#302014" />
-      </linearGradient>
-      {/* Interior void — slightly bluer/darker for exit to contrast with green */}
-      <radialGradient id={`cvd${uid}`} cx="50%" cy="55%" r="70%">
-        <stop offset="0%" stopColor={isStart ? "#1E1408" : "#060A08"} />
-        <stop offset="65%" stopColor={isStart ? "#0E0A06" : "#020604"} />
-        <stop offset="100%" stopColor="#000000" />
-      </radialGradient>
-      {/* Base atmospheric glow — gold (start) / green (exit) */}
-      <radialGradient id={`cvglow${uid}`} cx="50%" cy="100%" r="58%">
-        <stop offset="0%" stopColor={isStart ? "rgba(220,170,60,0.25)" : "rgba(34,197,94,0.32)"} />
-        <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-      </radialGradient>
-      {/* Clip: restrict ladder to the inside of the arch */}
-      <clipPath id={`archclip${uid}`}>
-        <path d="M16,100 L16,48 Q16,10 50,10 Q84,10 84,48 L84,100 Z" />
-      </clipPath>
-      {/* Metallic green gradient for ladder rails + rungs (horizontal → tube look) */}
-      <linearGradient id={`ldr${uid}`} x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%"   stopColor="#14532D" />
-        <stop offset="30%"  stopColor="#16A34A" />
-        <stop offset="55%"  stopColor="#22C55E" />
-        <stop offset="80%"  stopColor="#15803D" />
-        <stop offset="100%" stopColor="#14532D" />
-      </linearGradient>
-      {/* Green depth glow around the ladder */}
-      <radialGradient id={`cvgr${uid}`} cx="50%" cy="62%" r="36%">
-        <stop offset="0%" stopColor="rgba(34,197,94,0.26)" />
-        <stop offset="100%" stopColor="rgba(34,197,94,0)" />
-      </radialGradient>
-    </defs>
-
-    {/* ── Rocky outer frame ── */}
-    <rect width="100" height="100" fill={`url(#cvf${uid})`} />
-
-    {/* ── Dark void inside arch ── */}
-    <path d="M16,100 L16,48 Q16,10 50,10 Q84,10 84,48 L84,100 Z" fill={`url(#cvd${uid})`} />
-
-    {/* ── Exit cave: green ladder descending into the dark ── */}
-    {!isStart && (
-      <g clipPath={`url(#archclip${uid})`}>
-        {/* Diffuse green ambient light cast from the ladder */}
-        <ellipse cx="50" cy="62" rx="20" ry="30" fill={`url(#cvgr${uid})`} />
-        {/* Left rail */}
-        <rect x="37" y="18" width="4.5" height="80" rx="2.25" fill={`url(#ldr${uid})`} />
-        <rect x="37.5" y="18" width="1.5" height="80" rx="0.75" fill="rgba(187,247,208,0.50)" />
-        {/* Right rail */}
-        <rect x="58.5" y="18" width="4.5" height="80" rx="2.25" fill={`url(#ldr${uid})`} />
-        <rect x="59" y="18" width="1.5" height="80" rx="0.75" fill="rgba(187,247,208,0.50)" />
-        {/* Rungs */}
-        {[25, 35, 45, 55, 65, 75, 85, 93].map((ry) => (
-          <g key={ry}>
-            <rect x="37" y={ry} width="26" height="3.5" rx="1.75" fill={`url(#ldr${uid})`} />
-            <rect x="38" y={ry + 0.5} width="24" height="1.2" rx="0.6" fill="rgba(187,247,208,0.55)" />
-          </g>
-        ))}
-        {/* Subtle green floor reflection at bottom */}
-        <ellipse cx="50" cy="98" rx="16" ry="4" fill="rgba(34,197,94,0.14)" />
-      </g>
-    )}
-
-    {/* ── Atmospheric bottom glow (gold/green) ── */}
-    <ellipse cx="50" cy="96" rx="26" ry="11" fill={`url(#cvglow${uid})`} />
-
-    {/* ── Arch stone rim ── */}
-    <path d="M16,48 Q16,10 50,10 Q84,10 84,48"
-          fill="none" stroke="rgba(160,130,90,0.72)" strokeWidth="3" />
-    {/* Inner receding arch shadow */}
-    <path d="M23,100 L23,50 Q23,20 50,20 Q77,20 77,50 L77,100 Z" fill="rgba(0,0,0,0.22)" />
-    <path d="M23,50 Q23,20 50,20 Q77,20 77,50"
-          fill="none" stroke="rgba(80,60,40,0.48)" strokeWidth="1.5" />
-    {/* Keystone block */}
-    <path d="M44,10 L50,4 L56,10 Z" fill="rgba(150,118,75,0.65)" />
-
-    {/* ── Frame rock texture — left ── */}
-    <path d="M4,24 Q11,18 17,24 Q19,32 12,34 Q3,33 4,24Z" fill="rgba(255,255,255,0.07)" />
-    <path d="M4,56 Q11,50 17,55 Q19,63 12,65 Q3,64 4,56Z" fill="rgba(0,0,0,0.12)" />
-    <path d="M4,78 Q10,73 15,77 Q16,84 10,85 Q3,85 4,78Z" fill="rgba(255,255,255,0.05)" />
-    {/* ── Frame rock texture — right ── */}
-    <path d="M83,36 Q90,30 97,36 Q99,44 92,46 Q83,45 83,36Z" fill="rgba(255,255,255,0.07)" />
-    <path d="M84,60 Q91,54 98,60 Q100,68 93,70 Q84,69 84,60Z" fill="rgba(0,0,0,0.10)" />
-    <path d="M84,80 Q90,75 96,79 Q98,86 92,88 Q84,87 84,80Z" fill="rgba(255,255,255,0.05)" />
-
-    {/* ── Top bevel ── */}
-    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.08)" />
-    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.06)" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.42)" strokeWidth="1.5" />
-  </svg>
-);
-
 /**
  * Stone wall — a squat 4-sided pyramid per tile (one square base, 4 triangular faces meeting
  * at a center apex), the same "block" language as the reference art. Repeated edge-to-edge,
@@ -363,62 +239,6 @@ const WaterTile = ({ uid }: { uid: string }) => (
   </svg>
 );
 
-// ─── Arrow Vector ─────────────────────────────────────────────────────────────
-
-const renderArrowVector = (tileType: number) => {
-  const shadow =
-    "drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 5px rgba(0,0,0,0.75))";
-  const common = {
-    fill: "#f6c84f",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-
-  const OneArrow = ({ dir }: { dir: "up" | "right" | "down" | "left" }) => {
-    const rotations = { up: 0, right: 90, down: 180, left: 270 };
-    return (
-      <g transform={`rotate(${rotations[dir]} 16 16)`}>
-        <path d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z"
-              stroke="rgba(16,18,12,0.92)" strokeWidth="4.2" {...common} />
-        <path d="M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z"
-              stroke="#fff8c8" strokeWidth="1.7" {...common} />
-      </g>
-    );
-  };
-
-  const GlyphPath = ({ d }: { d: string }) => (
-    <>
-      <path d={d} stroke="rgba(16,18,12,0.92)" strokeWidth="4.2" {...common} />
-      <path d={d} stroke="#fff8c8" strokeWidth="1.7" {...common} />
-    </>
-  );
-
-  const doubleVerticalPath =
-    "M16 3 L26 13 L21 13 L21 19 L26 19 L16 29 L6 19 L11 19 L11 13 L6 13 Z";
-  const doubleHorizontalPath =
-    "M3 16 L13 6 L13 11 L19 11 L19 6 L29 16 L19 26 L19 21 L13 21 L13 26 Z";
-  const omniPath =
-    "M13 13 L13 8 L10 8 L16 2 L22 8 L19 8 L19 13 L24 13 L24 10 L30 16 L24 22 L24 19 L19 19 L19 24 L22 24 L16 30 L10 24 L13 24 L13 19 L8 19 L8 22 L2 16 L8 10 L8 13 Z";
-
-  const shape =
-    tileType === 7  ? <OneArrow dir="up"    /> :
-    tileType === 8  ? <OneArrow dir="right" /> :
-    tileType === 9  ? <OneArrow dir="down"  /> :
-    tileType === 10 ? <OneArrow dir="left"  /> :
-    tileType === 11 ? <GlyphPath d={doubleVerticalPath}   /> :
-    tileType === 12 ? <GlyphPath d={doubleHorizontalPath} /> :
-    tileType === 13 ? <GlyphPath d={omniPath} /> :
-    null;
-
-  if (!shape) return null;
-
-  return (
-    <svg viewBox="0 0 32 32" className="h-[78%] w-[78%]" aria-hidden style={{ filter: shadow }}>
-      {shape}
-    </svg>
-  );
-};
-
 // Direction -> which edge of the tile to hug (inset, staying inside the block) and how much to
 // rotate the "points up" chevron shape. Left/right sit above center so they clear the hero's feet.
 const IDLE_HINT_DIR_STYLE: Record<string, React.CSSProperties> = {
@@ -448,36 +268,14 @@ const renderIdleHintChevrons = (directions: { dx: number; dy: number }[] | undef
   });
 };
 
-// ─── Arrow background — warm amber stone with deeper bevel ────────────────────
-
-const ArrowBgTile = ({ uid }: { uid: string }) => (
-  <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
-    <defs>
-      <linearGradient id={`abg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#C8A455" />
-        <stop offset="50%" stopColor="#A87E30" />
-        <stop offset="100%" stopColor="#7A5618" />
-      </linearGradient>
-    </defs>
-    <rect width="100" height="100" fill={`url(#abg${uid})`} />
-    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.13)" />
-    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.09)" />
-    <polygon points="100,100 0,100 14,87 86,87" fill="rgba(0,0,0,0.28)" />
-    <polygon points="100,100 100,0 87,14 87,86" fill="rgba(0,0,0,0.20)" />
-    {/* Subtle etched cross-hatch */}
-    <line x1="14" y1="50" x2="86" y2="50" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
-    <line x1="50" y1="14" x2="50" y2="86" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="1.5" />
-  </svg>
-);
-
 // ─── Player / spawn sprites using dinotoon ────────────────────────────────────
 
 /** Player dino — dark oval shadow behind the image so screen-blend keeps strong green */
-const PlayerSprite = ({ rotate }: { rotate?: boolean }) => {
+/** climbOut plays a one-shot "emerging from the cave" beat when a level first loads. */
+const PlayerSprite = ({ rotate, climbOut }: { rotate?: boolean; climbOut?: boolean }) => {
   const t = rotate ? "translateX(-50%) rotate(90deg)" : "translateX(-50%)";
   return (
-    <>
+    <div className={climbOut ? "absolute inset-0 animate-climb-out-of-cave" : "contents"}>
       {/* Dark neutral oval: gives screen-blend a dark base so dino stays saturated */}
       <div
         className="pointer-events-none absolute bottom-[3%] left-1/2 h-[140%] w-[140%]"
@@ -498,7 +296,7 @@ const PlayerSprite = ({ rotate }: { rotate?: boolean }) => {
           transform: t,
         }}
       />
-    </>
+    </div>
   );
 };
 
@@ -559,6 +357,7 @@ export function GameTop2D({
   rotateUpright = false,
   theme,
   idleArrowHintDirections,
+  levelId,
   onArrowClick,
   onCancelSelection,
 }: GameTop2DProps) {
@@ -570,6 +369,19 @@ export function GameTop2D({
   const wallColor = themes[theme ?? "default"].wall;
 
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
+
+  // Plays a one-shot "just arrived" beat when a level first loads: the goal ladder pulses so
+  // it's clear where you're heading, and the hero's spawn-cave entrance animates them climbing
+  // out. Keyed on levelId so it fires exactly once per level, not on every re-render.
+  const [showLevelIntro, setShowLevelIntro] = useState(false);
+  const introLevelRef = useRef<typeof levelId>(undefined);
+  useEffect(() => {
+    if (levelId == null || introLevelRef.current === levelId) return;
+    introLevelRef.current = levelId;
+    setShowLevelIntro(true);
+    const t = window.setTimeout(() => setShowLevelIntro(false), 2200);
+    return () => window.clearTimeout(t);
+  }, [levelId]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -695,10 +507,15 @@ export function GameTop2D({
                   case 5:  return <VoidTile />;
                   case 0:  return <FloorTile uid={uid} />;
                   case 2:  return <StoneTile uid={uid} />;
-                  case 6:  return <BreakableRockTile uid={uid} />;
+                  case 6:  return <CrackedRockTile uid={uid} />;
                   case 1:  return <StoneWallTile uid={uid} baseColor={wallColor} />;
                   case 4:  return <WaterTile uid={uid} />;
-                  case 3:  return <CaveTile uid={uid} isStart={false} rotate={rotateUpright} />;
+                  case 3:
+                    return (
+                      <div className={`h-full w-full ${showLevelIntro && isCave ? "animate-goal-intro-glow" : ""}`}>
+                        <CaveTile uid={uid} isStart={false} rotate={rotateUpright} />
+                      </div>
+                    );
                   case 18: return <CaveTile uid={uid} isStart rotate={rotateUpright} />;
                   case 14: return <IconTile uid={uid} iconUrl={redKeyUrl}    bgColor="rgba(200,30,30,0.20)"   rotate={rotateUpright && needsUprightIcon} />;
                   case 15: return <IconTile uid={uid} iconUrl={greenKeyUrl}  bgColor="rgba(20,160,70,0.20)"   rotate={rotateUpright && needsUprightIcon} />;
@@ -707,7 +524,7 @@ export function GameTop2D({
                   case 19: return <IconTile uid={uid} iconUrl={teleportUrl}  bgColor="rgba(70,0,140,0.78)"    rotate={false} />;
                   case 20: return <IconTile uid={uid} iconUrl={hourglassUrl} bgColor="rgba(100,65,0,0.50)"    rotate={rotateUpright && needsUprightIcon} />;
                   default:
-                    if (effectiveIsArrow) return <ArrowBgTile uid={uid} />;
+                    if (effectiveIsArrow) return <ArrowBg uid={uid} />;
                     return <FloorTile uid={uid} />;
                 }
               };
@@ -736,12 +553,14 @@ export function GameTop2D({
 
                   {effectiveIsArrow && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      {renderArrowVector(effectiveTileType)}
+                      <ArrowGlyph type={effectiveTileType} />
                     </div>
                   )}
 
                   {isPlayer && isPlayerWarping && <TeleportFlashOverlay />}
-                  {isPlayer && !isPlayerWarping && <PlayerSprite rotate={rotateUpright} />}
+                  {isPlayer && !isPlayerWarping && (
+                    <PlayerSprite rotate={rotateUpright} climbOut={showLevelIntro} />
+                  )}
                   {isPlayer && renderIdleHintChevrons(idleArrowHintDirections)}
                 </div>
               );

@@ -37,7 +37,7 @@ export interface TutorialStep {
   arrowAt?: { x: number; y: number };
   /**
    * Replaces the mini demo board with a callout pointing at a real HUD control instead of a
-   * grid cell — used for mechanics that live outside the level grid (e.g. the Replay button).
+   * grid cell — used for mechanics that live outside the level grid (e.g. the Restart Level button).
    */
   uiCallout?: { icon: "restart"; label: string };
 }
