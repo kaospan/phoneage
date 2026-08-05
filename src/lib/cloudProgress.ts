@@ -125,6 +125,36 @@ export async function migrateLocalProgressToCloud(
   });
 }
 
+/**
+ * Wipes a signed-in player's cloud-side level progress back to a fresh Level-1-only state
+ * ("start over"). Resets every player_progress row in place (own_progress_update already
+ * permits this) rather than deleting rows, since there's no self-service delete RLS policy for
+ * that table — functionally equivalent for the campaign's purposes.
+ */
+export async function resetCloudProgress(userId: string): Promise<void> {
+  if (!supabase) return;
+  const { error: progressError } = await supabase
+    .from("player_progress")
+    .update({
+      completed: false,
+      clear_count: 0,
+      best_moves: null,
+      last_moves: null,
+      best_time_left_seconds: null,
+      last_time_left_seconds: null,
+      last_completed_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+  if (progressError) console.warn("[cloudProgress] reset progress error:", progressError.message);
+
+  const { error: metaError } = await supabase
+    .from("profiles")
+    .update({ highest_unlocked_level_id: 1, last_played_level_id: null })
+    .eq("id", userId);
+  if (metaError) console.warn("[cloudProgress] reset profile meta error:", metaError.message);
+}
+
 /** Touches last_seen_at so the CRM can show a meaningful "last seen" even when offline. */
 export async function touchLastSeen(userId: string): Promise<void> {
   if (!supabase) return;

@@ -113,6 +113,13 @@ export const saveCampaignProgress = (progress: CampaignProgressState): void => {
   }
 };
 
+/** Wipes local level progress back to a fresh Level-1-only state ("start over"). */
+export const resetCampaignProgress = (): CampaignProgressState => {
+  const fresh = createDefaultProgress();
+  saveCampaignProgress(fresh);
+  return fresh;
+};
+
 export const syncCampaignProgress = (
   progress: CampaignProgressState,
   levelIds: number[],

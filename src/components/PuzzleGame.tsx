@@ -55,6 +55,7 @@ import {
   getLevelCampaignRecord,
   loadCampaignProgress,
   recordLevelCompletion,
+  resetCampaignProgress,
   saveCampaignProgress,
   setLastPlayedLevel,
   syncCampaignProgress,
@@ -62,7 +63,7 @@ import {
   type CampaignProgressState,
 } from "@/lib/campaignProgress";
 import { usePlayerSession } from "@/contexts/PlayerSessionContext";
-import { fetchCloudProgress, pushLevelProgress, pushProfileMeta, touchLastSeen } from "@/lib/cloudProgress";
+import { fetchCloudProgress, pushLevelProgress, pushProfileMeta, resetCloudProgress, touchLastSeen } from "@/lib/cloudProgress";
 import { startPlaySession, endPlaySession } from "@/lib/playSessions";
 import { usePlayerPresence } from "@/hooks/usePlayerPresence";
 import { TutorialOverlay } from "./TutorialOverlay";
@@ -2066,6 +2067,20 @@ export const PuzzleGame = () => {
       return goToLevelIndex(nextIndex);
     }, [allLevels, goToLevelIndex]);
 
+    // "Start Over": wipes local progress immediately (so the UI reflects it right away) and,
+    // for signed-in players, the cloud copy too — bypassing commitCampaignProgress's normal
+    // diff-and-push logic, since a diff against an emptied local state wouldn't know to clear
+    // out rows that already exist server-side.
+    const handleStartOver = useCallback(() => {
+      const fresh = resetCampaignProgress();
+      campaignProgressRef.current = fresh;
+      setCampaignProgress(fresh);
+      const userId = playerUserIdRef.current;
+      if (userId) void resetCloudProgress(userId);
+      goToLevelIndex(0);
+      pushHudMessage("Progress reset — starting over from Level 1", 2600);
+    }, [goToLevelIndex, pushHudMessage]);
+
     const resetSelectorToPlayer = useCallback(() => {
       setIsSelectorActive(false);
       setSelectorPos({ x: localPlayerPos.x, y: localPlayerPos.y });
@@ -2758,6 +2773,7 @@ export const PuzzleGame = () => {
         progressValue={campaignProgressValue}
         totalLevels={allLevels.length}
         onSelectLevel={goToLevelId}
+        onStartOver={handleStartOver}
       />
     );
 
