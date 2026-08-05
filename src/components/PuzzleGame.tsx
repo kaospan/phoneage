@@ -880,10 +880,18 @@ export const PuzzleGame = () => {
       const basics = getTutorialDefinition("basics");
       if (basics) queue.push(basics);
     }
+    // Forced by level rather than cell-type detection: arrow-remote's whole point is that an
+    // arrow can sit somewhere unreachable by walking, which triggerCellTypes (any arrow tile
+    // present) can't distinguish from an ordinary reachable one — level 2 is where that first
+    // happens, so it's pinned there directly instead.
+    if (currentLevel.id === 2 && !seen.has("arrow-remote")) {
+      const remote = getTutorialDefinition("arrow-remote");
+      if (remote) queue.push(remote);
+    }
     const usedTypes = new Set<number>();
     for (const row of renderGrid) for (const cell of row) usedTypes.add(cell);
     for (const def of TUTORIAL_DEFINITIONS) {
-      if (def.id === "basics" || seen.has(def.id)) continue;
+      if (def.id === "basics" || def.id === "arrow-remote" || seen.has(def.id)) continue;
       if (def.triggerCellTypes.some((t) => usedTypes.has(t))) queue.push(def);
     }
     if (queue.length > 0) setTutorialQueue(queue);

@@ -4,6 +4,7 @@ export type TutorialId =
   | "basics"
   | "arrow-single"
   | "arrow-multi"
+  | "arrow-remote"
   | "teleport"
   | "key-lock"
   | "breakable-rock"
@@ -26,6 +27,13 @@ export interface TutorialStep {
   sound?: TutorialSound;
   /** Optional secondary line shown only for this step (e.g. "Tap again to redirect"). */
   caption?: string;
+  /**
+   * When set, the arrow block from the mini-grid is rendered as a sliding sprite at this cell
+   * for the step (instead of sitting statically in the grid), so the animation can show it
+   * gliding to a new spot — e.g. when demonstrating a remote arrow move. The block at its
+   * original grid position is suppressed so it isn't drawn twice.
+   */
+  arrowAt?: { x: number; y: number };
   /**
    * Replaces the mini demo board with a callout pointing at a real HUD control instead of a
    * grid cell — used for mechanics that live outside the level grid (e.g. the Replay button).
