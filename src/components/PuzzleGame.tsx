@@ -145,6 +145,7 @@ interface SimulationState {
   grid: CellType[][];
   baseGrid: CellType[][];
   breakableRockStates: Map<string, boolean>;
+  crumbleAnimations: Map<string, number>;
   players: Map<PlayerId, SimPlayer>;
   arrowGlides: ArrowGlide[];
   goalCaveKeys: Set<string>;
@@ -272,6 +273,8 @@ const TELEPORT_CYCLE_DELAY_TICKS = 180;
 /** Once a cycle commits, how long the origin pad flashes and the dino stays hidden before
  *  reappearing on the destination pad: 1000ms * 60 ticks/sec / 1000ms = 60 ticks. */
 const TELEPORT_WARP_FLASH_TICKS = 60;
+/** How long a breakable rock takes to crumble after being stepped off, in simulation ticks (60Hz). */
+const CRUMBLE_ANIMATION_TICKS = 30;
 /** Height reserved for the secondary bottom HUD bar shown in mobile portrait, so overlapping controls (e.g. the thumbstick) can clear it. */
 const BOTTOM_HUD_CLEARANCE_PX = 60;
 
@@ -314,6 +317,13 @@ const deltaFromFacing = (facing: FacingDirection): { dx: number; dy: number } =>
     default:
       return { dx: 0, dy: -1 };
   }
+};
+
+const dirKeyFromDelta = (dx: number, dy: number): "U" | "R" | "D" | "L" => {
+  if (dx === 0 && dy === -1) return "U";
+  if (dx === 1 && dy === 0) return "R";
+  if (dx === 0 && dy === 1) return "D";
+  return "L";
 };
 
 type LevelData = ReturnType<typeof getAllLevels>[number];
@@ -413,9 +423,10 @@ export const PuzzleGame = () => {
   const [campaignProgress, setCampaignProgress] = useState<CampaignProgressState>(
     () => initialCampaignProgressRef.current ?? loadCampaignProgress()
   );
-  const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
-  const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
-  const [renderCavePos, setRenderCavePos] = useState({ x: 0, y: 0 });
+   const [renderGrid, setRenderGrid] = useState<CellType[][]>([]);
+   const [renderPlayers, setRenderPlayers] = useState<SimPlayer[]>([]);
+   const [renderCavePos, setRenderCavePos] = useState({ x: 0, y: 0 });
+   const [crumbleAnimations, setCrumbleAnimations] = useState<Map<string, number>>(new Map());
   const [activeLevel, setActiveLevel] = useState<LevelData | null>(null);
   const [moves, setMoves] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
@@ -700,6 +711,7 @@ export const PuzzleGame = () => {
   const recordMovesEnabledRef = useRef(false);
   const isReplayingRef = useRef(false);
   const replayIntervalRef = useRef<number | null>(null);
+  const selectedArrowLogRef = useRef<{ x: number; y: number } | null>(null);
 
   const [overrideRevision, setOverrideRevision] = useState(0);
   // Server-verified admins (admin_users) and beta testers (beta_testers) always get unrestricted
@@ -1378,6 +1390,7 @@ export const PuzzleGame = () => {
         grid: gridCopy,
         baseGrid: baseGridCopy,
         breakableRockStates: new Map(),
+        crumbleAnimations: new Map(),
         players,
         arrowGlides: [],
         // IMPORTANT: completion should only trigger on real cave tiles in the grid.
@@ -1394,6 +1407,10 @@ export const PuzzleGame = () => {
       setIsComplete(false);
       setCompletionSummary(null);
       recordedActionsRef.current = [];
+      selectedArrowLogRef.current = null;
+      if (recordMovesEnabledRef.current) {
+        console.log("Start");
+      }
       setSelectedArrow(null);
       setSelectorPos({ ...spawn });
       setIsSelectorActive(false);
@@ -1692,6 +1709,20 @@ export const PuzzleGame = () => {
       // Don't record inputs that replay itself is injecting — only capture live play.
       if (!isReplayingRef.current && recordMovesEnabledRef.current) {
         recordedActionsRef.current.push(command);
+
+        if (command.type === "select") {
+          selectedArrowLogRef.current = { x: command.x, y: command.y };
+        } else if (command.type === "deselect") {
+          selectedArrowLogRef.current = null;
+        } else if (command.type === "move") {
+          const dir = dirKeyFromDelta(command.dx, command.dy);
+          if (selectedArrowLogRef.current) {
+            const { x, y } = selectedArrowLogRef.current;
+            console.log(`A(${x},${y}):${dir}`);
+          } else {
+            console.log(`P:${dir}`);
+          }
+        }
       }
 
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1805,48 +1836,63 @@ export const PuzzleGame = () => {
       let localSelected = selectedArrow;
       let localComplete = isComplete;
 
-      // Advance arrow glides
-      if (sim.arrowGlides.length > 0) {
-        sim.arrowGlides = sim.arrowGlides.filter((glide) => {
-          const next = glide.path[glide.index];
-          const prev = glide.index === 0 ? glide.from : glide.path[glide.index - 1];
-          if (!next) return false;
+       // Advance arrow glides
+       if (sim.arrowGlides.length > 0) {
+         sim.arrowGlides = sim.arrowGlides.filter((glide) => {
+           const next = glide.path[glide.index];
+           const prev = glide.index === 0 ? glide.from : glide.path[glide.index - 1];
+           if (!next) return false;
 
-          if (glide.index === 0) sim.grid[glide.from.y][glide.from.x] = 5;
-          else sim.grid[prev.y][prev.x] = sim.baseGrid[prev.y][prev.x];
-          sim.grid[next.y][next.x] = glide.arrowType;
-          glide.index += 1;
-          gridDirty = true;
+           if (glide.index === 0) sim.grid[glide.from.y][glide.from.x] = 5;
+           else sim.grid[prev.y][prev.x] = sim.baseGrid[prev.y][prev.x];
+           sim.grid[next.y][next.x] = glide.arrowType;
+           glide.index += 1;
+           gridDirty = true;
 
-          if (glide.index >= glide.path.length) {
-            const owner = sim.players.get(glide.ownerId);
-            if (owner) {
-              owner.isGliding = false;
-              const newArrowPos = { x: next.x, y: next.y };
-              const testState: GameState = {
-                grid: sim.grid,
-                baseGrid: sim.baseGrid,
-                playerPos: owner.pos,
-                inventory: owner.keys,
-                selectedArrow: newArrowPos,
-                breakableRockStates: sim.breakableRockStates,
-                isGliding: false,
-                isComplete: false
-              } as GameState;
-              const dirs = [
-                { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
-              ];
-              const canMove = dirs.some((dir) => attemptRemoteArrowMove(testState, dir.dx, dir.dy).glidePath);
-              owner.selectedArrow = canMove ? newArrowPos : null;
-              if (owner.isLocal) {
-                localSelected = owner.selectedArrow;
-              }
-            }
-            return false;
-          }
-          return true;
-        });
-      }
+           if (glide.index >= glide.path.length) {
+             const owner = sim.players.get(glide.ownerId);
+             if (owner) {
+               owner.isGliding = false;
+               const newArrowPos = { x: next.x, y: next.y };
+               const testState: GameState = {
+                 grid: sim.grid,
+                 baseGrid: sim.baseGrid,
+                 playerPos: owner.pos,
+                 inventory: owner.keys,
+                 selectedArrow: newArrowPos,
+                 breakableRockStates: sim.breakableRockStates,
+                 isGliding: false,
+                 isComplete: false
+               } as GameState;
+               const dirs = [
+                 { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
+               ];
+               const canMove = dirs.some((dir) => attemptRemoteArrowMove(testState, dir.dx, dir.dy).glidePath);
+               owner.selectedArrow = canMove ? newArrowPos : null;
+               if (owner.isLocal) {
+                 localSelected = owner.selectedArrow;
+               }
+             }
+             return false;
+           }
+           return true;
+         });
+       }
+
+       // Advance crumble animations — remove completed ones
+       if (sim.crumbleAnimations.size > 0) {
+         let crumbleDirty = false;
+         for (const [key, progress] of sim.crumbleAnimations.entries()) {
+           const nextProgress = progress + 1;
+           if (nextProgress >= CRUMBLE_ANIMATION_TICKS) {
+             sim.crumbleAnimations.delete(key);
+             crumbleDirty = true;
+           } else {
+             sim.crumbleAnimations.set(key, nextProgress);
+           }
+         }
+         if (crumbleDirty) gridDirty = true;
+       }
 
       // Advance player glides and inputs
       sim.players.forEach((player, id) => {
@@ -2048,8 +2094,10 @@ export const PuzzleGame = () => {
             }
           }
           if (outcome.brokeRock && player.isLocal) {
-            pushHudMessage("Rock crumbled");
-          }
+             const rockKey = `${player.pos.x},${player.pos.y}`;
+             sim.crumbleAnimations.set(rockKey, 0);
+             pushHudMessage("Rock crumbled");
+           }
           if (outcome.consumedMove) {
             player.moves += 1;
             if (player.isLocal) localMoves = player.moves;
@@ -2117,7 +2165,8 @@ export const PuzzleGame = () => {
         );
       }
 
-      if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
+        if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
+       if (sim.crumbleAnimations.size > 0) setCrumbleAnimations(new Map(sim.crumbleAnimations));
       if (playersDirty || gridDirty) setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
       if (localMoves !== moves) setMoves(localMoves);
       if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
@@ -3807,20 +3856,22 @@ export const PuzzleGame = () => {
             )}
 
             {viewMode === "top" ? (
-              <GameTop2D
-                grid={renderGrid}
-                cavePos={renderCavePos}
-                playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
-                selectedArrow={selectedArrow}
-                selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
-                players={renderPlayers}
-                zoomFactor={cameraZoomFactor}
-                fullBleed={isFullscreenMode}
-                rotateUpright={isMobilePortrait}
-                theme={currentLevel.theme}
-                idleArrowHintDirections={idleArrowHintDirections}
-                levelId={currentLevel?.id ?? null}
-                onArrowClick={(x, y) => {
+                   <GameTop2D
+                     grid={renderGrid}
+                     cavePos={renderCavePos}
+                     playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
+                     selectedArrow={selectedArrow}
+                     selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+                     players={renderPlayers}
+                     zoomFactor={cameraZoomFactor}
+                     fullBleed={isFullscreenMode}
+                     rotateUpright={isMobilePortrait}
+                     theme={currentLevel.theme}
+                     idleArrowHintDirections={idleArrowHintDirections}
+                      levelId={currentLevel?.id ?? null}
+                      crumbleAnimations={crumbleAnimations}
+                      isAdmin={isVerifiedAdminAccount}
+                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];
                   if (cell !== undefined && isArrowCell(cell)) {
@@ -3874,8 +3925,9 @@ export const PuzzleGame = () => {
                     rotateUpright={isMobilePortrait}
                     theme={currentLevel.theme}
                     idleArrowHintDirections={idleArrowHintDirections}
-                    levelId={currentLevel?.id ?? null}
-                    onArrowClick={(x, y) => {
+                      levelId={currentLevel?.id ?? null}
+                      isAdmin={isVerifiedAdminAccount}
+                     onArrowClick={(x, y) => {
                       if (localPlayer?.isGliding) return;
                       const cell = renderGrid[y]?.[x];
                       if (cell !== undefined && isArrowCell(cell)) {
@@ -3908,20 +3960,22 @@ export const PuzzleGame = () => {
                 </div>
               </div>
             ) : viewMode === "sprite" ? (
-              <GameSprite2D
-                grid={renderGrid}
-                atlasSourceGrid={activeLevel?.grid ?? currentLevel?.grid ?? renderGrid}
-                cavePos={renderCavePos}
-                levelImageUrl={resolvedLevelImageUrl}
-                playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
-                selectedArrow={selectedArrow}
-                selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
-                players={renderPlayers}
-                zoomFactor={cameraZoomFactor}
-                fullBleed={isFullscreenMode}
-                rotateUpright={isMobilePortrait}
-                idleArrowHintDirections={idleArrowHintDirections}
-                onArrowClick={(x, y) => {
+               <GameSprite2D
+                 grid={renderGrid}
+                 atlasSourceGrid={activeLevel?.grid ?? currentLevel?.grid ?? renderGrid}
+                 cavePos={renderCavePos}
+                 levelImageUrl={resolvedLevelImageUrl}
+                 playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
+                 selectedArrow={selectedArrow}
+                 selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+                 players={renderPlayers}
+                 zoomFactor={cameraZoomFactor}
+                 fullBleed={isFullscreenMode}
+                 rotateUpright={isMobilePortrait}
+                  idleArrowHintDirections={idleArrowHintDirections}
+                  crumbleAnimations={crumbleAnimations}
+                  isAdmin={isVerifiedAdminAccount}
+                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];
                   if (cell !== undefined && isArrowCell(cell)) {
@@ -3951,21 +4005,22 @@ export const PuzzleGame = () => {
                   }
                 }}
               />
-            ) : (
-              <Game3D
-                grid={renderGrid}
-                cavePos={renderCavePos}
-                selectedArrow={selectedArrow}
-                selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
-                cameraOffset={cameraOffset}
-                zoomFactor={cameraZoomFactor}
-                viewMode={viewMode}
-                theme={currentLevel.theme}
-                rotateUpright={isMobilePortrait}
-                players={renderPlayers}
-                localPlayerId={localPlayer?.id}
-                onPlayerClick={flashPlayerHighlight}
-                playerFlashCount={playerFlashCount}
+             ) : (
+               <Game3D
+                 grid={renderGrid}
+                 cavePos={renderCavePos}
+                 selectedArrow={selectedArrow}
+                 selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+                 cameraOffset={cameraOffset}
+                 zoomFactor={cameraZoomFactor}
+                 viewMode={viewMode}
+                 theme={currentLevel.theme}
+                 rotateUpright={isMobilePortrait}
+                 players={renderPlayers}
+                 localPlayerId={localPlayer?.id}
+                 onPlayerClick={flashPlayerHighlight}
+                 playerFlashCount={playerFlashCount}
+                 crumbleAnimations={crumbleAnimations}
                 onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];

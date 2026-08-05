@@ -39,22 +39,25 @@ const GLOBAL_TILE_SPRITE_URLS: Record<number, string> = {
 type PlayerFacing = "up" | "right" | "down" | "left";
 
 interface GameSprite2DProps {
-  grid: number[][];
-  atlasSourceGrid?: number[][];
-  cavePos: { x: number; y: number };
-  levelImageUrl?: string | null;
-  playerStart?: { x: number; y: number } | null;
-  selectedArrow?: { x: number; y: number } | null;
-  selectorPos?: { x: number; y: number } | null;
-  players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
-  zoomFactor?: number;
-  fullBleed?: boolean;
-  rotateUpright?: boolean;
-  /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
-  idleArrowHintDirections?: { dx: number; dy: number }[];
-  onArrowClick?: (x: number, y: number) => void;
-  onCancelSelection?: () => void;
-}
+   grid: number[][];
+   atlasSourceGrid?: number[][];
+   cavePos: { x: number; y: number };
+   levelImageUrl?: string | null;
+   playerStart?: { x: number; y: number } | null;
+   selectedArrow?: { x: number; y: number } | null;
+   selectorPos?: { x: number; y: number } | null;
+   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean }>;
+   zoomFactor?: number;
+   fullBleed?: boolean;
+   rotateUpright?: boolean;
+   /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
+   idleArrowHintDirections?: { dx: number; dy: number }[];
+    /** Map of cell keys "x,y" to crumble animation progress (0-1) for breakable rocks that are crumbling. */
+    crumbleAnimations?: Map<string, number>;
+    isAdmin?: boolean;
+    onArrowClick?: (x: number, y: number) => void;
+    onCancelSelection?: () => void;
+  }
 
 type LevelSpriteAtlas = {
   tileSprites: Record<number, string>;
@@ -240,21 +243,22 @@ const renderIdleHintChevrons = (directions: { dx: number; dy: number }[] | undef
 };
 
 export function GameSprite2D({
-  grid,
-  atlasSourceGrid,
-  cavePos,
-  levelImageUrl,
-  playerStart,
-  selectedArrow,
-  selectorPos,
-  players,
-  zoomFactor = 1,
-  fullBleed = false,
-  rotateUpright = false,
-  idleArrowHintDirections,
-  onArrowClick,
-  onCancelSelection,
-}: GameSprite2DProps) {
+   grid,
+   atlasSourceGrid,
+   cavePos,
+   levelImageUrl,
+   playerStart,
+   selectedArrow,
+   selectorPos,
+   players,
+   zoomFactor = 1,
+   fullBleed = false,
+   rotateUpright = false,
+   idleArrowHintDirections,
+   crumbleAnimations,
+   onArrowClick,
+   onCancelSelection,
+ }: GameSprite2DProps) {
   const [references, setReferences] = useState<CellReference[]>(() => {
     if (typeof window === "undefined") return [];
     return getCellReferences();
@@ -765,10 +769,14 @@ export function GameSprite2D({
               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
               const edge = edgeMasks?.[y]?.[x] ?? null;
-              // Arrow tiles stay visible even while the player stands on them — hiding them here
-              // used to make it impossible to tell what you were standing on.
-              const effectiveTileType = displayTileType;
-              const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
+               // Arrow tiles stay visible even while the player stands on them — hiding them here
+               // used to make it impossible to tell what you were standing on.
+               const effectiveTileType = displayTileType;
+               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
+               // Override for crumbling rocks — show the rock tile with crumble animation
+               // even though the grid cell has already been set to void (5).
+               const isCrumblingRock = crumbleAnimations?.has(`${x},${y}`);
+               const renderTileType = isCrumblingRock ? 6 : effectiveTileType;
               const originalTileType = atlasGoalCaveKeys.has(`${x},${y}`) ? 3 : (sourceGrid[y]?.[x] ?? tileType);
               const baselineTileType = goalCaveKeys.has(`${x},${y}`)
                 ? 3
@@ -788,70 +796,71 @@ export function GameSprite2D({
                 ? tileChangedFromScreenshot || playerStartNeedsCleanup
                 : allowGeneratedFallback;
 
-              const atlasSprite =
-                levelAtlas?.tileSprites?.[effectiveTileType] ??
-                (useScreenshotBase && effectiveTileType === 18
-                  ? levelAtlas?.tileSprites?.[spawnCleanupTileType]
-                  : undefined);
-              const refSprite = latestByType.get(effectiveTileType)?.imageData;
-              const canUseRefSprite = effectiveTileType !== 5;
-              const fallbackTileBackgroundImage =
-                  effectiveTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
-                  effectiveTileType === 3 && goalCaveFallbackUrl ? `url(${goalCaveFallbackUrl})` :
-                  effectiveTileType === 6 && breakableRockFallbackUrl ? `url(${breakableRockFallbackUrl})` :
-                  atlasSprite ? `url(${atlasSprite})` :
-                  (canUseRefSprite && refSprite) ? `url(${refSprite})` :
-                  GLOBAL_TILE_SPRITE_URLS[effectiveTileType] ? `url(${GLOBAL_TILE_SPRITE_URLS[effectiveTileType]})` :
-                  effectiveTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
-                  effectiveTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
-                  effectiveTileType === 16 && redLockFallbackUrl ? `url(${redLockFallbackUrl})` :
-                  effectiveTileType === 17 && greenLockFallbackUrl ? `url(${greenLockFallbackUrl})` :
-                  effectiveTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
-                  effectiveTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
-                  undefined;
+               const atlasSprite =
+                 levelAtlas?.tileSprites?.[renderTileType] ??
+                 (useScreenshotBase && renderTileType === 18
+                   ? levelAtlas?.tileSprites?.[spawnCleanupTileType]
+                   : undefined);
+               const refSprite = latestByType.get(renderTileType)?.imageData;
+               const canUseRefSprite = renderTileType !== 5;
+               const fallbackTileBackgroundImage =
+                   renderTileType === 18 ? (startCaveSpriteUrl ? `url(${startCaveSpriteUrl})` : undefined) :
+                   renderTileType === 3 && goalCaveFallbackUrl ? `url(${goalCaveFallbackUrl})` :
+                   renderTileType === 6 && breakableRockFallbackUrl ? `url(${breakableRockFallbackUrl})` :
+                   atlasSprite ? `url(${atlasSprite})` :
+                   (canUseRefSprite && refSprite) ? `url(${refSprite})` :
+                   GLOBAL_TILE_SPRITE_URLS[renderTileType] ? `url(${GLOBAL_TILE_SPRITE_URLS[renderTileType]})` :
+                   renderTileType === 14 && redKeyFallbackUrl ? `url(${redKeyFallbackUrl})` :
+                   renderTileType === 15 && greenKeyFallbackUrl ? `url(${greenKeyFallbackUrl})` :
+                   renderTileType === 16 && redLockFallbackUrl ? `url(${redLockFallbackUrl})` :
+                   renderTileType === 17 && greenLockFallbackUrl ? `url(${greenLockFallbackUrl})` :
+                   renderTileType === 19 && teleportFallbackUrl ? `url(${teleportFallbackUrl})` :
+                   renderTileType === 20 && bonusTimeFallbackUrl ? `url(${bonusTimeFallbackUrl})` :
+                   undefined;
               const staticTileBackgroundImage = useScreenshotBase
                 ? (atlasSprite ? `url(${atlasSprite})` : undefined)
                 : fallbackTileBackgroundImage;
               const backgroundImage = shouldPaintStaticTile ? staticTileBackgroundImage : undefined;
               // In portrait (rotateUpright), sprite tiles get a counter-rotated child div instead.
               // Caves, locks, and hourglass all need upright rotation; arrows are intentionally NOT rotated.
-              const needsUprightSprite = effectiveTileType === 3 || effectiveTileType === 18 ||
-                effectiveTileType === 16 || effectiveTileType === 17 || effectiveTileType === 20;
-              const useRotatedChild = rotateUpright && needsUprightSprite && Boolean(backgroundImage);
-              const cellBackgroundImage = useRotatedChild ? undefined : backgroundImage;
-              const arrowVector =
-                effectiveIsArrow && shouldPaintStaticTile && !backgroundImage
-                  ? renderArrowVector(effectiveTileType)
-                  : null;
+               const needsUprightSprite = renderTileType === 3 || renderTileType === 18 ||
+                 renderTileType === 16 || renderTileType === 17 || renderTileType === 20;
+               const useRotatedChild = rotateUpright && needsUprightSprite && Boolean(backgroundImage);
+               const cellBackgroundImage = useRotatedChild ? undefined : backgroundImage;
+               const arrowVector =
+                 effectiveIsArrow && shouldPaintStaticTile && !backgroundImage
+                   ? renderArrowVector(renderTileType)
+                   : null;
 
-              const fallback =
-                !shouldPaintStaticTile || (useScreenshotBase && !backgroundImage) ? "transparent" :
-                effectiveTileType === 5 ? "black" :
-                effectiveTileType === 0 ? "rgba(255,255,255,0.08)" :
-                effectiveTileType === 4 ? "rgba(30,144,255,0.55)" :
-                effectiveTileType === 1 ? "rgba(166,124,82,0.78)" :
-                effectiveTileType === 2 ? "rgba(120,85,60,0.75)" :
-                effectiveTileType === 6 ? "rgba(160,155,140,0.80)" :
-                effectiveTileType === 14 ? "rgba(255,70,70,0.70)" :
-                effectiveTileType === 15 ? "rgba(60,210,120,0.70)" :
-                effectiveTileType === 16 ? "rgba(150,20,20,0.80)" :
-                effectiveTileType === 17 ? "rgba(20,110,35,0.80)" :
-                effectiveTileType === 18 ? "rgba(0,0,0,0.88)" :
-                effectiveTileType === 20 ? "rgba(251,191,36,0.78)" :
-                effectiveIsArrow ? "rgba(160,120,80,0.88)" :
-                "rgba(255,255,255,0.06)";
+               const fallback =
+                 !shouldPaintStaticTile || (useScreenshotBase && !backgroundImage) ? "transparent" :
+                 renderTileType === 5 ? "black" :
+                 renderTileType === 0 ? "rgba(255,255,255,0.08)" :
+                 renderTileType === 4 ? "rgba(30,144,255,0.55)" :
+                 renderTileType === 1 ? "rgba(166,124,82,0.78)" :
+                 renderTileType === 2 ? "rgba(120,85,60,0.75)" :
+                 renderTileType === 6 ? "rgba(160,155,140,0.80)" :
+                 renderTileType === 14 ? "rgba(255,70,70,0.70)" :
+                 renderTileType === 15 ? "rgba(60,210,120,0.70)" :
+                 renderTileType === 16 ? "rgba(150,20,20,0.80)" :
+                 renderTileType === 17 ? "rgba(20,110,35,0.80)" :
+                 renderTileType === 18 ? "rgba(0,0,0,0.88)" :
+                 renderTileType === 20 ? "rgba(251,191,36,0.78)" :
+                 effectiveIsArrow ? "rgba(160,120,80,0.88)" :
+                 "rgba(255,255,255,0.06)";
 
-              return (
-                <div
-                  key={`${x}-${y}`}
-                  className={[
-                    "relative min-h-0 min-w-0",
-                    isPlayer ? "z-10 overflow-visible" : "overflow-hidden",
-                    isArrow ? "cursor-pointer hover:brightness-110" : "",
-                    isPlayer && effectiveIsArrow ? "ring-2 ring-amber-300/80" : "",
-                    isSelected ? "z-20 ring-4 ring-white animate-selected-arrow-pulse" : "",
-                    isSelector ? "ring-2 ring-emerald-300" : "",
-                  ].join(" ")}
+               return (
+                 <div
+                   key={`${x}-${y}`}
+                   className={[
+                     "relative min-h-0 min-w-0",
+                     isPlayer ? "z-10 overflow-visible" : "overflow-hidden",
+                     isArrow ? "cursor-pointer hover:brightness-110" : "",
+                     isPlayer && effectiveIsArrow ? "ring-2 ring-amber-300/80" : "",
+                     isSelected ? "z-20 ring-4 ring-white animate-selected-arrow-pulse" : "",
+                     isSelector ? "ring-2 ring-emerald-300" : "",
+                     crumbleAnimations?.has(`${x},${y}`) ? "animate-crumble" : "",
+                   ].join(" ")}
                   style={{
                     backgroundColor: cellBackgroundImage ? undefined : fallback,
                     backgroundImage: cellBackgroundImage,
@@ -866,7 +875,7 @@ export function GameSprite2D({
                     e.stopPropagation();
                     if (isArrow) onArrowClick?.(x, y);
                   }}
-                  title={`Tile ${tileType}`}
+                   title={isAdmin ? `Tile ${tileType} (${x}, ${y})` : `Tile ${tileType}`}
                 >
                   {edge?.any && allowGeneratedFallback && (
                     <div

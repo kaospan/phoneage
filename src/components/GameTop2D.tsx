@@ -16,30 +16,33 @@ import { ArrowBg, ArrowGlyph } from "@/components/tiles/ArrowTile";
 type PlayerFacing = "up" | "right" | "down" | "left";
 
 interface GameTop2DProps {
-  grid: number[][];
-  cavePos: { x: number; y: number };
-  playerStart?: { x: number; y: number } | null;
-  selectedArrow?: { x: number; y: number } | null;
-  selectorPos?: { x: number; y: number } | null;
-  players: Array<{
-    id: string;
-    pos: { x: number; y: number };
-    facing: PlayerFacing;
-    color: string;
-    isLocal?: boolean;
-    teleportWarpTicksLeft?: number;
-  }>;
-  zoomFactor?: number;
-  fullBleed?: boolean;
-  rotateUpright?: boolean;
-  theme?: ColorTheme;
-  /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
-  idleArrowHintDirections?: { dx: number; dy: number }[];
-  /** Identifies the current level so a fresh load (new id) can play its one-shot intro beat. */
-  levelId?: number | string | null;
-  onArrowClick?: (x: number, y: number) => void;
-  onCancelSelection?: () => void;
-}
+   grid: number[][];
+   cavePos: { x: number; y: number };
+   playerStart?: { x: number; y: number } | null;
+   selectedArrow?: { x: number; y: number } | null;
+   selectorPos?: { x: number; y: number } | null;
+   players: Array<{
+     id: string;
+     pos: { x: number; y: number };
+     facing: PlayerFacing;
+     color: string;
+     isLocal?: boolean;
+     teleportWarpTicksLeft?: number;
+   }>;
+   zoomFactor?: number;
+   fullBleed?: boolean;
+   rotateUpright?: boolean;
+   theme?: ColorTheme;
+   /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
+   idleArrowHintDirections?: { dx: number; dy: number }[];
+   /** Identifies the current level so a fresh load (new id) can play its one-shot intro beat. */
+   levelId?: number | string | null;
+    /** Map of cell keys "x,y" to crumble animation progress (0-1) for breakable rocks that are crumbling. */
+    crumbleAnimations?: Map<string, number>;
+    isAdmin?: boolean;
+    onArrowClick?: (x: number, y: number) => void;
+    onCancelSelection?: () => void;
+  }
 
 // ─── Color helpers (for theme-driven tile shading) ────────────────────────────
 
@@ -346,21 +349,22 @@ const TeleportFlashOverlay = () => (
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function GameTop2D({
-  grid,
-  cavePos,
-  playerStart,
-  selectedArrow,
-  selectorPos,
-  players,
-  zoomFactor = 1,
-  fullBleed = false,
-  rotateUpright = false,
-  theme,
-  idleArrowHintDirections,
-  levelId,
-  onArrowClick,
-  onCancelSelection,
-}: GameTop2DProps) {
+   grid,
+   cavePos,
+   playerStart,
+   selectedArrow,
+   selectorPos,
+   players,
+   zoomFactor = 1,
+   fullBleed = false,
+   rotateUpright = false,
+   theme,
+   idleArrowHintDirections,
+   levelId,
+   crumbleAnimations,
+   onArrowClick,
+   onCancelSelection,
+ }: GameTop2DProps) {
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -485,15 +489,19 @@ export function GameTop2D({
               const isCave = goalCaveKeys.has(`${x},${y}`);
               const isPlayer = localPlayer?.pos.x === x && localPlayer?.pos.y === y;
               const isPlayerWarping = Boolean(localPlayer && (localPlayer.teleportWarpTicksLeft ?? 0) > 0);
-              const tileType = isCave ? 3 : cell;
-              const displayTileType = isPlayer && tileType === 18 ? 0 : tileType;
-              const isArrow = isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13;
-              const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
-              const isSelector = selectorPos?.x === x && selectorPos?.y === y;
-              // Arrow tiles stay visible even while the player stands on them — hiding them here
-              // used to make it impossible to tell what you were standing on.
-              const effectiveTileType = displayTileType;
-              const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
+               const tileType = isCave ? 3 : cell;
+               const displayTileType = isPlayer && tileType === 18 ? 0 : tileType;
+               const isArrow = isArrowCell(cell) || cell === 11 || cell === 12 || cell === 13;
+               const isSelected = selectedArrow?.x === x && selectedArrow?.y === y;
+               const isSelector = selectorPos?.x === x && selectorPos?.y === y;
+               // Arrow tiles stay visible even while the player stands on them — hiding them here
+               // used to make it impossible to tell what you were standing on.
+               const effectiveTileType = displayTileType;
+               const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
+               // Override for crumbling rocks — show the rock tile with crumble animation
+               // even though the grid cell has already been set to void (5).
+               const isCrumblingRock = crumbleAnimations?.has(uid);
+               const renderTileType = isCrumblingRock ? 6 : effectiveTileType;
 
               const needsUprightIcon =
                 effectiveTileType === 3  ||
@@ -502,12 +510,18 @@ export function GameTop2D({
                 effectiveTileType === 17 ||
                 effectiveTileType === 20;
 
-              const renderTileBg = () => {
-                switch (effectiveTileType) {
-                  case 5:  return <VoidTile />;
-                  case 0:  return <FloorTile uid={uid} />;
-                  case 2:  return <StoneTile uid={uid} />;
-                  case 6:  return <CrackedRockTile uid={uid} />;
+               const renderTileBg = () => {
+                 switch (renderTileType) {
+                   case 5:  return <VoidTile />;
+                   case 0:  return <FloorTile uid={uid} />;
+                   case 2:  return <StoneTile uid={uid} />;
+                   case 6: {
+                     return (
+                       <div className={isCrumblingRock ? "animate-crumble" : undefined}>
+                         <CrackedRockTile uid={uid} />
+                       </div>
+                     );
+                   }
                   case 1:  return <StoneWallTile uid={uid} baseColor={wallColor} />;
                   case 4:  return <WaterTile uid={uid} />;
                   case 3:
@@ -543,6 +557,7 @@ export function GameTop2D({
                     isSelected ? "z-20 ring-4 ring-white animate-selected-arrow-pulse" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
                   ].join(" ")}
+                  title={isAdmin ? `${x}, ${y}` : undefined}
                   onClick={
                     isArrow && !isPlayer
                       ? (e) => { e.stopPropagation(); onArrowClick?.(x, y); }
