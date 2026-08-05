@@ -158,6 +158,8 @@ export function CrmDashboard() {
     const [error, setError] = useState<string | null>(null);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [testUserFilter, setTestUserFilter] = useState<TestUserFilter>("all");
+    const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
+    const [showAdmins, setShowAdmins] = useState(false);
     const [tab, setTab] = useState("players");
     const [leaderboardLevelId, setLeaderboardLevelId] = useState<number | "all">("all");
     const [bestSortBy, setBestSortBy] = useState<"clears" | "moves" | "time">("clears");
@@ -168,11 +170,15 @@ export function CrmDashboard() {
         if (!supabase) { setError("Supabase not configured"); setLoading(false); return; }
         setLoading(true);
         setError(null);
-        const [profilesRes, progressRes, sessionsRes, levelsRes] = await Promise.all([
+        const [profilesRes, progressRes, sessionsRes, levelsRes, adminUsersRes] = await Promise.all([
             supabase.from("profiles").select("*").order("last_seen_at", { ascending: false }),
             supabase.from("player_progress").select("*"),
             supabase.from("play_sessions").select("*").order("started_at", { ascending: false }).limit(5000),
             supabase.from("levels").select("id").order("id", { ascending: true }),
+            // Best-effort: without schema_admin_visibility.sql's admin-read policy, RLS only
+            // returns the viewer's own admin_users row — that's fine, badges/filtering just
+            // degrade to knowing about the current admin until the migration is run.
+            supabase.from("admin_users").select("user_id"),
         ]);
         if (profilesRes.error || progressRes.error || sessionsRes.error || levelsRes.error) {
             setError(profilesRes.error?.message ?? progressRes.error?.message ?? sessionsRes.error?.message ?? levelsRes.error?.message ?? "Load failed");
@@ -183,6 +189,7 @@ export function CrmDashboard() {
         setProgress((progressRes.data ?? []) as ProgressRow[]);
         setSessions((sessionsRes.data ?? []) as SessionRow[]);
         setLevels((levelsRes.data ?? []).map((l: { id: number }) => ({ id: l.id })) as DbLevel[]);
+        setAdminIds(new Set((adminUsersRes.data ?? []).map((r: { user_id: string }) => r.user_id)));
         setLoading(false);
     };
 
@@ -260,10 +267,12 @@ export function CrmDashboard() {
     }, [sessions]);
 
     const filteredProfiles = useMemo(() => {
-        if (testUserFilter === "test-only") return profiles.filter((p) => p.is_test_user);
-        if (testUserFilter === "non-test") return profiles.filter((p) => !p.is_test_user);
-        return profiles;
-    }, [profiles, testUserFilter]);
+        let list = profiles;
+        if (testUserFilter === "test-only") list = list.filter((p) => p.is_test_user);
+        else if (testUserFilter === "non-test") list = list.filter((p) => !p.is_test_user);
+        if (!showAdmins) list = list.filter((p) => !adminIds.has(p.id));
+        return list;
+    }, [profiles, testUserFilter, showAdmins, adminIds]);
 
     const bestPlayersOverall = useMemo(() => {
         return profiles
@@ -425,6 +434,16 @@ export function CrmDashboard() {
                                 {f === "all" ? "All" : f === "non-test" ? "Non-test" : "Test only"}
                             </Button>
                         ))}
+                        {adminIds.size > 0 && (
+                            <Button
+                                size="sm"
+                                variant={showAdmins ? "default" : "ghost"}
+                                className={showAdmins ? "bg-amber-300 text-stone-950 hover:bg-amber-200" : "text-stone-300 hover:text-stone-100"}
+                                onClick={() => setShowAdmins((v) => !v)}
+                            >
+                                {showAdmins ? "Hide admins" : "Show admins"}
+                            </Button>
+                        )}
                         <span className="text-xs text-stone-500">{filteredProfiles.length} shown</span>
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -436,7 +455,7 @@ export function CrmDashboard() {
                                     <TableRow className="border-white/10 hover:bg-transparent">
                                         <TableHead className="text-stone-400">Player</TableHead>
                                         <TableHead className="text-stone-400">Status</TableHead>
-                                        <TableHead className="text-stone-400">Test</TableHead>
+                                        <TableHead className="text-stone-400">Tags</TableHead>
                                         <TableHead className="text-stone-400">Levels Cleared</TableHead>
                                         <TableHead className="text-stone-400">Total Attempts</TableHead>
                                         <TableHead className="text-stone-400">Total Moves</TableHead>
@@ -470,11 +489,17 @@ export function CrmDashboard() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {p.is_test_user ? (
-                                                        <Badge variant="outline" className="border-red-300/30 bg-red-500/10 text-red-200">Test</Badge>
-                                                    ) : (
-                                                        <span className="text-xs text-stone-500">—</span>
-                                                    )}
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        {adminIds.has(p.id) && (
+                                                            <Badge variant="outline" className="border-sky-300/30 bg-sky-500/10 text-sky-200">Admin</Badge>
+                                                        )}
+                                                        {p.is_test_user && (
+                                                            <Badge variant="outline" className="border-red-300/30 bg-red-500/10 text-red-200">Test</Badge>
+                                                        )}
+                                                        {!adminIds.has(p.id) && !p.is_test_user && (
+                                                            <span className="text-xs text-stone-500">—</span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>{stats.levelsCompleted}</TableCell>
                                                 <TableCell>{stats.totalAttempts}</TableCell>
@@ -688,7 +713,14 @@ export function CrmDashboard() {
                                         const stats = statsByUser.get(p.id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0, totalPlayMs: 0 };
                                         return (
                                             <TableRow key={p.id} className="border-white/5">
-                                                <TableCell className="font-medium text-stone-100">{p.display_name ?? p.id.slice(0, 8)}</TableCell>
+                                                <TableCell className="font-medium text-stone-100">
+                                                    <div className="flex items-center gap-1.5">
+                                                        {p.display_name ?? p.id.slice(0, 8)}
+                                                        {adminIds.has(p.id) && (
+                                                            <Badge variant="outline" className="border-sky-300/30 bg-sky-500/10 text-sky-200">Admin</Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="text-stone-300">{p.email ?? "—"}</TableCell>
                                                 <TableCell className="text-stone-400">{timeAgo(p.created_at)}</TableCell>
                                                 <TableCell className="text-stone-400">{timeAgo(p.last_seen_at)}</TableCell>
@@ -756,9 +788,14 @@ export function CrmDashboard() {
                     <div className="text-xs text-stone-500">
                         Total time played: {formatDuration((statsByUser.get(selectedProfile.id) ?? { totalPlayMs: 0 }).totalPlayMs)}
                     </div>
-                    {selectedProfile.is_test_user && (
-                        <div className="mt-2">
-                            <Badge variant="outline" className="border-red-300/30 bg-red-500/10 text-red-200">Test User</Badge>
+                    {(adminIds.has(selectedProfile.id) || selectedProfile.is_test_user) && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                            {adminIds.has(selectedProfile.id) && (
+                                <Badge variant="outline" className="border-sky-300/30 bg-sky-500/10 text-sky-200">Admin</Badge>
+                            )}
+                            {selectedProfile.is_test_user && (
+                                <Badge variant="outline" className="border-red-300/30 bg-red-500/10 text-red-200">Test User</Badge>
+                            )}
                         </div>
                     )}
 

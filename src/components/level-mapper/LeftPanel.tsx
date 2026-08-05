@@ -425,7 +425,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 ? 'border-emerald-300/30 bg-emerald-500/15 text-emerald-100'
                                 : 'border-white/10 bg-white/[0.06] text-stone-300 hover:border-amber-200/30 hover:text-stone-50',
                         ].join(' ')}
-                        title="When enabled, the main game can freely skip/preview all levels."
+                        title="Verified admin accounts can always skip/preview all levels in the main game. This toggle only controls forcing rebuilds/saves over canonical level data here in the mapper."
                         aria-pressed={adminModeEnabled}
                     >
                         <span>Admin</span>
