@@ -712,6 +712,9 @@ export const PuzzleGame = () => {
   const isReplayingRef = useRef(false);
   const replayIntervalRef = useRef<number | null>(null);
   const selectedArrowLogRef = useRef<{ x: number; y: number } | null>(null);
+  const arrowSelectHintSeenRef = useRef<boolean>(() => {
+    try { return localStorage.getItem("arrowSelectHintSeen") === "1"; } catch { return false; }
+  });
 
   const [overrideRevision, setOverrideRevision] = useState(0);
   // Server-verified admins (admin_users) and beta testers (beta_testers) always get unrestricted
@@ -996,6 +999,16 @@ export const PuzzleGame = () => {
     setRemoteArrowHintStage(null);
     remoteArrowHintMoveOriginRef.current = null;
   }, [currentLevel?.id]);
+
+  // Mark the arrow-selection HUD hint as seen after the first selection in levels 1-3.
+  useEffect(() => {
+    if (!selectedArrow) return;
+    if (arrowSelectHintSeenRef.current) return;
+    const levelId = currentLevel?.id;
+    if (levelId == null || levelId > 3) return;
+    arrowSelectHintSeenRef.current = true;
+    try { localStorage.setItem("arrowSelectHintSeen", "1"); } catch {}
+  }, [selectedArrow, currentLevel?.id]);
 
   // Starts the hands-on walkthrough once any animated tutorial for the level has been dismissed
   // — real board, real arrow, real controls, not the mini demo grid. Requires an arrow that can
@@ -4108,7 +4121,7 @@ export const PuzzleGame = () => {
             piloting the arrow instead of your character is an easy, recurring mistake. Only one
             of the two banners can show at once (remoteArrowHintStage is null once the
             walkthrough's done), so they never stack. */}
-        {selectedArrow && !remoteArrowHintStage && !isTutorialActive && !isComplete && !isTimeUp && (
+        {selectedArrow && !remoteArrowHintStage && !isTutorialActive && !isComplete && !isTimeUp && (currentLevel?.id == null || currentLevel.id <= 3) && !arrowSelectHintSeenRef.current && (
           <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+5.25rem)] z-[65] flex justify-center px-4">
             <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/25 bg-stone-950/85 px-3.5 py-1.5 text-xs font-semibold text-stone-100 shadow-xl backdrop-blur-md">
               <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-white" />
