@@ -754,6 +754,15 @@ export interface SolutionFrame {
   arrowTo?: Position;
 }
 
+function parseActionString(raw: string): Action | null {
+  if (raw === "T") return { t: "T" };
+  const pMatch = raw.match(/^P:([URDL])$/);
+  if (pMatch) return { t: "P", d: pMatch[1] as DirKey };
+  const aMatch = raw.match(/^A\((\d+),(\d+)\):([URDL])$/);
+  if (aMatch) return { t: "A", x: Number(aMatch[1]), y: Number(aMatch[2]), d: aMatch[3] as DirKey };
+  return null;
+}
+
 export function replaySolutionActions(
   grid: CellType[][],
   playerStart: Position,
