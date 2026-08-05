@@ -13,22 +13,24 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader';
 
 interface Game3DProps {
-  grid: number[][];
-  cavePos: { x: number; y: number };
-  selectedArrow?: { x: number; y: number } | null;
-  selectorPos?: { x: number; y: number } | null;
-  cameraOffset?: { x: number; z: number };
-  zoomFactor?: number;
-  viewMode?: '2d' | '3d' | 'fps';
-  theme?: ColorTheme;
-  players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean; teleportWarpTicksLeft?: number }>;
-  localPlayerId?: string;
-  onArrowClick?: (x: number, y: number) => void;
-  onCancelSelection?: () => void;
-  onPlayerClick?: () => void;
-  playerFlashCount?: number;
-  rotateUpright?: boolean;
-}
+   grid: number[][];
+   cavePos: { x: number; y: number };
+   selectedArrow?: { x: number; y: number } | null;
+   selectorPos?: { x: number; y: number } | null;
+   cameraOffset?: { x: number; z: number };
+   zoomFactor?: number;
+   viewMode?: '2d' | '3d' | 'fps';
+   theme?: ColorTheme;
+   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean; teleportWarpTicksLeft?: number }>;
+   localPlayerId?: string;
+   onArrowClick?: (x: number, y: number) => void;
+   onCancelSelection?: () => void;
+   onPlayerClick?: () => void;
+   playerFlashCount?: number;
+   rotateUpright?: boolean;
+   /** Map of cell keys "x,y" to crumble animation progress (0-1) for breakable rocks that are crumbling. */
+   crumbleAnimations?: Map<string, number>;
+ }
 
 type PlayerFacing = 'up' | 'right' | 'down' | 'left';
 type MeshPointerEvent = ThreeEvent<PointerEvent>;
@@ -1939,22 +1941,23 @@ const CameraController = ({
 };
 
 export const Game3D = ({
-  grid,
-  cavePos,
-  selectedArrow,
-  selectorPos,
-  cameraOffset,
-  zoomFactor = 0.93,
-  viewMode = '3d',
-  theme = 'default',
-  players,
-  localPlayerId,
-  onArrowClick,
-  onCancelSelection,
-  onPlayerClick,
-  playerFlashCount = 0,
-  rotateUpright = false,
-}: Game3DProps) => {
+   grid,
+   cavePos,
+   selectedArrow,
+   selectorPos,
+   cameraOffset,
+   zoomFactor = 0.93,
+   viewMode = '3d',
+   theme = 'default',
+   players,
+   localPlayerId,
+   onArrowClick,
+   onCancelSelection,
+   onPlayerClick,
+   playerFlashCount = 0,
+   rotateUpright = false,
+   crumbleAnimations,
+ }: Game3DProps) => {
   const gridHeight = grid.length;
   const gridWidth = grid[0]?.length || 0;
 

@@ -6,6 +6,24 @@ import { buildBaseGrid, cloneGrid } from "./utils";
 import type { LevelSolution, LevelDump, SolveGridInitialState, SolveOptions } from "./types";
 import type { SolveState } from "./state";
 
+export function validateSolverInput(levelId: number, grid: CellType[][], playerStart: Position, cavePos: Position): void {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const startTile = grid[playerStart.y]?.[playerStart.x];
+  const caveTile = grid[cavePos.y]?.[cavePos.x];
+  console.log({
+    levelId,
+    start: playerStart,
+    startTile,
+    cave: cavePos,
+    caveTile,
+    rows,
+    cols,
+    startInBounds: playerStart.x >= 0 && playerStart.x < cols && playerStart.y >= 0 && playerStart.y < rows,
+    caveInBounds: cavePos.x >= 0 && cavePos.x < cols && cavePos.y >= 0 && cavePos.y < rows,
+  });
+}
+
 export async function runSolveLevel(levelId: number, options: SolveOptions = {}): Promise<LevelSolution> {
   const levels = getAllLevels();
   const lvl = levels.find((l) => l.id === levelId);
@@ -20,6 +38,7 @@ export async function runSolveLevel(levelId: number, options: SolveOptions = {})
       ms: 0,
     };
   }
+  validateSolverInput(levelId, lvl.grid as CellType[][], lvl.playerStart, lvl.cavePos);
   return solveGrid(lvl.grid as CellType[][], lvl.playerStart, lvl.cavePos, options, levelId);
 }
 
@@ -176,6 +195,8 @@ export async function solveGrid(
       ms: 0,
     };
   }
+
+  validateSolverInput(levelId, grid, playerStart, cavePos);
 
   const start: SolveState = {
     grid: grid.map((r) => r.slice()) as CellType[][],

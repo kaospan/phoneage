@@ -342,11 +342,13 @@ export const TUTORIAL_DEFINITIONS: TutorialDefinition[] = [
         sound: "break",
         caption: "One step smashes it open.",
       },
-      {
+       {
         characterAt: { x: 3, y: 1 },
+        crumbleCell: { x: 2, y: 1 },
         cameraFocus: { x: 3, y: 1 },
         cameraZoom: 1.2,
-        durationMs: 500,
+        durationMs: 800,
+        caption: "It crumbles into void — you can never step on it again.",
       },
     ],
   },
