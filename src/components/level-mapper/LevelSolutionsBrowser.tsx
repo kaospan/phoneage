@@ -8,6 +8,7 @@ import {
   runSolveLevel,
   replaySolutionActions,
   generateSolverTraceHTML,
+  createEmptyTrace,
   type LevelSolution,
   type SolutionFrame,
 } from '@/lib/levelSolver';
@@ -72,11 +73,19 @@ export const LevelSolutionsBrowser: React.FC = () => {
   const solveOne = useCallback(async (id: number) => {
     setSolveStatus((prev) => ({ ...prev, [id]: { status: 'solving' } }));
     try {
-      const result = await runSolveLevel(id, SINGLE_SOLVE_OPTS);
+      const trace = createEmptyTrace();
+      const result = await runSolveLevel(id, { ...SINGLE_SOLVE_OPTS, trace });
       setSolveStatus((prev) => ({
         ...prev,
         [id]: { status: result.solved ? 'solved' : 'unsolved', solution: result },
       }));
+      if (!result.solved && result.trace) {
+        const html = generateSolverTraceHTML(result.trace);
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
     } catch (err) {
       setSolveStatus((prev) => ({ ...prev, [id]: { status: 'error', error: (err as Error).message } }));
     }
@@ -135,18 +144,25 @@ export const LevelSolutionsBrowser: React.FC = () => {
         if (existing !== 'solved') {
           setSolveStatus((prev) => ({ ...prev, [id]: { status: 'solving' } }));
           try {
-            const result = await runSolveLevel(id, BATCH_SOLVE_OPTS);
+            const trace = createEmptyTrace();
+            const result = await runSolveLevel(id, { ...BATCH_SOLVE_OPTS, trace });
             setSolveStatus((prev) => ({
               ...prev,
               [id]: { status: result.solved ? 'solved' : 'unsolved', solution: result },
             }));
+            if (!result.solved && result.trace) {
+              const html = generateSolverTraceHTML(result.trace);
+              const blob = new Blob([html], { type: 'text/html' });
+              const url = URL.createObjectURL(blob);
+              window.open(url, '_blank');
+              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            }
           } catch (err) {
             setSolveStatus((prev) => ({ ...prev, [id]: { status: 'error', error: (err as Error).message } }));
           }
         }
         done += 1;
         setBatchProgress({ done, total: ids.length });
-        // Yield so the list/thumbnails can repaint between levels instead of freezing the tab.
         await new Promise(requestAnimationFrame);
       }
       setBatchRunning(false);

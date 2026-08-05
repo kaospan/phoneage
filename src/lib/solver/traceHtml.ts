@@ -1,4 +1,5 @@
 import type { SolverTrace } from "./trace/trace";
+import { reconstructState } from "./trace/trace";
 
 const CELL_COLORS: Record<number, string> = {
   0: "#4a4a4a", 1: "#ef4444", 2: "#78716c", 3: "#22c55e", 4: "#3b82f6", 5: "#0f172a",
@@ -11,6 +12,13 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
   const nodes = Array.from(trace.nodes.values());
   const goalSet = new Set(trace.goalCaves.map((g) => `${g.x},${g.y}`));
   const furthest = trace.furthestStateId ?? trace.startStateId;
+  const initial = trace.lastExpandedStateId ?? furthest ?? trace.startStateId;
+
+  for (const node of nodes) {
+    if (!node.renderedState) {
+      node.renderedState = reconstructState(trace, node.id);
+    }
+  }
 
   const nodesJson = JSON.stringify(nodes.map((n) => ({
     id: n.id,
@@ -20,9 +28,11 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
     expansionOrder: n.expansionOrder,
     playerPos: n.playerPos,
     inventory: n.inventory,
-    grid: n.grid,
-    baseGrid: n.baseGrid,
-    breakableRockStates: Array.from(n.breakableRockStates.entries()),
+    grid: n.renderedState?.grid ?? n.playerPos,
+    baseGrid: n.renderedState?.baseGrid,
+    breakableRockStates: n.renderedState?.breakableRockStates
+      ? Array.from(n.renderedState.breakableRockStates.entries())
+      : [],
     attemptedActions: n.attemptedActions,
     distanceToGoal: n.distanceToGoal,
   })));
@@ -88,7 +98,8 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
       <div class="meta" style="margin-top:8px">
         <div>States generated: <b>${trace.statesGenerated}</b></div>
         <div>Nodes expanded: <b>${trace.nodesExpanded}</b></div>
-        <div>Collisions: <b>${trace.collisions.size}</b></div>
+        <div>Collisions: <b>${trace.collisions.length}</b></div>
+        <div>Dead ends: <b>${trace.deadEnds.length}</b></div>
       </div>
     </div>
   </div>
@@ -97,19 +108,20 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
   const nodes = ${nodesJson};
   const goalSet = new Set(${JSON.stringify(Array.from(goalSet))});
   const startStateId = ${trace.startStateId};
-  let currentIdx = 0;
+  let currentIdx = ${nodes.findIndex(n => n.id === initial)};
 
   function render() {
     const node = nodes[currentIdx];
     if (!node) return;
     const board = document.getElementById('board');
-    board.style.gridTemplateColumns = 'repeat(' + (node.grid[0]?.length || 0) + ', 36px)';
+    const grid = node.grid || [];
+    board.style.gridTemplateColumns = 'repeat(' + (grid[0]?.length || 0) + ', 36px)';
     board.innerHTML = '';
-    for (let y = 0; y < node.grid.length; y++) {
-      for (let x = 0; x < node.grid[y].length; x++) {
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < grid[y].length; x++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
-        const v = node.grid[y][x];
+        const v = grid[y]?.[x];
         cell.style.background = CELL_COLORS[v] || '#000';
         cell.textContent = v;
         const key = x+','+y;

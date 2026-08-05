@@ -29,6 +29,7 @@ export interface TraceNode {
   expansionOrder: number | undefined;
   attemptedActions: TraceActionRecord[];
   distanceToGoal: number;
+  renderedState?: SolveState;
 }
 
 export interface SolverTrace {
