@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
-import { loadCampaignProgress } from "@/lib/campaignProgress";
+import { loadCampaignProgress, resetCampaignProgress } from "@/lib/campaignProgress";
 import { hasCloudProgress, migrateLocalProgressToCloud, touchLastSeen } from "@/lib/cloudProgress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,16 +38,31 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
     // a resend-confirmation action instead of just showing Supabase's raw error text.
     const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
 
+    // campaignProgress.ts's localStorage cache is a single, unscoped slot — not keyed per
+    // account. Tracked here so a sign-out (or a straight switch to a different account) can
+    // wipe it before the next account ever sees it, otherwise it leaks in two ways: the new
+    // account's UI can briefly show the previous player's progress, and — worse — the "migrate
+    // whatever's in local storage" first-login path below would upload it straight into the new
+    // account as if it were their own pre-signup progress.
+    const previousUserIdRef = useRef<string | null>(null);
+
     useEffect(() => {
         if (!supabase) {
             setLoading(false);
             return;
         }
         supabase.auth.getSession().then(({ data }) => {
+            previousUserIdRef.current = data.session?.user?.id ?? null;
             setSession(data.session);
             setLoading(false);
         });
         const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
+            const newUserId = newSession?.user?.id ?? null;
+            const prevUserId = previousUserIdRef.current;
+            if (prevUserId && prevUserId !== newUserId) {
+                resetCampaignProgress();
+            }
+            previousUserIdRef.current = newUserId;
             setSession(newSession);
         });
         return () => subscription.subscription.unsubscribe();

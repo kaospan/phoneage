@@ -849,7 +849,7 @@ export function GameSprite2D({
                     isPlayer ? "z-10 overflow-visible" : "overflow-hidden",
                     isArrow ? "cursor-pointer hover:brightness-110" : "",
                     isPlayer && effectiveIsArrow ? "ring-2 ring-amber-300/80" : "",
-                    isSelected ? "ring-2 ring-white" : "",
+                    isSelected ? "z-20 ring-4 ring-white animate-selected-arrow-pulse" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
                   ].join(" ")}
                   style={{

@@ -13,9 +13,15 @@ CREATE TABLE IF NOT EXISTS public.disabled_view_modes (
 );
 ALTER TABLE public.disabled_view_modes ENABLE ROW LEVEL SECURITY;
 
+-- DROP + CREATE (rather than a plain CREATE) so this whole file is safe to re-run — CREATE
+-- POLICY has no "IF NOT EXISTS" option, so re-running the original version errored on a policy
+-- left over from an earlier partial run.
+DROP POLICY IF EXISTS "disabled_view_modes_read_all" ON public.disabled_view_modes;
 CREATE POLICY "disabled_view_modes_read_all" ON public.disabled_view_modes
   FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "disabled_view_modes_admin_insert" ON public.disabled_view_modes;
 CREATE POLICY "disabled_view_modes_admin_insert" ON public.disabled_view_modes
   FOR INSERT TO authenticated WITH CHECK (public.is_admin());
+DROP POLICY IF EXISTS "disabled_view_modes_admin_delete" ON public.disabled_view_modes;
 CREATE POLICY "disabled_view_modes_admin_delete" ON public.disabled_view_modes
   FOR DELETE TO authenticated USING (public.is_admin());

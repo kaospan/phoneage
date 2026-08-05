@@ -103,6 +103,10 @@ export default {
           "0%": { strokeDashoffset: "0" },
           "100%": { strokeDashoffset: "-32" },
         },
+        "selected-arrow-pulse": {
+          "0%, 100%": { boxShadow: "0 0 10px 3px rgba(255,255,255,0.5)" },
+          "50%": { boxShadow: "0 0 22px 8px rgba(255,255,255,0.95)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -111,6 +115,7 @@ export default {
         "flicker": "flicker 0.15s infinite",
         "map-dot-pop": "map-dot-pop 0.45s ease-out backwards",
         "map-trail-flow": "map-trail-flow 1.1s linear infinite",
+        "selected-arrow-pulse": "selected-arrow-pulse 1.1s ease-in-out infinite",
       },
     },
   },

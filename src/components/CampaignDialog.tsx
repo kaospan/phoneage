@@ -79,54 +79,60 @@ export const CampaignDialog = ({
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100svh-1rem)] w-[calc(100vw-1rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden border-white/10 bg-stone-950/95 p-0 text-stone-100">
-        <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_42%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_40%)] px-4 py-4 sm:px-6 sm:py-5">
+        <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_42%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_40%)] px-3 py-2.5 sm:px-6 sm:py-5">
           {/* DialogContent already renders its own close (×) button in the top-right corner —
               this header just reserves space for it (pr-12) instead of adding a second one. */}
-          <DialogHeader className="min-w-0 gap-2 pr-12 text-left">
-            <DialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-[0.14em] text-stone-50">
-              <Map className="h-5 w-5 text-amber-300" />
+          <DialogHeader className="min-w-0 gap-0.5 pr-10 text-left sm:gap-2 sm:pr-12">
+            <DialogTitle className="flex items-center gap-1.5 text-base font-black uppercase tracking-[0.1em] text-stone-50 sm:gap-2 sm:text-xl sm:tracking-[0.14em]">
+              <Map className="h-4 w-4 text-amber-300 sm:h-5 sm:w-5" />
               Campaign Map
             </DialogTitle>
-            <DialogDescription className="text-stone-300">
+            {/* Hidden on the smallest screens — the stat cards below already say the same thing
+                more usefully, and every pixel of header height here is a pixel the level path
+                (what this dialog is actually for) doesn't get. */}
+            <DialogDescription className="hidden text-stone-300 sm:block">
               Track clears, revisit solved stages, and push the campaign frontier forward one puzzle at a time.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Cleared</div>
-              <div className="mt-2 text-3xl font-black text-stone-50">{completedCount}</div>
-              <div className="mt-1 text-sm text-stone-300">of {totalLevels} total stages</div>
+          {/* 3-across even on narrow phones — stacking these vertically (the old md:grid-cols-3)
+              left almost the whole portrait screen full of stat cards and only a sliver for the
+              actual level path below, which is the part players are here to use. */}
+          <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-5 sm:gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-2 sm:rounded-2xl sm:p-4">
+              <div className="text-[9px] font-black uppercase tracking-[0.1em] text-stone-400 sm:text-xs sm:tracking-[0.16em]">Cleared</div>
+              <div className="mt-1 text-lg font-black text-stone-50 sm:mt-2 sm:text-3xl">{completedCount}</div>
+              <div className="mt-0.5 text-[10px] leading-tight text-stone-300 sm:mt-1 sm:text-sm">of {totalLevels} stages</div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Frontier</div>
-              <div className="mt-2 flex items-center gap-2 text-3xl font-black text-stone-50">
-                <Play className="h-5 w-5 text-emerald-300" />
+            <div className="rounded-xl border border-white/10 bg-white/5 p-2 sm:rounded-2xl sm:p-4">
+              <div className="text-[9px] font-black uppercase tracking-[0.1em] text-stone-400 sm:text-xs sm:tracking-[0.16em]">Frontier</div>
+              <div className="mt-1 flex items-center gap-1 text-lg font-black text-stone-50 sm:mt-2 sm:gap-2 sm:text-3xl">
+                <Play className="h-3.5 w-3.5 text-emerald-300 sm:h-5 sm:w-5" />
                 <span>{frontierLevelId == null ? "--" : frontierLevelId}</span>
               </div>
-              <div className="mt-1 text-sm text-stone-300">
-                {lockedCount > 0 ? `${lockedCount} stages still locked` : "Every stage is unlocked"}
+              <div className="mt-0.5 text-[10px] leading-tight text-stone-300 sm:mt-1 sm:text-sm">
+                {lockedCount > 0 ? `${lockedCount} locked` : "All unlocked"}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-400">Completion</div>
-              <div className="mt-2 text-3xl font-black text-stone-50">{Math.round(progressValue)}%</div>
-              <div className="mt-3">
-                <Progress value={progressValue} className="h-2.5 bg-white/10 [&>div]:bg-amber-400" />
+            <div className="rounded-xl border border-white/10 bg-white/5 p-2 sm:rounded-2xl sm:p-4">
+              <div className="text-[9px] font-black uppercase tracking-[0.1em] text-stone-400 sm:text-xs sm:tracking-[0.16em]">Done</div>
+              <div className="mt-1 text-lg font-black text-stone-50 sm:mt-2 sm:text-3xl">{Math.round(progressValue)}%</div>
+              <div className="mt-1 sm:mt-3">
+                <Progress value={progressValue} className="h-1.5 bg-white/10 sm:h-2.5 [&>div]:bg-amber-400" />
               </div>
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end">
+          <div className="mt-2 flex justify-end sm:mt-3">
             <Button
               type="button"
               onClick={() => setConfirmingReset(true)}
               variant="outline"
               size="sm"
-              className="gap-1.5 border-red-400/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+              className="h-7 gap-1.5 border-red-400/30 bg-red-500/10 px-2 text-xs text-red-200 hover:bg-red-500/20 hover:text-red-100 sm:h-9 sm:px-3 sm:text-sm"
               title="Erase all campaign progress and start over from Level 1"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Start Over
             </Button>
           </div>

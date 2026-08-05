@@ -90,6 +90,61 @@ const maybeReloadOnceForNewBuild = () => {
   }
 };
 
+// GitHub Pages doesn't support custom response headers, so the index.html cache-control meta
+// tags (see index.html) are only a best-effort hint — a tab left open across a new deploy can
+// still be running a stale build indefinitely, since maybeReloadOnceForNewBuild above only ever
+// compares against whatever build is ALREADY loaded. This actively re-checks what's actually
+// live, bypassing any HTTP cache via `cache: 'no-store'`, and offers a refresh instead of forcing
+// one — a forced reload mid-puzzle would be more disruptive than a stale tab.
+const VERSION_CHECK_INTERVAL_MS = 3 * 60 * 1000;
+const UPDATE_BANNER_ID = 'stone-age-update-banner';
+
+const showUpdateBanner = () => {
+  if (document.getElementById(UPDATE_BANNER_ID)) return;
+  const banner = document.createElement('div');
+  banner.id = UPDATE_BANNER_ID;
+  banner.style.cssText = [
+    'position:fixed', 'left:50%', 'bottom:16px', 'transform:translateX(-50%)',
+    'z-index:2147483647', 'background:rgba(20,14,10,0.95)', 'color:#fef3c7',
+    'border:1px solid rgba(252,211,77,0.4)', 'border-radius:9999px', 'padding:10px 16px',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif', 'font-size:13px',
+    'display:flex', 'align-items:center', 'gap:10px', 'box-shadow:0 10px 30px rgba(0,0,0,0.4)',
+  ].join(';');
+  banner.innerHTML = `
+    <span>A new version is available.</span>
+    <button type="button" style="background:#fbbf24;color:#1c140e;border:none;border-radius:9999px;padding:4px 12px;font-weight:700;cursor:pointer;font-size:13px;">Refresh</button>
+  `;
+  banner.querySelector('button')?.addEventListener('click', () => window.location.reload());
+  document.body.appendChild(banner);
+};
+
+const checkForNewVersion = async () => {
+  if (!import.meta.env.PROD) return;
+  const currentBuildId = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? '';
+  if (!currentBuildId) return;
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}index.html?_=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const html = await res.text();
+    const match = html.match(/<meta name="build-id" content="([^"]*)"/);
+    const remoteBuildId = match?.[1] ?? '';
+    if (remoteBuildId && remoteBuildId !== currentBuildId) {
+      showUpdateBanner();
+    }
+  } catch {
+    // Best-effort — a network hiccup shouldn't nag the player.
+  }
+};
+
+const startVersionWatch = () => {
+  if (typeof window === 'undefined' || !import.meta.env.PROD) return;
+  window.setInterval(() => void checkForNewVersion(), VERSION_CHECK_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void checkForNewVersion();
+  });
+  window.addEventListener('focus', () => void checkForNewVersion());
+};
+
 try {
   const rootElement = document.getElementById("root");
   console.log('📦 Root element:', rootElement);
@@ -99,6 +154,7 @@ try {
   }
 
   maybeReloadOnceForNewBuild();
+  startVersionWatch();
 
   console.log('🎯 Creating React root...');
   const root = createRoot(rootElement);

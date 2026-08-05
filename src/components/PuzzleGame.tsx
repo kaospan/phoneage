@@ -9,7 +9,6 @@ import {
   Expand,
   LayoutDashboard,
   LogOut,
-  Map as MapIcon,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -278,23 +277,6 @@ const BOTTOM_HUD_CLEARANCE_PX = 60;
 const distanceBetweenTouches = (t1: Touch, t2: Touch) =>
   Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
 
-const miniMapCellColor = (cell: CellType): string => {
-  if (cell === 0) return '#8a7560';
-  if (cell === 1) return '#3b1f0a';
-  if (cell === 2) return '#4a4a4a';
-  if (cell === 3) return '#4ade80';
-  if (cell === 4) return '#3b82f6';
-  if (cell >= 7 && cell <= 13) return '#60a5fa';
-  if (cell === 14) return '#ef4444';
-  if (cell === 15) return '#22c55e';
-  if (cell === 16) return '#991b1b';
-  if (cell === 17) return '#166534';
-  if (cell === 18) return '#1a1a1a';
-  if (cell === 19) return '#7dd3fc';
-  if (cell === 20) return '#fbbf24';
-  return '#111111';
-};
-
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
   if (dx > 0) return "right";
   if (dx < 0) return "left";
@@ -498,9 +480,6 @@ export const PuzzleGame = () => {
     intent: 'pinch' | 'pan' | null;
   } | null>(null);
   const multiTouchActiveRef = useRef(false);
-  const [isMiniMapVisible, setIsMiniMapVisible] = useState(false);
-  const [isMiniMapGestureActive, setIsMiniMapGestureActive] = useState(false);
-  const miniMapDismissTimerRef = useRef<number | null>(null);
 
   // Player highlight flash state for control transfer feedback
   const [playerFlashCount, setPlayerFlashCount] = useState(0);
@@ -902,11 +881,12 @@ export const PuzzleGame = () => {
 
   // A player standing on a void tile is always stuck — void can't be walked on or off (see
   // movement.ts's "Fire, water, void impassable" rule), only reached via a glide that ran out of
-  // room before hitting a real stopping point. First possible on level 3. One-time nudge toward
-  // Replay rather than leaving them to figure out the softlock on their own.
+  // room before hitting a real stopping point. Possible on any level with the right layout
+  // (first reachable on level 3), so this isn't pinned to one — same one-time-ever gate as every
+  // other tutorial (still reachable afterward via the "?" Watch Again menu).
   useEffect(() => {
     if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
-    if (!currentLevel || currentLevel.id !== 3 || renderGrid.length === 0) return;
+    if (!currentLevel || renderGrid.length === 0) return;
     if (isBuilding || isComplete || isTimeUp) return;
     if (getSeenTutorials().has("stuck-reminder")) return;
     const pos = renderPlayers.find((p) => p.isLocal)?.pos;
@@ -2507,28 +2487,6 @@ export const PuzzleGame = () => {
     const canZoomOut = cameraZoomIndex > fitToWidthZoomIndex;
     const nextViewMode = cyclableViewModes[(cyclableViewModes.indexOf(viewMode) + 1) % cyclableViewModes.length];
 
-  // Compute approximate viewport rectangle for mini-map viewport indicator
-  const miniMapViewport = useMemo(() => {
-    const cols = renderGrid[0]?.length ?? 0;
-    const rows = renderGrid.length;
-    if (cols === 0 || rows === 0 || viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return null;
-    const is2D = viewMode === '2d';
-    const fovDeg = is2D ? 42 : 50;
-    const baseH = is2D ? 24 : 18;
-    const fovRad = fovDeg * Math.PI / 180;
-    const visibleH = 2 * Math.tan(fovRad / 2) * baseH * cameraZoomFactor;
-    // Estimate container aspect ratio: in portrait the board is roughly 0.55× screen height
-    const estAspect = window.innerWidth / Math.max(1, window.innerHeight * 0.55);
-    const visibleW = visibleH * estAspect;
-    const cx = localPlayerPos.x + cameraOffset.x;
-    const cy = localPlayerPos.y + cameraOffset.z;
-    const wFrac = Math.min(1, visibleW / cols);
-    const hFrac = Math.min(1, visibleH / rows);
-    const leftFrac = Math.max(0, Math.min(1 - wFrac, (cx - visibleW / 2) / cols));
-    const topFrac = Math.max(0, Math.min(1 - hFrac, (cy - visibleH / 2) / rows));
-    return { leftFrac, topFrac, wFrac, hFrac };
-  }, [renderGrid, viewMode, cameraZoomFactor, cameraOffset, localPlayerPos]);
-
     // Drag handlers for panning the view
     const handleMouseDown = (e: React.MouseEvent) => {
       if (viewMode === 'fps' || viewMode === 'sprite' || viewMode === 'top') return;
@@ -2567,7 +2525,6 @@ export const PuzzleGame = () => {
       if (e.touches.length >= 2) {
         multiTouchActiveRef.current = true;
         setIsDragging(false);
-        setIsMiniMapGestureActive(true);
         const t0 = e.touches[0], t1 = e.touches[1], t2 = e.touches[2];
         const dist = distanceBetweenTouches(t0, t1);
         const midX = t2 ? (t0.clientX + t1.clientX + t2.clientX) / 3 : (t0.clientX + t1.clientX) / 2;
@@ -2664,13 +2621,11 @@ export const PuzzleGame = () => {
       if (e.touches.length === 0) {
         multiTouchActiveRef.current = false;
         setIsDragging(false);
-        setIsMiniMapGestureActive(false);
         twoFingerGestureRef.current = null;
         pinchDistanceRef.current = null;
       } else if (e.touches.length < 2) {
         twoFingerGestureRef.current = null;
         pinchDistanceRef.current = null;
-        setIsMiniMapGestureActive(false);
         setIsDragging(false);
       }
     };
@@ -2907,26 +2862,6 @@ export const PuzzleGame = () => {
         </Button>
 
         {campaignDialog}
-
-        <Button
-          onClick={() => {
-            setIsMiniMapVisible((v) => {
-              if (miniMapDismissTimerRef.current != null) window.clearTimeout(miniMapDismissTimerRef.current);
-              if (!v) miniMapDismissTimerRef.current = window.setTimeout(() => setIsMiniMapVisible(false), 3000);
-              return !v;
-            });
-          }}
-          variant="ghost"
-          size="sm"
-          className={[
-            "h-9 w-9 p-0 hover:bg-primary/20",
-            (isMiniMapVisible || isMiniMapGestureActive) ? "text-primary bg-primary/10" : "",
-          ].join(" ")}
-          title="Toggle level overview"
-          aria-pressed={isMiniMapVisible || isMiniMapGestureActive}
-        >
-          <MapIcon className="h-4 w-4" />
-        </Button>
 
         <Button
           onClick={() => {
@@ -3967,54 +3902,6 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        {(isMiniMapVisible || isMiniMapGestureActive) && renderGrid.length > 0 && (
-          <div
-            className="absolute bottom-14 right-2 z-[80] w-[32vw] max-w-[150px] rounded-xl bg-gray-900/95 border border-white/25 shadow-2xl p-1.5"
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => { e.stopPropagation(); if (isMiniMapVisible) setIsMiniMapVisible(false); }}
-            onPointerUp={() => { if (isMiniMapVisible) setIsMiniMapVisible(false); }}
-            style={isMobilePortrait ? { transform: 'rotate(-90deg)', transformOrigin: 'center center' } : undefined}
-          >
-            <div className="text-[8px] font-bold tracking-widest text-white/40 text-center mb-1 uppercase leading-none">Map</div>
-            <div style={{ position: 'relative', width: '100%' }}>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${renderGrid[0]?.length ?? 1}, 1fr)`,
-                  gap: '0.5px',
-                  width: '100%',
-                }}
-              >
-                {renderGrid.flatMap((row, y) =>
-                  row.map((cell, x) => {
-                    const isPlayer = renderPlayers.some((p) => p.pos.x === x && p.pos.y === y);
-                    const isCave = renderCavePos.x === x && renderCavePos.y === y;
-                    const bg = isPlayer ? '#ffffff' : isCave ? '#4ade80' : miniMapCellColor(cell);
-                    return (
-                      <div key={`${y}-${x}`} style={{ aspectRatio: '1', backgroundColor: bg, minWidth: 0 }} />
-                    );
-                  })
-                )}
-              </div>
-              {miniMapViewport && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: `${miniMapViewport.leftFrac * 100}%`,
-                    top: `${miniMapViewport.topFrac * 100}%`,
-                    width: `${miniMapViewport.wFrac * 100}%`,
-                    height: `${miniMapViewport.hFrac * 100}%`,
-                    border: '1.5px solid rgba(255,255,255,0.75)',
-                    borderRadius: '2px',
-                    boxShadow: '0 0 4px rgba(255,255,255,0.25)',
-                    pointerEvents: 'none',
-                  }}
-                />
-              )}
-            </div>
-          </div>
-        )}
         {isReplaying && (
           <div className="pointer-events-none absolute left-1/2 top-16 z-[65] -translate-x-1/2 px-4">
             <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-red-300/30 bg-red-950/85 px-4 py-2 text-sm font-black uppercase tracking-[0.12em] text-red-100 shadow-xl backdrop-blur-md">
@@ -4053,6 +3940,19 @@ export const PuzzleGame = () => {
               >
                 ×
               </button>
+            </div>
+          </div>
+        )}
+        {/* Same reminder as the one-time hint above, but permanent — every time an arrow is
+            selected (not just during the first-ever walkthrough), since forgetting you're
+            piloting the arrow instead of your character is an easy, recurring mistake. Only one
+            of the two banners can show at once (remoteArrowHintStage is null once the
+            walkthrough's done), so they never stack. */}
+        {selectedArrow && !remoteArrowHintStage && !isTutorialActive && !isComplete && !isTimeUp && (
+          <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+5.25rem)] z-[65] flex justify-center px-4">
+            <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/25 bg-stone-950/85 px-3.5 py-1.5 text-xs font-semibold text-stone-100 shadow-xl backdrop-blur-md">
+              <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-white" />
+              Arrow selected — tap it again, or tap elsewhere, to switch back to your dinosaur.
             </div>
           </div>
         )}

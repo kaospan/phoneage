@@ -720,7 +720,10 @@ export function GameTop2D({
                     isPlayer ? "z-10 overflow-visible" : "overflow-hidden",
                     isArrow && !isPlayer ? "cursor-pointer hover:brightness-110" : "",
                     isPlayer && effectiveIsArrow ? "ring-2 ring-amber-300/80" : "",
-                    isSelected ? "ring-2 ring-white" : "",
+                    // Deliberately loud — this is the one state where the player's next tap
+                    // does something completely different (move the arrow, not themselves), so
+                    // it needs to be unmistakable at a glance, not just a thin outline.
+                    isSelected ? "z-20 ring-4 ring-white animate-selected-arrow-pulse" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
                   ].join(" ")}
                   onClick={
