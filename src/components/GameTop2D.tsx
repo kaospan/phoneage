@@ -36,10 +36,7 @@ interface GameTop2DProps {
    /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
    idleArrowHintDirections?: { dx: number; dy: number }[];
    /** Identifies the current level so a fresh load (new id) can play its one-shot intro beat. */
-   levelId?: number | string | null;
-    /** Map of cell keys "x,y" to crumble animation progress (0-1) for breakable rocks that are crumbling. */
-    crumbleAnimations?: Map<string, number>;
-    isAdmin?: boolean;
+    levelId?: number | string | null;
     onArrowClick?: (x: number, y: number) => void;
     onCancelSelection?: () => void;
   }
@@ -557,7 +554,6 @@ export function GameTop2D({
                     isSelected ? "z-20 ring-4 ring-white animate-selected-arrow-pulse" : "",
                     isSelector ? "ring-2 ring-emerald-300" : "",
                   ].join(" ")}
-                  title={isAdmin ? `${x}, ${y}` : undefined}
                   onClick={
                     isArrow && !isPlayer
                       ? (e) => { e.stopPropagation(); onArrowClick?.(x, y); }

@@ -3870,7 +3870,6 @@ export const PuzzleGame = () => {
                      idleArrowHintDirections={idleArrowHintDirections}
                       levelId={currentLevel?.id ?? null}
                       crumbleAnimations={crumbleAnimations}
-                      isAdmin={isVerifiedAdminAccount}
                  onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];
@@ -3926,7 +3925,6 @@ export const PuzzleGame = () => {
                     theme={currentLevel.theme}
                     idleArrowHintDirections={idleArrowHintDirections}
                       levelId={currentLevel?.id ?? null}
-                      isAdmin={isVerifiedAdminAccount}
                      onArrowClick={(x, y) => {
                       if (localPlayer?.isGliding) return;
                       const cell = renderGrid[y]?.[x];
@@ -3974,7 +3972,6 @@ export const PuzzleGame = () => {
                  rotateUpright={isMobilePortrait}
                   idleArrowHintDirections={idleArrowHintDirections}
                   crumbleAnimations={crumbleAnimations}
-                  isAdmin={isVerifiedAdminAccount}
                  onArrowClick={(x, y) => {
                   if (localPlayer?.isGliding) return;
                   const cell = renderGrid[y]?.[x];

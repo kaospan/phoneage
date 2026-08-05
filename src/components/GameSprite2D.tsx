@@ -54,7 +54,6 @@ interface GameSprite2DProps {
    idleArrowHintDirections?: { dx: number; dy: number }[];
     /** Map of cell keys "x,y" to crumble animation progress (0-1) for breakable rocks that are crumbling. */
     crumbleAnimations?: Map<string, number>;
-    isAdmin?: boolean;
     onArrowClick?: (x: number, y: number) => void;
     onCancelSelection?: () => void;
   }
@@ -875,7 +874,7 @@ export function GameSprite2D({
                     e.stopPropagation();
                     if (isArrow) onArrowClick?.(x, y);
                   }}
-                   title={isAdmin ? `Tile ${tileType} (${x}, ${y})` : `Tile ${tileType}`}
+                   title={`Tile ${tileType}`}
                 >
                   {edge?.any && allowGeneratedFallback && (
                     <div
