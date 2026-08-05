@@ -37,7 +37,10 @@ import { RefreshCw, Circle, Trash2, Shield, ShieldOff } from "lucide-react";
 
 const PRESENCE_CHANNEL = "game-presence";
 
-const ORPHANED_SESSION_CAP_MS = 20 * 60 * 1000;
+// Sessions that never got an ended_at (tab closed, crash, connection loss) are capped so one
+// stuck row can't inflate total play time — levels' own timers top out around 2 minutes, so 10
+// minutes is already generous headroom for pre-timer idle/thinking time.
+const ORPHANED_SESSION_CAP_MS = 10 * 60 * 1000;
 
 interface ProfileRow {
     id: string;
@@ -71,6 +74,7 @@ interface SessionRow {
     completed: boolean;
     moves: number | null;
     time_left_seconds: number | null;
+    active_seconds: number | null;
 }
 
 interface PresenceMeta {
@@ -220,13 +224,27 @@ export function CrmDashboard() {
             const s = map.get(sess.user_id) ?? { levelsCompleted: 0, totalClears: 0, totalAttempts: 0, totalMoves: 0, totalPlayMs: 0 };
             s.totalAttempts += 1;
             s.totalMoves += sess.moves ?? 0;
-            const startMs = new Date(sess.started_at).getTime();
-            const endMs = sess.ended_at ? new Date(sess.ended_at).getTime() : Math.min(now, startMs + ORPHANED_SESSION_CAP_MS);
-            s.totalPlayMs += Math.max(0, endMs - startMs);
+            // active_seconds (idle-aware, tracked client-side) is preferred when present; older
+            // sessions logged before that shipped fall back to the wall-clock start/end span.
+            if (sess.active_seconds != null) {
+                s.totalPlayMs += Math.max(0, sess.active_seconds * 1000);
+            } else {
+                const startMs = new Date(sess.started_at).getTime();
+                const endMs = sess.ended_at ? new Date(sess.ended_at).getTime() : Math.min(now, startMs + ORPHANED_SESSION_CAP_MS);
+                s.totalPlayMs += Math.max(0, endMs - startMs);
+            }
             map.set(sess.user_id, s);
         }
+        // Belt-and-suspenders sanity clamp: no matter how many orphaned sessions a user racked
+        // up, they can't have played longer than their account has existed.
+        for (const p of profiles) {
+            const s = map.get(p.id);
+            if (!s) continue;
+            const accountAgeMs = Math.max(0, now - new Date(p.created_at).getTime());
+            s.totalPlayMs = Math.min(s.totalPlayMs, accountAgeMs);
+        }
         return map;
-    }, [progress, sessions]);
+    }, [progress, sessions, profiles]);
 
     const timeToCompleteByUserLevel = useMemo(() => {
         const map = new Map<string, number>();

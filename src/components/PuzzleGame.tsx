@@ -155,6 +155,11 @@ const MOBILE_DEFAULT_CAMERA_ZOOM_INDEX = DEFAULT_CAMERA_ZOOM_INDEX;
 const PINCH_ZOOM_STEP_DISTANCE_PX = 18;
 const IDLE_ARROW_HINT_MS = 2500;
 const EMPTY_ARROW_HINT: { dx: number; dy: number }[] = [];
+// "Time Played" in the CRM should reflect actual engagement, not a tab left open while the
+// player is away — the session clock stops accruing once this long passes with no move/keystroke
+// (same lastInputAtRef signal the idle-arrow-hint above already tracks, just a longer threshold).
+const SESSION_IDLE_TIMEOUT_MS = 30_000;
+const SESSION_ACTIVE_TIME_TICK_MS = 1_000;
 export const VIEW_MODES = ["3d", "fps", "2d", "sprite", "top"] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
@@ -357,6 +362,10 @@ export const PuzzleGame = () => {
   const currentPlaySessionIdRef = useRef<string | null>(null);
   const currentPlaySessionLevelIdRef = useRef<number | null>(null);
   const sessionStartInFlightRef = useRef(false);
+  // Accumulated active (non-idle) milliseconds for the currently open play session, plus the
+  // timestamp accounting was last brought up to date to. See accrueSessionActiveTime below.
+  const sessionActiveMsRef = useRef(0);
+  const sessionAccountedAtRef = useRef<number>(Date.now());
   // The fixed-timestep loop can run stepSimulation multiple times synchronously within one
   // animation frame when catching up on lag; each of those calls closes over the same (stale)
   // `isComplete` React state until the next render, so `isComplete` alone can't guard against
@@ -669,6 +678,34 @@ export const PuzzleGame = () => {
   // Drives the "idle on an arrow tile" hint below — reset on every input so the flash only
   // kicks in once the player has genuinely stopped acting, not just between simulation ticks.
   const lastInputAtRef = useRef<number>(Date.now());
+
+  // Brings sessionActiveMsRef up to date: adds the time elapsed since it was last accounted for,
+  // but only if the player was still "recently active" (per lastInputAtRef) throughout that
+  // window — otherwise that stretch was idle and doesn't count toward played time.
+  const accrueSessionActiveTime = useCallback(() => {
+    const now = Date.now();
+    const elapsed = now - sessionAccountedAtRef.current;
+    sessionAccountedAtRef.current = now;
+    if (elapsed <= 0) return;
+    if (now - lastInputAtRef.current < SESSION_IDLE_TIMEOUT_MS) {
+      sessionActiveMsRef.current += elapsed;
+    }
+  }, []);
+
+  const resetSessionActiveTime = useCallback(() => {
+    sessionActiveMsRef.current = 0;
+    sessionAccountedAtRef.current = Date.now();
+  }, []);
+
+  // Ticks the active-time accounting once a second while a session is open, so idle stretches
+  // longer than SESSION_IDLE_TIMEOUT_MS stop accruing well before the session actually ends.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (currentPlaySessionIdRef.current) accrueSessionActiveTime();
+    }, SESSION_ACTIVE_TIME_TICK_MS);
+    return () => window.clearInterval(interval);
+  }, [accrueSessionActiveTime]);
+
   const wsRef = useRef<WebSocket | null>(null);
   const lastRenderRef = useRef(0);
   const buildInFlightRef = useRef<Set<number>>(new Set());
@@ -1104,10 +1141,12 @@ export const PuzzleGame = () => {
           const abandonedTimeLeftSeconds = timerEnabledRef.current
             ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
             : null;
+          accrueSessionActiveTime();
           void endPlaySession(openSessionId, {
             completed: false,
             moves: priorMoves || null,
             timeLeftSeconds: abandonedTimeLeftSeconds,
+            activeSeconds: Math.round(sessionActiveMsRef.current / 1000),
           });
           currentPlaySessionIdRef.current = null;
         }
@@ -1115,6 +1154,7 @@ export const PuzzleGame = () => {
         if (sessionUserId && !isReplayingRef.current) {
           currentPlaySessionLevelIdRef.current = level.id;
           sessionStartInFlightRef.current = true;
+          resetSessionActiveTime();
           void startPlaySession(sessionUserId, level.id).then((id) => {
             sessionStartInFlightRef.current = false;
             currentPlaySessionIdRef.current = id;
@@ -1192,7 +1232,34 @@ export const PuzzleGame = () => {
         cavePos: { ...cave },
       });
       resetLevelTimer(level.timeLimitSeconds);
-    }, [buildBaseGrid, resetLevelTimer]);
+    }, [accrueSessionActiveTime, buildBaseGrid, resetLevelTimer, resetSessionActiveTime]);
+
+  // Close the open play session the moment the tab is actually hidden (switched away, closed,
+  // backgrounded) so it gets a real end time. Without this, a session that's never resumed sits
+  // open forever and the CRM's stats have to guess its length (ORPHANED_SESSION_CAP_MS) — with
+  // enough abandoned tabs that guess snowballs into "total play time" exceeding the account's
+  // age. visibilitychange is used over beforeunload/unload, which don't fire reliably on mobile.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") return;
+      const openSessionId = currentPlaySessionIdRef.current;
+      if (!openSessionId) return;
+      const moves = simRef.current?.players.get(localPlayerIdRef.current)?.moves ?? 0;
+      const timeLeftSeconds = timerEnabledRef.current
+        ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
+        : null;
+      accrueSessionActiveTime();
+      void endPlaySession(openSessionId, {
+        completed: false,
+        moves: moves || null,
+        timeLeftSeconds,
+        activeSeconds: Math.round(sessionActiveMsRef.current / 1000),
+      });
+      currentPlaySessionIdRef.current = null;
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [accrueSessionActiveTime]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1835,10 +1902,12 @@ export const PuzzleGame = () => {
 
         commitCampaignProgress(clearUpdate.progress);
         if (currentPlaySessionIdRef.current) {
+          accrueSessionActiveTime();
           void endPlaySession(currentPlaySessionIdRef.current, {
             completed: true,
             moves: localPlayer.moves,
             timeLeftSeconds: clearTimeLeftSeconds,
+            activeSeconds: Math.round(sessionActiveMsRef.current / 1000),
           });
           currentPlaySessionIdRef.current = null;
         }
@@ -1882,6 +1951,7 @@ export const PuzzleGame = () => {
       if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
       if (sim.cavePos.x !== renderCavePos.x || sim.cavePos.y !== renderCavePos.y) setRenderCavePos(sim.cavePos);
     }, [
+      accrueSessionActiveTime,
       addLevelTimeSeconds,
       allLevels,
       commitCampaignProgress,
