@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { loadCampaignProgress } from "@/lib/campaignProgress";
-import { hasCloudProgress, migrateLocalProgressToCloud } from "@/lib/cloudProgress";
+import { hasCloudProgress, migrateLocalProgressToCloud, touchLastSeen } from "@/lib/cloudProgress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,6 +65,9 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                 await migrateLocalProgressToCloud(userId, local);
             }
             if (!cancelled) setReadyUserId(userId);
+            // Baseline touch so "Last Seen" reflects this app open even if the player never
+            // starts a level (PuzzleGame's own activity-driven touches take over from here).
+            void touchLastSeen(userId);
         })();
         return () => { cancelled = true; };
     }, [session?.user?.id]);

@@ -62,7 +62,7 @@ import {
   type CampaignProgressState,
 } from "@/lib/campaignProgress";
 import { usePlayerSession } from "@/contexts/PlayerSessionContext";
-import { fetchCloudProgress, pushLevelProgress, pushProfileMeta } from "@/lib/cloudProgress";
+import { fetchCloudProgress, pushLevelProgress, pushProfileMeta, touchLastSeen } from "@/lib/cloudProgress";
 import { startPlaySession, endPlaySession } from "@/lib/playSessions";
 import { usePlayerPresence } from "@/hooks/usePlayerPresence";
 import { TutorialOverlay } from "./TutorialOverlay";
@@ -160,6 +160,10 @@ const EMPTY_ARROW_HINT: { dx: number; dy: number }[] = [];
 // (same lastInputAtRef signal the idle-arrow-hint above already tracks, just a longer threshold).
 const SESSION_IDLE_TIMEOUT_MS = 30_000;
 const SESSION_ACTIVE_TIME_TICK_MS = 1_000;
+// The CRM's "Last Seen" should track genuine activity, not just the moment they signed in — so
+// it's touched periodically while the player is actively engaged (same idle definition as above),
+// throttled to once a minute so a long session doesn't hammer the DB every tick.
+const LAST_SEEN_TOUCH_INTERVAL_MS = 60_000;
 export const VIEW_MODES = ["3d", "fps", "2d", "sprite", "top"] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
@@ -366,6 +370,7 @@ export const PuzzleGame = () => {
   // timestamp accounting was last brought up to date to. See accrueSessionActiveTime below.
   const sessionActiveMsRef = useRef(0);
   const sessionAccountedAtRef = useRef<number>(Date.now());
+  const lastSeenTouchedAtRef = useRef(0);
   // The fixed-timestep loop can run stepSimulation multiple times synchronously within one
   // animation frame when catching up on lag; each of those calls closes over the same (stale)
   // `isComplete` React state until the next render, so `isComplete` alone can't guard against
@@ -689,6 +694,11 @@ export const PuzzleGame = () => {
     if (elapsed <= 0) return;
     if (now - lastInputAtRef.current < SESSION_IDLE_TIMEOUT_MS) {
       sessionActiveMsRef.current += elapsed;
+      const userId = playerUserIdRef.current;
+      if (userId && now - lastSeenTouchedAtRef.current >= LAST_SEEN_TOUCH_INTERVAL_MS) {
+        lastSeenTouchedAtRef.current = now;
+        void touchLastSeen(userId);
+      }
     }
   }, []);
 
