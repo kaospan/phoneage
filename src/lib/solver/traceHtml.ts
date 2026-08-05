@@ -49,6 +49,10 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
     };
   }));
 
+  const initialIndex = nodes.findIndex((n) => n.id === initial);
+  const startIndex = nodes.findIndex((n) => n.id === trace.startStateId);
+  const furthestIndex = nodes.findIndex((n) => n.id === furthest);
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -120,20 +124,20 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
   const nodes = ${nodesJson};
   const goalSet = new Set(${JSON.stringify(Array.from(goalSet))});
   const startStateId = ${trace.startStateId};
-  let currentIdx = ${nodes.findIndex(n => n.id === initial)};
+  let currentIdx = ${Math.max(0, initialIndex)};
 
   function render() {
     const node = nodes[currentIdx];
     if (!node) return;
     const board = document.getElementById('board');
-    const grid = node.grid || [];
+    const grid = Array.isArray(node.grid) ? node.grid : [];
     board.style.gridTemplateColumns = 'repeat(' + (grid[0]?.length || 0) + ', 36px)';
     board.innerHTML = '';
     for (let y = 0; y < grid.length; y++) {
       for (let x = 0; x < grid[y].length; x++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
-        const v = grid[y]?.[x];
+        const v = grid[y][x];
         cell.style.background = CELL_COLORS[v] || '#000';
         cell.textContent = v;
         const key = x+','+y;
@@ -171,8 +175,8 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
   }
 
   function jump(id) {
-    currentIdx = nodes.findIndex(n => n.id === id);
-    if (currentIdx < 0) currentIdx = 0;
+    const idx = nodes.findIndex(n => n.id === id);
+    if (idx >= 0) currentIdx = idx;
     render();
   }
   function jumpStart() { jump(${trace.startStateId}); }
