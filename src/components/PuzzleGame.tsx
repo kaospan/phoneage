@@ -2770,14 +2770,15 @@ export const PuzzleGame = () => {
           disabled={isComplete || localPlayer?.isGliding}
           className={
             isMobilePortrait
-              ? "h-9 w-9 p-0 text-base font-semibold hover:bg-primary/20"
+              ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
               : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20"
           }
           title="Restart level (R)"
         >
+          {/* Icon-only on mobile (no room for a label there), but enlarged and amber-accented so
+              it reads as a distinct, important action among the neighboring same-size icon
+              buttons — spelled out with text on desktop instead, where there's room for it. */}
           <span aria-hidden>↻</span>
-          {/* Icon-only on mobile portrait to save HUD space; spelled out on desktop, where the
-              restart button was easy to miss among the other icon-only controls. */}
           {!isMobilePortrait && <span className="text-sm">Restart Level</span>}
         </Button>
 
