@@ -120,6 +120,15 @@ export default {
           "0%, 100%": { boxShadow: "0 0 0 0 rgba(251,191,36,0)" },
           "50%": { boxShadow: "0 0 0 6px rgba(251,191,36,0.35)" },
         },
+        "crumble": {
+          "0%": { transform: "scale(1) rotate(0deg)", opacity: "1" },
+          "15%": { transform: "scale(1.08) rotate(-3deg)", opacity: "1" },
+          "30%": { transform: "scale(1.12) rotate(2deg)", opacity: "0.9" },
+          "45%": { transform: "scale(1.05) rotate(-1deg)", opacity: "0.7" },
+          "60%": { transform: "scale(0.85) rotate(2deg)", opacity: "0.5" },
+          "75%": { transform: "scale(0.6) rotate(-1deg)", opacity: "0.3" },
+          "100%": { transform: "scale(0.3) rotate(0deg)", opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -132,6 +141,7 @@ export default {
         "goal-intro-glow": "goal-intro-glow 0.85s ease-in-out infinite",
         "climb-out-of-cave": "climb-out-of-cave 0.8s cubic-bezier(0.34,1.56,0.64,1) backwards",
         "stuck-hint-pulse": "stuck-hint-pulse 1.6s ease-in-out infinite",
+        "crumble": "crumble 0.5s ease-in-out forwards",
       },
     },
   },

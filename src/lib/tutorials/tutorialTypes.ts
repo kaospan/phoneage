@@ -20,6 +20,8 @@ export interface TutorialStep {
   fingerAt?: { x: number; y: number };
   /** Cells to highlight with a glowing outline during this step. */
   highlightCells?: Array<{ x: number; y: number }>;
+  /** Cells whose rock tile should play the crumble animation (rock fading/scaling into void). */
+  crumblingCells?: Array<{ x: number; y: number }>;
   /** Camera focus point (mini-grid cell coordinates) and zoom level (1 = fit whole board). Omit for a uiCallout step. */
   cameraFocus?: { x: number; y: number };
   cameraZoom?: number;
