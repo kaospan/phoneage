@@ -305,11 +305,14 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                   {tutorial.miniGrid.map((row, y) =>
                     row.map((cellType, x) => {
                       const isHighlighted = displayStep?.highlightCells?.some((c) => c.x === x && c.y === y);
+                      const isCrumblingRock = displayStep?.crumblingCells?.some((c) => c.x === x && c.y === y);
                       // When the arrow block is rendered as a sliding sprite (arrowAt), suppress
                       // its static grid icon so it isn't drawn twice.
                       const arrowSpriteActive = displayStep?.arrowAt && arrowCell;
                       const isMovedArrowCell =
                         arrowSpriteActive && arrowCell && x === arrowCell.x && y === arrowCell.y;
+                      // While crumbling, render the void gap underneath the breaking rock tile
+                      const bgCellType = isCrumblingRock ? 5 : cellType;
                       return (
                         <div
                           key={`${x}-${y}`}
@@ -323,11 +326,17 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                             transition: "box-shadow 250ms ease-in-out",
                           }}
                         >
-                          <TileBg type={cellType} uid={`tut-${x}-${y}`} />
-                          {!isMovedArrowCell && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <TileIcon type={cellType} />
+                          <TileBg type={bgCellType} uid={`tut-${x}-${y}`} />
+                          {isCrumblingRock ? (
+                            <div className="absolute inset-0 animate-crumble">
+                              <CrackedRockTile uid={`tut-crumble-${x}-${y}`} />
                             </div>
+                          ) : (
+                            !isMovedArrowCell && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <TileIcon type={cellType} />
+                              </div>
+                            )
                           )}
                         </div>
                       );
