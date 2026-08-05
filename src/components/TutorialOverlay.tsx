@@ -166,6 +166,11 @@ interface TutorialOverlayProps {
 // disappear on its own — only an explicit click (Skip, Got it, or the ×) may close it. Slowed
 // down from the original pacing so captions have time to actually be read.
 const STEP_DURATION_MULTIPLIER = 1.5;
+// A step's authored durationMs is tuned for its animation (a tap, a glide), not for reading —
+// short "beat" steps with no new caption text stay fast, but any step that puts a fresh sentence
+// on screen gets a floor scaled to its length so it can't fly by before it's readable.
+const CAPTION_READING_MS_BASE = 1000;
+const CAPTION_READING_MS_PER_CHAR = 40;
 
 export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   const [tutorialIndex, setTutorialIndex] = useState(0);
@@ -205,10 +210,22 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
     finish();
   };
 
+  // Replays the whole queue from the top without closing the overlay — lets a player who just
+  // finished immediately watch it again instead of having to dig it out of the "?" menu later.
+  const replay = () => {
+    setTutorialIndex(0);
+    setStepIndex(0);
+    setAwaitingDismiss(false);
+  };
+
   useEffect(() => {
     if (!step || awaitingDismiss) return;
     playTutorialSound(step.sound);
-    timerRef.current = window.setTimeout(advance, step.durationMs * STEP_DURATION_MULTIPLIER);
+    const readingFloorMs = step.caption
+      ? CAPTION_READING_MS_BASE + step.caption.length * CAPTION_READING_MS_PER_CHAR
+      : 0;
+    const delay = Math.max(step.durationMs * STEP_DURATION_MULTIPLIER, readingFloorMs);
+    timerRef.current = window.setTimeout(advance, delay);
     return () => { if (timerRef.current != null) window.clearTimeout(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tutorialIndex, stepIndex, awaitingDismiss]);
@@ -375,13 +392,24 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
             </div>
 
             {awaitingDismiss ? (
-              <Button
-                onClick={finish}
-                size="lg"
-                className="mt-5 bg-amber-400 px-8 text-base font-black text-stone-950 hover:bg-amber-300"
-              >
-                Got it!
-              </Button>
+              <div className="mt-5 flex items-center gap-3">
+                <Button
+                  onClick={replay}
+                  variant="outline"
+                  size="lg"
+                  className="gap-2 border-white/15 bg-white/5 text-stone-100 hover:bg-white/15"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Watch Again
+                </Button>
+                <Button
+                  onClick={finish}
+                  size="lg"
+                  className="bg-amber-400 px-8 text-base font-black text-stone-950 hover:bg-amber-300"
+                >
+                  Got it!
+                </Button>
+              </div>
             ) : (
               <Button
                 onClick={skip}
