@@ -2074,6 +2074,7 @@ export const PuzzleGame = () => {
             gridDirty = true;
           }
           if (outcome.newPlayerPos) {
+            const oldPos = { ...player.pos };
             player.facing = facingFromDelta(
               outcome.newPlayerPos.x - player.pos.x,
               outcome.newPlayerPos.y - player.pos.y,
@@ -2086,6 +2087,11 @@ export const PuzzleGame = () => {
               if (player.isLocal) {
                 pushHudMessage("Teleporting in 3s — move to break free!", 1800);
               }
+            }
+            if (outcome.brokeRock && player.isLocal) {
+              const rockKey = `${oldPos.x},${oldPos.y}`;
+              sim.crumbleAnimations.set(rockKey, 0);
+              pushHudMessage("Rock crumbled");
             }
           }
           if (outcome.collectedKey && player.isLocal) {
@@ -2106,12 +2112,7 @@ export const PuzzleGame = () => {
               pushHudMessage("Bonus time collected", 1400);
             }
           }
-          if (outcome.brokeRock && player.isLocal) {
-             const rockKey = `${player.pos.x},${player.pos.y}`;
-             sim.crumbleAnimations.set(rockKey, 0);
-             pushHudMessage("Rock crumbled");
-           }
-          if (outcome.consumedMove) {
+           if (outcome.consumedMove) {
             player.moves += 1;
             if (player.isLocal) localMoves = player.moves;
           }
@@ -4107,7 +4108,7 @@ export const PuzzleGame = () => {
           </div>
         )}
         {isTutorialActive && (
-          <TutorialOverlay queue={tutorialQueue} onDone={handleTutorialsDone} />
+          <TutorialOverlay queue={tutorialQueue} onDone={handleTutorialsDone} isMobilePortrait={isMobilePortrait} />
         )}
         {remoteArrowHintStage && !isTutorialActive && !isComplete && !isTimeUp && (
           <div className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+5.25rem)] z-[65] flex justify-center px-4">

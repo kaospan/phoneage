@@ -151,9 +151,10 @@ const UiCallout = ({ label }: { label: string }) => (
 interface TutorialOverlayProps {
   queue: TutorialDefinition[];
   onDone: (shown: TutorialDefinition[]) => void;
+  isMobilePortrait?: boolean;
 }
 
-export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
+export function TutorialOverlay({ queue, onDone, isMobilePortrait }: TutorialOverlayProps) {
   const [tutorialIndex, setTutorialIndex] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const [awaitingDismiss, setAwaitingDismiss] = useState(false);
@@ -287,7 +288,7 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
 
             <div
               className="relative mt-4 w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl"
-              style={{ height: 220 }}
+              style={{ height: isMobilePortrait ? "min(55vh, 520px)" : 220 }}
             >
               {step.uiCallout ? (
                 <UiCallout label={step.uiCallout.label} />

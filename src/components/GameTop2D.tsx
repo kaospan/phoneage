@@ -497,7 +497,7 @@ export function GameTop2D({
                const effectiveIsArrow = effectiveTileType >= 7 && effectiveTileType <= 13;
                // Override for crumbling rocks — show the rock tile with crumble animation
                // even though the grid cell has already been set to void (5).
-               const isCrumblingRock = crumbleAnimations?.has(uid);
+                const isCrumblingRock = crumbleAnimations?.has(`${x},${y}`);
                const renderTileType = isCrumblingRock ? 6 : effectiveTileType;
 
               const needsUprightIcon =
