@@ -3292,14 +3292,21 @@ export const PuzzleGame = () => {
                    {`L${currentLevel.id}`}
                  </span>
                  <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
-                 {currentBestMoves != null && (
-                   <span
-                     className="inline-flex items-center rounded-md border border-amber-300/50 bg-amber-500/10 px-2 py-1 text-[11px] font-black tracking-wide text-amber-100"
-                     title="Personal best moves on this level"
-                   >
-                     PB {currentBestMoves}
-                   </span>
-                 )}
+                 {/* Always rendered (even with no PB yet) at a fixed min-width so the HUD's
+                     total width — and the next-level arrow at the end of this row — doesn't
+                     shift depending on whether a level has a personal best recorded. */}
+                 <span
+                   className={[
+                     "inline-flex min-w-[60px] items-center justify-center rounded-md border px-2 py-1 text-[11px] font-black tracking-wide",
+                     currentBestMoves != null
+                       ? "border-amber-300/50 bg-amber-500/10 text-amber-100"
+                       : "border-transparent bg-transparent text-transparent pointer-events-none",
+                   ].join(" ")}
+                   title={currentBestMoves != null ? "Personal best moves on this level" : undefined}
+                   aria-hidden={currentBestMoves == null}
+                 >
+                   PB {currentBestMoves ?? 0}
+                 </span>
                   {timeLeftText && (
                      <span
                        className={[
@@ -3677,6 +3684,62 @@ export const PuzzleGame = () => {
                   }
                 }}
               />
+            ) : viewMode === "3d" ? (
+              // Reuses the "top" mode's own clean tile graphics rather than the separate
+              // Three.js engine below (still used for "fps"/"2d") — just tilted on a small
+              // CSS rotateX so it reads as a mild 3D perspective instead of a flat top-down view.
+              <div
+                className="h-full w-full"
+                style={{ perspective: "1400px", perspectiveOrigin: "50% 15%" }}
+              >
+                <div
+                  className="h-full w-full"
+                  style={{ transform: "rotateX(22deg)", transformOrigin: "50% 50%" }}
+                >
+                  <GameTop2D
+                    grid={renderGrid}
+                    cavePos={renderCavePos}
+                    playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
+                    selectedArrow={selectedArrow}
+                    selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
+                    players={renderPlayers}
+                    zoomFactor={cameraZoomFactor}
+                    fullBleed={isFullscreenMode}
+                    rotateUpright={isMobilePortrait}
+                    theme={currentLevel.theme}
+                    idleArrowHintDirections={idleArrowHintDirections}
+                    onArrowClick={(x, y) => {
+                      if (localPlayer?.isGliding) return;
+                      const cell = renderGrid[y]?.[x];
+                      if (cell !== undefined && isArrowCell(cell)) {
+                        if (localPlayerPos.x === x && localPlayerPos.y === y) {
+                          pushHudMessage("Step off the arrow before selecting it.", 2200);
+                          return;
+                        }
+                        const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                        if (isSameArrow) {
+                          enqueueInput({ type: "deselect" });
+                          resetSelectorToPlayer();
+                          flashPlayerHighlight();
+                          pushHudMessage("Arrow deselected");
+                        } else {
+                          enqueueInput({ type: "select", x, y });
+                          setIsSelectorActive(false);
+                          setSelectorPos({ x, y });
+                          pushHudMessage("Arrow selected — use the controls to move it.", 2200);
+                        }
+                      }
+                    }}
+                    onCancelSelection={() => {
+                      if (selectedArrow) {
+                        enqueueInput({ type: "deselect" });
+                        resetSelectorToPlayer();
+                        pushHudMessage("Arrow deselected");
+                      }
+                    }}
+                  />
+                </div>
+              </div>
             ) : viewMode === "sprite" ? (
               <GameSprite2D
                 grid={renderGrid}
