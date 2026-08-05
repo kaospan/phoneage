@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import dinotoonUrl from "@/assets/dinotoon.png";
+import { isArrowCell } from "@/game/arrows";
+import type { CellType } from "@/game/types";
 import type { TutorialDefinition, TutorialSound } from "@/lib/tutorials/tutorialTypes";
 import { Button } from "@/components/ui/button";
 
@@ -214,6 +216,19 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   const rows = tutorial?.miniGrid.length ?? 0;
   const cols = tutorial?.miniGrid[0]?.length ?? 0;
 
+  // The (single) arrow block that this tutorial demos, so we can render it as a sliding
+  // sprite when a step wants to show it being moved remotely.
+  const arrowCell = useMemo(() => {
+    if (!tutorial) return null;
+    for (let y = 0; y < tutorial.miniGrid.length; y++) {
+      const row = tutorial.miniGrid[y];
+      for (let x = 0; x < row.length; x++) {
+        if (isArrowCell(row[x] as CellType)) return { x, y, type: row[x] as CellType };
+      }
+    }
+    return null;
+  }, [tutorial]);
+
   const transform = useMemo(() => {
     if (!step?.cameraFocus) return "";
     const cx = (step.cameraFocus.x + 0.5) * CELL_PX;
@@ -226,128 +241,159 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
   if (!tutorial || !step) return null;
 
   return (
-    <div className="absolute inset-0 z-[90] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div className="absolute inset-0 z-[90] bg-black/80 backdrop-blur-sm">
       <button
         onClick={skip}
         aria-label="Close tutorial"
         title="Hide tutorial"
-        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 text-lg text-stone-300 hover:bg-white/15 hover:text-stone-50"
+        className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 text-lg text-stone-300 hover:bg-white/15 hover:text-stone-50"
       >
         ×
       </button>
-      <div className="flex w-full max-w-xl flex-col items-center px-4">
-        <div className="text-center">
-          <div className="text-base font-black uppercase tracking-[0.22em] text-amber-300 sm:text-lg">{tutorial.title}</div>
-          <div className="mt-2 text-lg font-medium leading-snug text-stone-50 sm:text-xl">{step.caption ?? tutorial.text}</div>
-        </div>
+      {/* Scrolls independently of the (fixed-position) close button above — on short/portrait
+          viewports the stacked title/caption/board/button content can be taller than the
+          screen, and it was previously just clipped since this had no overflow handling. */}
+      <div className="absolute inset-0 overflow-y-auto overscroll-contain">
+        <div className="flex min-h-full w-full flex-col items-center justify-center px-4 py-14">
+          <div className="flex w-full max-w-xl flex-col items-center">
+            <div className="text-center">
+              <div className="text-base font-black uppercase tracking-[0.22em] text-amber-300 sm:text-lg">{tutorial.title}</div>
+              <div className="mt-2 text-lg font-medium leading-snug text-stone-50 sm:text-xl">{step.caption ?? tutorial.text}</div>
+            </div>
 
-        <div
-          className="relative mt-4 w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl"
-          style={{ height: 220 }}
-        >
-          {step.uiCallout ? (
-            <UiCallout label={step.uiCallout.label} />
-          ) : (
             <div
-              className="absolute left-0 top-0"
-              style={{
-                width: cols * CELL_PX,
-                height: rows * CELL_PX,
-                transform,
-                transformOrigin: "top left",
-                transition: `transform ${transitionMs}ms ease-in-out`,
-              }}
+              className="relative mt-4 w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl"
+              style={{ height: 220 }}
             >
-              {tutorial.miniGrid.map((row, y) =>
-                row.map((cellType, x) => {
-                  const isHighlighted = step.highlightCells?.some((c) => c.x === x && c.y === y);
-                  return (
+              {step.uiCallout ? (
+                <UiCallout label={step.uiCallout.label} />
+              ) : (
+                <div
+                  className="absolute left-0 top-0"
+                  style={{
+                    width: cols * CELL_PX,
+                    height: rows * CELL_PX,
+                    transform,
+                    transformOrigin: "top left",
+                    transition: `transform ${transitionMs}ms ease-in-out`,
+                  }}
+                >
+                  {tutorial.miniGrid.map((row, y) =>
+                    row.map((cellType, x) => {
+                      const isHighlighted = step.highlightCells?.some((c) => c.x === x && c.y === y);
+                      // When the arrow block is rendered as a sliding sprite (step.arrowAt),
+                      // suppress its static grid icon so it isn't drawn twice.
+                      const arrowSpriteActive = step.arrowAt && arrowCell;
+                      const isMovedArrowCell =
+                        arrowSpriteActive && arrowCell && x === arrowCell.x && y === arrowCell.y;
+                      return (
+                        <div
+                          key={`${x}-${y}`}
+                          className="absolute overflow-hidden"
+                          style={{
+                            left: x * CELL_PX,
+                            top: y * CELL_PX,
+                            width: CELL_PX,
+                            height: CELL_PX,
+                            boxShadow: isHighlighted ? "inset 0 0 0 3px #fde047, 0 0 18px 4px rgba(253,224,71,0.8)" : "inset 0 0 0 1px rgba(0,0,0,0.3)",
+                            transition: "box-shadow 250ms ease-in-out",
+                          }}
+                        >
+                          <TileBg type={cellType} />
+                          {!isMovedArrowCell && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <TileIcon type={cellType} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }),
+                  )}
+
+                  {/* Sliding arrow block sprite (e.g. when demonstrating a remote move) */}
+                  {step.arrowAt && arrowCell && (
                     <div
-                      key={`${x}-${y}`}
-                      className="absolute overflow-hidden"
+                      className="absolute flex items-center justify-center"
                       style={{
-                        left: x * CELL_PX,
-                        top: y * CELL_PX,
+                        left: step.arrowAt.x * CELL_PX,
+                        top: step.arrowAt.y * CELL_PX,
                         width: CELL_PX,
                         height: CELL_PX,
-                        boxShadow: isHighlighted ? "inset 0 0 0 3px #fde047, 0 0 18px 4px rgba(253,224,71,0.8)" : "inset 0 0 0 1px rgba(0,0,0,0.3)",
-                        transition: "box-shadow 250ms ease-in-out",
+                        transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                        pointerEvents: "none",
                       }}
                     >
-                      <TileBg type={cellType} />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <TileIcon type={cellType} />
-                      </div>
+                      <TileIcon type={arrowCell.type} />
                     </div>
-                  );
-                }),
-              )}
+                  )}
 
-              {/* Character */}
-              {step.characterAt && (
-                <div
-                  className="absolute flex items-center justify-center"
-                  style={{
-                    left: step.characterAt.x * CELL_PX,
-                    top: step.characterAt.y * CELL_PX,
-                    width: CELL_PX,
-                    height: CELL_PX,
-                    transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
-                  }}
-                >
-                  <img src={dinotoonUrl} alt="" className="h-[85%] w-[85%] object-contain" style={{ imageRendering: "auto" }} />
-                </div>
-              )}
+                  {/* Character */}
+                  {step.characterAt && (
+                    <div
+                      className="absolute flex items-center justify-center"
+                      style={{
+                        left: step.characterAt.x * CELL_PX,
+                        top: step.characterAt.y * CELL_PX,
+                        width: CELL_PX,
+                        height: CELL_PX,
+                        transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                      }}
+                    >
+                      <img src={dinotoonUrl} alt="" className="h-[85%] w-[85%] object-contain" style={{ imageRendering: "auto" }} />
+                    </div>
+                  )}
 
-              {/* Animated finger cursor */}
-              {step.fingerAt && (
-                <div
-                  className="absolute flex items-center justify-center"
-                  style={{
-                    left: step.fingerAt.x * CELL_PX,
-                    top: step.fingerAt.y * CELL_PX,
-                    width: CELL_PX,
-                    height: CELL_PX,
-                    transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
-                  }}
-                >
-                  <FingerCursor />
+                  {/* Animated finger cursor */}
+                  {step.fingerAt && (
+                    <div
+                      className="absolute flex items-center justify-center"
+                      style={{
+                        left: step.fingerAt.x * CELL_PX,
+                        top: step.fingerAt.y * CELL_PX,
+                        width: CELL_PX,
+                        height: CELL_PX,
+                        transition: `left ${transitionMs}ms ease-in-out, top ${transitionMs}ms ease-in-out`,
+                      }}
+                    >
+                      <FingerCursor />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          {queue.map((t, i) => (
-            <div
-              key={t.id}
-              className={[
-                "h-1.5 w-6 rounded-full transition-colors",
-                i < tutorialIndex ? "bg-amber-300" : i === tutorialIndex ? "bg-amber-300/60" : "bg-white/15",
-              ].join(" ")}
-            />
-          ))}
-        </div>
+            <div className="mt-3 flex items-center gap-2">
+              {queue.map((t, i) => (
+                <div
+                  key={t.id}
+                  className={[
+                    "h-1.5 w-6 rounded-full transition-colors",
+                    i < tutorialIndex ? "bg-amber-300" : i === tutorialIndex ? "bg-amber-300/60" : "bg-white/15",
+                  ].join(" ")}
+                />
+              ))}
+            </div>
 
-        {awaitingDismiss ? (
-          <Button
-            onClick={finish}
-            size="lg"
-            className="mt-5 bg-amber-400 px-8 text-base font-black text-stone-950 hover:bg-amber-300"
-          >
-            Got it!
-          </Button>
-        ) : (
-          <Button
-            onClick={skip}
-            variant="ghost"
-            size="sm"
-            className="mt-4 text-sm text-stone-300 hover:bg-white/10 hover:text-stone-50"
-          >
-            Skip
-          </Button>
-        )}
+            {awaitingDismiss ? (
+              <Button
+                onClick={finish}
+                size="lg"
+                className="mt-5 bg-amber-400 px-8 text-base font-black text-stone-950 hover:bg-amber-300"
+              >
+                Got it!
+              </Button>
+            ) : (
+              <Button
+                onClick={skip}
+                variant="ghost"
+                size="sm"
+                className="mt-4 text-sm text-stone-300 hover:bg-white/10 hover:text-stone-50"
+              >
+                Skip
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
