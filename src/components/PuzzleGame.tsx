@@ -31,6 +31,7 @@ import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { GameTop2D } from "./GameTop2D";
 import { checkIsAdminAccount } from "@/lib/adminAccount";
+import { checkIsBetaTester } from "@/lib/betaTesters";
 import {
   RECORD_MOVES_UPDATED_EVENT,
   getRecordMovesEnabled,
@@ -724,11 +725,14 @@ export const PuzzleGame = () => {
   const replayIntervalRef = useRef<number | null>(null);
 
   const [overrideRevision, setOverrideRevision] = useState(0);
-  // Server-verified admins (admin_users) always get unrestricted level access in the main game —
-  // no separate local toggle to remember. The mapper's own "Admin" toggle (adminMode.ts) is a
-  // different, mapper-only concern (forcing level rebuilds/saves) and no longer gates this.
+  // Server-verified admins (admin_users) and beta testers (beta_testers) always get unrestricted
+  // level access in the main game — no separate local toggle to remember. The mapper's own
+  // "Admin" toggle (adminMode.ts) is a different, mapper-only concern (forcing level
+  // rebuilds/saves) and doesn't gate this. Beta testers get ONLY this — never /mapper or /crm,
+  // which are gated purely by admin_users (MapperAuthGate) and don't consult beta_testers at all.
   const [isVerifiedAdminAccount, setIsVerifiedAdminAccount] = useState(false);
-  const isAdminMode = isVerifiedAdminAccount;
+  const [isVerifiedBetaTester, setIsVerifiedBetaTester] = useState(false);
+  const canSkipLevels = isVerifiedAdminAccount || isVerifiedBetaTester;
   const [isReplaying, setIsReplaying] = useState(false);
   const [resolvedLevelImageUrl, setResolvedLevelImageUrl] = useState<string | null>(null);
   const [tutorialQueue, setTutorialQueue] = useState<TutorialDefinition[]>([]);
@@ -759,6 +763,16 @@ export const PuzzleGame = () => {
     let cancelled = false;
     checkIsAdminAccount(playerUserId).then((admin) => {
       if (!cancelled) setIsVerifiedAdminAccount(admin);
+    });
+    return () => { cancelled = true; };
+  }, [playerUserId]);
+
+  // Server-verified: is the currently signed-in player account a beta tester? (see beta_testers)
+  useEffect(() => {
+    if (!playerUserId) { setIsVerifiedBetaTester(false); return; }
+    let cancelled = false;
+    checkIsBetaTester(playerUserId).then((beta) => {
+      if (!cancelled) setIsVerifiedBetaTester(beta);
     });
     return () => { cancelled = true; };
   }, [playerUserId]);
@@ -913,7 +927,7 @@ export const PuzzleGame = () => {
     () => getHighestUnlockedLevelIndex(campaignProgress, orderedLevelIds),
     [campaignProgress, orderedLevelIds]
   );
-  const effectiveHighestUnlockedIndex = isAdminMode
+  const effectiveHighestUnlockedIndex = canSkipLevels
     ? Math.max(0, allLevels.length - 1)
     : highestUnlockedIndex;
   const frontierLevelId =
@@ -931,12 +945,12 @@ export const PuzzleGame = () => {
           theme: level.theme,
           isCurrent: level.id === currentLevel?.id,
           isCompleted: Boolean(record?.completed),
-          isUnlocked: isAdminMode || index <= highestUnlockedIndex,
+          isUnlocked: canSkipLevels || index <= highestUnlockedIndex,
           bestMoves: record?.bestMoves ?? null,
           bestTimeLeftSeconds: record?.bestTimeLeftSeconds ?? null,
         };
       }),
-    [allLevels, campaignProgress, currentLevel?.id, highestUnlockedIndex, isAdminMode]
+    [allLevels, campaignProgress, currentLevel?.id, highestUnlockedIndex, canSkipLevels]
   );
 
   useEffect(() => {
@@ -2028,7 +2042,7 @@ export const PuzzleGame = () => {
     const goToLevelIndex = useCallback((nextIndex: number) => {
       if (isTutorialActive) return false;
       if (nextIndex < 0 || nextIndex >= allLevels.length) return false;
-      if (!isAdminMode && nextIndex > highestUnlockedIndex) {
+      if (!canSkipLevels && nextIndex > highestUnlockedIndex) {
         const currentFrontier = allLevels[Math.min(highestUnlockedIndex, allLevels.length - 1)];
         const nextLocked = allLevels[nextIndex];
         if (currentFrontier && nextLocked) {
@@ -2044,7 +2058,7 @@ export const PuzzleGame = () => {
       setCompletionSummary(null);
       setCurrentLevelIndex(nextIndex);
       return true;
-    }, [allLevels, highestUnlockedIndex, isAdminMode, isTutorialActive, pushHudMessage]);
+    }, [allLevels, highestUnlockedIndex, canSkipLevels, isTutorialActive, pushHudMessage]);
 
     const goToLevelId = useCallback((levelId: number) => {
       const nextIndex = allLevels.findIndex((level) => level.id === levelId);
@@ -2728,7 +2742,7 @@ export const PuzzleGame = () => {
       rightShellPanelOpen ? "xl:pl-3 xl:pr-[22rem]" :
       "xl:px-3";
     const hasNextLevel = currentLevelIndex < allLevels.length - 1;
-    const nextLevelLocked = !isAdminMode && hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
+    const nextLevelLocked = !canSkipLevels && hasNextLevel && currentLevelIndex + 1 > highestUnlockedIndex;
     const nextLevelTitle = !hasNextLevel
       ? "No more levels"
       : nextLevelLocked

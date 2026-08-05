@@ -33,7 +33,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Circle, Trash2, Shield, ShieldOff } from "lucide-react";
+import { RefreshCw, Circle, Trash2, Shield, ShieldOff, Zap, ZapOff } from "lucide-react";
 
 const PRESENCE_CHANNEL = "game-presence";
 
@@ -160,6 +160,7 @@ export function CrmDashboard() {
     const [testUserFilter, setTestUserFilter] = useState<TestUserFilter>("all");
     const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
     const [showAdmins, setShowAdmins] = useState(false);
+    const [betaTesterIds, setBetaTesterIds] = useState<Set<string>>(new Set());
     const [tab, setTab] = useState("players");
     const [leaderboardLevelId, setLeaderboardLevelId] = useState<number | "all">("all");
     const [bestSortBy, setBestSortBy] = useState<"clears" | "moves" | "time">("clears");
@@ -170,7 +171,7 @@ export function CrmDashboard() {
         if (!supabase) { setError("Supabase not configured"); setLoading(false); return; }
         setLoading(true);
         setError(null);
-        const [profilesRes, progressRes, sessionsRes, levelsRes, adminUsersRes] = await Promise.all([
+        const [profilesRes, progressRes, sessionsRes, levelsRes, adminUsersRes, betaTestersRes] = await Promise.all([
             supabase.from("profiles").select("*").order("last_seen_at", { ascending: false }),
             supabase.from("player_progress").select("*"),
             supabase.from("play_sessions").select("*").order("started_at", { ascending: false }).limit(5000),
@@ -179,6 +180,8 @@ export function CrmDashboard() {
             // returns the viewer's own admin_users row — that's fine, badges/filtering just
             // degrade to knowing about the current admin until the migration is run.
             supabase.from("admin_users").select("user_id"),
+            // Also best-effort until schema_beta_testers.sql is run (table won't exist yet).
+            supabase.from("beta_testers").select("user_id"),
         ]);
         if (profilesRes.error || progressRes.error || sessionsRes.error || levelsRes.error) {
             setError(profilesRes.error?.message ?? progressRes.error?.message ?? sessionsRes.error?.message ?? levelsRes.error?.message ?? "Load failed");
@@ -190,6 +193,7 @@ export function CrmDashboard() {
         setSessions((sessionsRes.data ?? []) as SessionRow[]);
         setLevels((levelsRes.data ?? []).map((l: { id: number }) => ({ id: l.id })) as DbLevel[]);
         setAdminIds(new Set((adminUsersRes.data ?? []).map((r: { user_id: string }) => r.user_id)));
+        setBetaTesterIds(new Set((betaTestersRes.data ?? []).map((r: { user_id: string }) => r.user_id)));
         setLoading(false);
     };
 
@@ -360,6 +364,26 @@ export function CrmDashboard() {
         setProfiles((prev) => prev.map((p) => (p.id === userId ? { ...p, is_test_user: !current } : p)));
     };
 
+    // beta_testers is a separate allowlist table (like admin_users), not a column on profiles —
+    // granting/revoking is an insert/delete, not an update. Never touches admin_users, so this
+    // can never grant /mapper or /crm access, only the same in-game level-skip admins get.
+    const toggleBetaTester = async (userId: string, currentlyBeta: boolean) => {
+        if (!supabase) return;
+        if (currentlyBeta) {
+            const { error } = await supabase.from("beta_testers").delete().eq("user_id", userId);
+            if (error) { setError(error.message); return; }
+            setBetaTesterIds((prev) => {
+                const next = new Set(prev);
+                next.delete(userId);
+                return next;
+            });
+        } else {
+            const { error } = await supabase.from("beta_testers").insert({ user_id: userId });
+            if (error) { setError(error.message); return; }
+            setBetaTesterIds((prev) => new Set(prev).add(userId));
+        }
+    };
+
     const confirmDelete = async () => {
         if (!deleteTargetId || !supabase) return;
         setDeleting(true);
@@ -493,10 +517,13 @@ export function CrmDashboard() {
                                                         {adminIds.has(p.id) && (
                                                             <Badge variant="outline" className="border-sky-300/30 bg-sky-500/10 text-sky-200">Admin</Badge>
                                                         )}
+                                                        {betaTesterIds.has(p.id) && (
+                                                            <Badge variant="outline" className="border-violet-300/30 bg-violet-500/10 text-violet-200">Beta</Badge>
+                                                        )}
                                                         {p.is_test_user && (
                                                             <Badge variant="outline" className="border-red-300/30 bg-red-500/10 text-red-200">Test</Badge>
                                                         )}
-                                                        {!adminIds.has(p.id) && !p.is_test_user && (
+                                                        {!adminIds.has(p.id) && !betaTesterIds.has(p.id) && !p.is_test_user && (
                                                             <span className="text-xs text-stone-500">—</span>
                                                         )}
                                                     </div>
@@ -695,6 +722,67 @@ export function CrmDashboard() {
                 <TabsContent value="data" className="mt-0 flex min-h-0 flex-1 flex-col">
                     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
                         <div className="mb-6">
+                            <div className="text-sm font-black text-stone-50 mb-1">Beta Testers — Level Skip Access</div>
+                            <div className="text-xs text-stone-400 mb-3">
+                                Grants the same free level navigation admins get in the main game — never /mapper or /crm access. Use for beta testing specific players without making them admins.
+                            </div>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-white/10 hover:bg-transparent">
+                                        <TableHead className="text-stone-400">Player</TableHead>
+                                        <TableHead className="text-stone-400">Email</TableHead>
+                                        <TableHead className="text-stone-400">Level Skip Access</TableHead>
+                                        <TableHead className="text-stone-400">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {profiles.map((p) => {
+                                        const isAdmin = adminIds.has(p.id);
+                                        const isBeta = betaTesterIds.has(p.id);
+                                        return (
+                                            <TableRow key={p.id} className="border-white/5">
+                                                <TableCell className="font-medium text-stone-100">
+                                                    <div className="flex items-center gap-1.5">
+                                                        {p.display_name ?? p.id.slice(0, 8)}
+                                                        {isAdmin && (
+                                                            <Badge variant="outline" className="border-sky-300/30 bg-sky-500/10 text-sky-200">Admin</Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-stone-300">{p.email ?? "—"}</TableCell>
+                                                <TableCell>
+                                                    {isAdmin ? (
+                                                        <span className="text-xs text-stone-500">Admin — always has access</span>
+                                                    ) : isBeta ? (
+                                                        <Badge variant="outline" className="border-violet-300/30 bg-violet-500/10 text-violet-200">Beta access granted</Badge>
+                                                    ) : (
+                                                        <span className="text-xs text-stone-500">No level-skip access</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        disabled={isAdmin}
+                                                        className="gap-1.5 text-stone-300 hover:text-stone-100 disabled:opacity-40"
+                                                        onClick={() => toggleBetaTester(p.id, isBeta)}
+                                                    >
+                                                        {isBeta ? <ZapOff className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
+                                                        {isBeta ? "Revoke Beta Access" : "Grant Beta Access"}
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {profiles.length === 0 && (
+                                        <TableRow className="border-white/5">
+                                            <TableCell colSpan={4} className="py-8 text-center text-stone-500">No players yet.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                        <div className="mb-6">
                             <div className="text-sm font-black text-stone-50 mb-1">Test Users</div>
                             <div className="text-xs text-stone-400 mb-3">Mark accounts as test data to exclude them from analytics and allow bulk deletion.</div>
                             <Table>
@@ -788,10 +876,13 @@ export function CrmDashboard() {
                     <div className="text-xs text-stone-500">
                         Total time played: {formatDuration((statsByUser.get(selectedProfile.id) ?? { totalPlayMs: 0 }).totalPlayMs)}
                     </div>
-                    {(adminIds.has(selectedProfile.id) || selectedProfile.is_test_user) && (
+                    {(adminIds.has(selectedProfile.id) || betaTesterIds.has(selectedProfile.id) || selectedProfile.is_test_user) && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                             {adminIds.has(selectedProfile.id) && (
                                 <Badge variant="outline" className="border-sky-300/30 bg-sky-500/10 text-sky-200">Admin</Badge>
+                            )}
+                            {betaTesterIds.has(selectedProfile.id) && (
+                                <Badge variant="outline" className="border-violet-300/30 bg-violet-500/10 text-violet-200">Beta Tester</Badge>
                             )}
                             {selectedProfile.is_test_user && (
                                 <Badge variant="outline" className="border-red-300/30 bg-red-500/10 text-red-200">Test User</Badge>
