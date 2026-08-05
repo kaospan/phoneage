@@ -7,6 +7,7 @@ import { MapperPanelFrame, MapperMetricPill } from './MapperChrome';
 import {
   runSolveLevel,
   replaySolutionActions,
+  generateSolverTraceHTML,
   type LevelSolution,
   type SolutionFrame,
 } from '@/lib/levelSolver';
@@ -489,11 +490,33 @@ export const LevelSolutionsBrowser: React.FC = () => {
                 <div className="text-xs text-stone-500">
                   {selectedEntry?.status === 'solving'
                     ? 'Solving…'
-                    : selectedEntry?.status === 'unsolved'
-                      ? `No solution found — ${selectedEntry.solution?.reason ?? 'unknown reason'}.`
-                      : selectedEntry?.status === 'error'
-                        ? `Solver error: ${selectedEntry.error ?? 'unknown'}.`
-                        : 'Solve this level to see a step-by-step visual playthrough.'}
+                    : selectedEntry?.status === 'unsolved' ? (
+                      <>
+                        No solution found — {selectedEntry.solution?.reason ?? 'unknown reason'}.
+                        {selectedEntry.solution?.trace ? (() => {
+                          const traceLabel = selectedEntry.solution?.reason?.includes('Node limit')
+                            ? 'Inspect Search Frontier'
+                            : 'View Solver Trace';
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const html = generateSolverTraceHTML(selectedEntry.solution.trace!);
+                                const blob = new Blob([html], { type: 'text/html' });
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, '_blank');
+                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                              }}
+                              className="ml-2 rounded-lg border border-amber-300/30 bg-amber-500/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-100 hover:bg-amber-500/25"
+                            >
+                              {traceLabel}
+                            </button>
+                          );
+                        })() : null}
+                      </>
+                    ) : selectedEntry?.status === 'error'
+                      ? `Solver error: ${selectedEntry.error ?? 'unknown'}.`
+                      : 'Solve this level to see a step-by-step visual playthrough.'}
                 </div>
               )}
             </div>

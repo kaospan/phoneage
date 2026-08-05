@@ -1,6 +1,6 @@
 import { getAllLevels } from '@/data/levels';
 import { buildLevelFromSources } from '@/lib/levelImageDetection';
-import { runSolveLevel } from '@/lib/levelSolver';
+import { runSolveLevel, generateSolverTraceHTML } from '@/lib/levelSolver';
 import { seedDefaultReferences } from '@/lib/referenceSeeder';
 
 export interface RunLevelQaOptions {
@@ -111,6 +111,12 @@ export const runLevelQaReport = async (options: RunLevelQaOptions = {}): Promise
         maxDepth: options.solveMaxDepth ?? 120,
       });
       entry.solved = solved.solved;
+      if (!solved.solved && solved.trace) {
+        const html = generateSolverTraceHTML(solved.trace);
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        void fetch(url).then(() => URL.revokeObjectURL(url));
+      }
     } catch (error) {
       entry.solveError = (error as Error).message;
     }
