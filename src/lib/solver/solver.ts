@@ -48,7 +48,8 @@ export async function solveLevel(
     trace.nodesExpanded = 0;
     trace.statesGenerated = 0;
     trace.ms = 0;
-    trace.collisions = new Map();
+    trace.collisions = [];
+    trace.deadEnds = [];
     trace.nodes.set(0, {
       id: 0,
       parentId: null,
@@ -175,7 +176,11 @@ export async function solveLevel(
         if (opts.trace) {
           const existingId = stateIdByKey.get(nk);
           if (existingId !== undefined) {
-            trace.collisions.set(existingId, (trace.collisions.get(existingId) ?? 0) + 1);
+            trace.collisions.push({
+              fromNode: currentNodeId ?? 0,
+              toNode: existingId,
+              actionString: succ.actionString,
+            });
           }
         }
         continue;
