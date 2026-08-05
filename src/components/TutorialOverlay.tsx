@@ -69,35 +69,31 @@ const getVortexUrl = (): string | null => {
   return vortexUrl;
 };
 
- const TileBg = ({ type, uid, crumble }: { type: number; uid: string; crumble?: boolean }) => {
-   switch (type) {
-     case 0: // floor
-       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#d9a55a,#b8823a)" }} />;
-     case 2: // stone
-       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#5b4d42,#332a22)" }} />;
-     case 3: // cave/goal — the real game's ladder-arch tile, not a placeholder, so this reads as
-       // the same "ladder" players will actually see (see the original complaint this fixed).
-       return <CaveTile uid={uid} isStart={false} />;
-     case 18: // start marker — same arch, unlit (no ladder drawn inside)
-       return <CaveTile uid={uid} isStart />;
-     case 5: // void
-       return <div className="h-full w-full" style={{ background: "#0a0a0c" }} />;
-     case 6: // breakable rock — the real game's shattered-facet tile, not a placeholder
-       return (
-         <div className={crumble ? "animate-crumble" : undefined}>
-           <CrackedRockTile uid={uid} />
-         </div>
-       );
-     case 19: // teleport — same purple pad color as the real game's IconTile
-       return <div className="h-full w-full" style={{ background: "rgba(70,0,140,0.78)" }} />;
-     case 14: case 15: case 16: case 17: case 20:
-       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#c8a455,#8a6a2f)" }} />;
-     default:
-       // Arrows use the real game's own amber tile background, not a placeholder gradient.
-       if (isArrowCell(type as CellType)) return <ArrowBg uid={uid} />;
-       return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#c8a455,#8a6a2f)" }} />;
-   }
- };
+const TileBg = ({ type, uid }: { type: number; uid: string }) => {
+  switch (type) {
+    case 0: // floor
+      return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#d9a55a,#b8823a)" }} />;
+    case 2: // stone
+      return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#5b4d42,#332a22)" }} />;
+    case 3: // cave/goal — the real game's ladder-arch tile, not a placeholder, so this reads as
+      // the same "ladder" players will actually see (see the original complaint this fixed).
+      return <CaveTile uid={uid} isStart={false} />;
+    case 18: // start marker — same arch, unlit (no ladder drawn inside)
+      return <CaveTile uid={uid} isStart />;
+    case 5: // void
+      return <div className="h-full w-full" style={{ background: "#0a0a0c" }} />;
+    case 6: // breakable rock — the real game's shattered-facet tile, not a placeholder
+      return <CrackedRockTile uid={uid} />;
+    case 19: // teleport — same purple pad color as the real game's IconTile
+      return <div className="h-full w-full" style={{ background: "rgba(70,0,140,0.78)" }} />;
+    case 14: case 15: case 16: case 17: case 20:
+      return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#c8a455,#8a6a2f)" }} />;
+    default:
+      // Arrows use the real game's own amber tile background, not a placeholder gradient.
+      if (isArrowCell(type as CellType)) return <ArrowBg uid={uid} />;
+      return <div className="h-full w-full" style={{ background: "linear-gradient(135deg,#c8a455,#8a6a2f)" }} />;
+  }
+};
 
 const TileIcon = ({ type }: { type: number }) => {
   if (isArrowCell(type as CellType)) {
@@ -327,11 +323,7 @@ export function TutorialOverlay({ queue, onDone }: TutorialOverlayProps) {
                             transition: "box-shadow 250ms ease-in-out",
                           }}
                         >
-                          <TileBg
-                            type={cellType}
-                            uid={`tut-${x}-${y}`}
-                            crumble={displayStep?.crumbleCell?.x === x && displayStep?.crumbleCell?.y === y}
-                          />
+                          <TileBg type={cellType} uid={`tut-${x}-${y}`} />
                           {!isMovedArrowCell && (
                             <div className="absolute inset-0 flex items-center justify-center">
                               <TileIcon type={cellType} />

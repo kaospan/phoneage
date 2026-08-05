@@ -7,11 +7,9 @@ interface Game2DProps {
     selectedArrow?: { x: number; y: number } | null;
     onArrowClick?: (x: number, y: number) => void;
     onCancelSelection?: () => void;
-    /** Map of cell keys "x,y" to crumble animation progress (0-1) for breakable rocks that are crumbling. */
-    crumbleAnimations?: Map<string, number>;
   }
   
-  export const Game2D = ({ grid, playerPos, cavePos, selectedArrow, onArrowClick, onCancelSelection, crumbleAnimations }: Game2DProps) => {
+  export const Game2D = ({ grid, playerPos, cavePos, selectedArrow, onArrowClick, onCancelSelection }: Game2DProps) => {
     const goalCaveKeys = buildGoalCaveKeySet(grid, cavePos);
 
     const getCellDisplay = (cell: number, isPlayer: boolean, isCave: boolean) => {
@@ -42,7 +40,7 @@ interface Game2DProps {
       }
     };
   
-    const getCellColor = (cell: number, isCrumbling: boolean) => {
+    const getCellColor = (cell: number) => {
       switch (cell) {
         case 0: return "bg-amber-200"; // land
         case 1: return "bg-red-500"; // fire wall
@@ -62,7 +60,7 @@ interface Game2DProps {
         case 12:
         case 13: return "bg-amber-800"; // arrows
         case 4: return "bg-blue-400"; // water
-        case 5: return isCrumbling ? "bg-amber-700 text-amber-100" : "bg-sky-400"; // void (or crumbling rock)
+        case 5: return "bg-sky-400"; // void
         case 6: return "bg-amber-700 text-amber-100"; // breakable rock
         default: return "bg-stone-300";
       }
@@ -80,25 +78,23 @@ interface Game2DProps {
               {row.map((cell, x) => {
                 const isPlayer = playerPos.x === x && playerPos.y === y;
                 const isCave = goalCaveKeys.has(`${x},${y}`);
-                 const isArrow = (cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13;
-                 const isSelectedArrow = selectedArrow?.x === x && selectedArrow?.y === y;
-                 const isCrumbling = crumbleAnimations?.has(`${x},${y}`);
-                 const cellColor = isCave ? "bg-emerald-700" : getCellColor(cell, isCrumbling);
+                const isArrow = (cell >= 7 && cell <= 10) || cell === 11 || cell === 12 || cell === 13;
+                const isSelectedArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                const cellColor = isCave ? "bg-emerald-700" : getCellColor(cell);
                 
-                 return (
-                   <div
-                     key={`${x}-${y}`}
-                     className={`
-                       w-16 h-16 flex items-center justify-center text-3xl font-bold
-                       ${cellColor}
-                       ${isPlayer ? "ring-4 ring-green-400 animate-pulse shadow-sm" : ""}
-                       ${isCave ? "ring-4 ring-emerald-300 shadow-sm text-black" : ""}
-                       ${isSelectedArrow ? "ring-4 ring-white shadow-sm animate-pulse" : ""}
-                       ${crumbleAnimations?.has(`${x},${y}`) ? "animate-crumble" : ""}
-                       transition-all duration-200 rounded-lg
-                       border-2 border-stone-700 shadow-sm
-                       ${isArrow ? "cursor-pointer hover:brightness-110" : ""}
-                     `}
+                return (
+                  <div
+                    key={`${x}-${y}`}
+                    className={`
+                      w-16 h-16 flex items-center justify-center text-3xl font-bold
+                      ${cellColor}
+                      ${isPlayer ? "ring-4 ring-green-400 animate-pulse shadow-sm" : ""}
+                      ${isCave ? "ring-4 ring-emerald-300 shadow-sm text-black" : ""}
+                      ${isSelectedArrow ? "ring-4 ring-white shadow-sm animate-pulse" : ""}
+                      transition-all duration-200 rounded-lg
+                      border-2 border-stone-700 shadow-sm
+                      ${isArrow ? "cursor-pointer hover:brightness-110" : ""}
+                    `}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isArrow) {
