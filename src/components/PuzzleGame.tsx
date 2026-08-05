@@ -2165,6 +2165,21 @@ export const PuzzleGame = () => {
           totalLevels: allLevels.length,
         });
         setIsComplete(true);
+        if (recordMovesEnabledRef.current && !isReplayingRef.current && recordedActionsRef.current.length > 0) {
+          const moveLines: string[] = [];
+          let activeArrow: { x: number; y: number } | null = null;
+          for (const action of recordedActionsRef.current) {
+            if (action.type === "select") {
+              activeArrow = { x: action.x, y: action.y };
+            } else if (action.type === "deselect") {
+              activeArrow = null;
+            } else if (action.type === "move") {
+              const dir = action.dy === -1 ? "U" : action.dy === 1 ? "D" : action.dx === -1 ? "L" : "R";
+              moveLines.push(activeArrow ? `A(${activeArrow.x},${activeArrow.y}):${dir}` : `P:${dir}`);
+            }
+          }
+          console.log(`Level ${currentLevel.id} complete • Moves: [${moveLines.join(", ")}]`);
+        }
         const clearHighlights = [];
         if (clearUpdate.isFirstClear) clearHighlights.push("First clear");
         if (clearUpdate.isNewBestMoves) clearHighlights.push("Best moves");
