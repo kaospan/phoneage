@@ -1,4 +1,4 @@
-import type { SolverTrace } from "./trace";
+import type { SolverTrace } from "./trace/trace";
 
 const CELL_COLORS: Record<number, string> = {
   0: "#4a4a4a", 1: "#ef4444", 2: "#78716c", 3: "#22c55e", 4: "#3b82f6", 5: "#0f172a",

@@ -1,14 +1,14 @@
 import { getAllLevels, isPlaceholderGrid } from "@/data/levels";
 import { findGoalCaves } from "@/game/caves";
 import type { CellType, KeyInventory, Position } from "@/game/types";
-import { createEmptyTrace } from "./trace";
+import { createEmptyTrace } from "./trace/trace";
 import { generateSuccessors } from "./actions";
 import type { Action, SolveState } from "./state";
 import { cloneGrid, cloneInventory, cloneBreakables } from "./utils";
 import { manhattanToGoal } from "./heuristics";
 import { stateKey } from "./state";
 import type { SolveOptions, LevelSolution } from "./types";
-import type { SolverTrace, TraceActionRecord, TraceNode } from "./trace";
+import type { SolverTrace, TraceActionRecord, TraceNode } from "./trace/trace";
 
 function fmtAction(a: Action): string {
   if (a.t === "P") return `P:${a.d}`;
