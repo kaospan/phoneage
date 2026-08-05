@@ -633,12 +633,21 @@ export function dumpLevel(levelId: number): LevelDump | null {
  * Solves an arbitrary grid directly (no need for it to be registered via getAllLevels()) —
  * used by level-generation tooling to verify a candidate level before committing to it.
  */
+/** Lets a caller resume the search from real mid-level state instead of always assuming a fresh
+ * start (no keys collected, no rocks broken yet) — needed for checking "is this still solvable
+ * from where the player actually is right now", not just "is the level solvable from scratch". */
+export interface SolveGridInitialState {
+  inventory?: KeyInventory;
+  breakableRockStates?: Map<string, boolean>;
+}
+
 export async function solveGrid(
   grid: CellType[][],
   playerStart: Position,
   cavePos: Position,
   options: SolveOptions = {},
   levelId = 0,
+  initialState?: SolveGridInitialState,
 ): Promise<LevelSolution> {
   if (isPlaceholderGrid(grid)) {
     return {
@@ -668,8 +677,10 @@ export async function solveGrid(
     grid: grid.map((r) => r.slice()) as CellType[][],
     baseGrid: buildBaseGrid(grid.map((r) => r.slice()) as CellType[][]),
     playerPos: { ...playerStart },
-    inventory: { red: 0, green: 0 },
-    breakableRockStates: new Map(),
+    inventory: initialState?.inventory ? { ...initialState.inventory } : { red: 0, green: 0 },
+    breakableRockStates: initialState?.breakableRockStates
+      ? new Map(initialState.breakableRockStates)
+      : new Map(),
   };
   return await solveLevel(levelId, start, goalCaves, {
     maxMsPerLevel: options.maxMsPerLevel ?? 15000,

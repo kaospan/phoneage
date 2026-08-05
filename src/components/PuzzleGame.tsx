@@ -43,6 +43,7 @@ import { CellType, GameState, KeyInventory, Position } from "@/game/types";
 import { isArrowCell, getArrowDirections } from "@/game/arrows";
 import { buildGoalCaveKeySet, findGoalCaves } from "@/game/caves";
 import { attemptPlayerMove, attemptRemoteArrowMove } from "@/game/movement";
+import { solveGrid } from "@/lib/levelSolver";
 import { getNextTeleport, TELEPORT_CELL } from "@/game/teleport";
 import { buildLevelFromSources } from "@/lib/levelImageDetection";
 import { LEVEL_OVERRIDES_UPDATED_EVENT, saveLevelOverride } from "@/lib/levelOverrides";
@@ -922,6 +923,55 @@ export const PuzzleGame = () => {
     const def = getTutorialDefinition("stuck-reminder");
     if (def) setTutorialQueue([def]);
   }, [isPlayerStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
+
+  // Local move availability only catches "no move from THIS exact tile" — it can't see a dead
+  // end the player backed themselves into a few moves ago, like relaying every bridging arrow
+  // out of reach without ever riding one across. That needs an actual reachability search over
+  // the current grid (arrows included), so it's debounced and only runs a bounded BFS (via the
+  // same solver used for level QA) when the fast local check didn't already find something —
+  // no need to pay for a full search when the cheap check already knows the answer. A budget-cap
+  // ("timed out"/"node limit") is treated as inconclusive, never as "stuck", so a big/slow level
+  // that the search couldn't fully finish exploring never produces a false alarm.
+  const [isGloballyStuck, setIsGloballyStuck] = useState(false);
+  const globalStuckRequestRef = useRef(0);
+  useEffect(() => {
+    if (isPlayerStuck) {
+      setIsGloballyStuck(false);
+      return;
+    }
+    if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
+    if (!currentLevel || renderGrid.length === 0) return;
+    if (isBuilding || isComplete || isTimeUp) return;
+    const localPlayer = renderPlayers.find((p) => p.isLocal);
+    if (!localPlayer) return;
+    const sim = simRef.current;
+    const breakableRockStates = sim?.breakableRockStates ?? new Map();
+    const requestId = ++globalStuckRequestRef.current;
+    const timer = window.setTimeout(() => {
+      void solveGrid(
+        renderGrid,
+        localPlayer.pos,
+        renderCavePos,
+        { maxMsPerLevel: 700, maxNodesPerLevel: 15000, maxDepth: 120 },
+        currentLevel.id,
+        { inventory: { ...localPlayer.keys }, breakableRockStates },
+      ).then((result) => {
+        if (globalStuckRequestRef.current !== requestId) return; // stale — state moved on
+        setIsGloballyStuck(!result.solved && result.reason === "No solution found (search exhausted)");
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [renderGrid, renderPlayers, renderCavePos, currentLevel, isPlayerStuck, tutorialsEnabled, isReplaying, isTutorialActive, isBuilding, isComplete, isTimeUp]);
+
+  const isStuck = isPlayerStuck || isGloballyStuck;
+
+  useEffect(() => {
+    if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
+    if (!isGloballyStuck) return;
+    if (getSeenTutorials().has("stuck-reminder")) return;
+    const def = getTutorialDefinition("stuck-reminder");
+    if (def) setTutorialQueue([def]);
+  }, [isGloballyStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
 
   const handleTutorialsDone = useCallback((shown: TutorialDefinition[]) => {
     for (const t of shown) markTutorialSeen(t.id);
@@ -2880,7 +2930,7 @@ export const PuzzleGame = () => {
             // Subtle recurring nudge toward the way out whenever no move is currently possible
             // — not gated to "first time ever" like the Stuck? tutorial, since it should still
             // catch the eye every time this happens, not just once per player.
-            isPlayerStuck ? "animate-stuck-hint-pulse" : "",
+            isStuck ? "animate-stuck-hint-pulse" : "",
           ].join(" ")}
           title="Restart level (R)"
         >
@@ -3577,7 +3627,7 @@ export const PuzzleGame = () => {
                     disabled={isComplete || localPlayer?.isGliding}
                     className={[
                       "h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-stone-50 hover:bg-white/10",
-                      isPlayerStuck ? "animate-stuck-hint-pulse" : "",
+                      isStuck ? "animate-stuck-hint-pulse" : "",
                     ].join(" ")}
                     title="Restart level (R)"
                   >
