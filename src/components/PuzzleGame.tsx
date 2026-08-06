@@ -275,7 +275,7 @@ const TELEPORT_CYCLE_DELAY_TICKS = 180;
  *  reappearing on the destination pad: 1000ms * 60 ticks/sec / 1000ms = 60 ticks. */
 const TELEPORT_WARP_FLASH_TICKS = 60;
 /** How long a breakable rock takes to crumble after being stepped off, in simulation ticks (60Hz). */
-const CRUMBLE_ANIMATION_TICKS = 30;
+const CRUMBLE_ANIMATION_TICKS = 42;
 /** Height reserved for the secondary bottom HUD bar shown in mobile portrait, so overlapping controls (e.g. the thumbstick) can clear it. */
 const BOTTOM_HUD_CLEARANCE_PX = 60;
 const MAX_SESSION_RECORDED_INPUTS = 1000;

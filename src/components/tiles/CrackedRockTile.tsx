@@ -91,3 +91,18 @@ export const CrackedRockTile = ({ uid }: { uid: string }) => (
     <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.40)" strokeWidth="1.5" />
   </svg>
 );
+
+export const RockCrumbleEffect = () => (
+  <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div className="absolute inset-[7%] rounded-full bg-stone-200/20 blur-[2px] animate-rock-dust" />
+    <div className="absolute left-[14%] top-[19%] h-[22%] w-[18%] rotate-12 rounded-[2px] bg-[#9A7248] shadow-sm animate-rock-chip-a" />
+    <div className="absolute right-[15%] top-[24%] h-[16%] w-[23%] -rotate-6 rounded-[2px] bg-[#B08658] shadow-sm animate-rock-chip-b" />
+    <div className="absolute bottom-[16%] left-[40%] h-[18%] w-[17%] rotate-45 rounded-[2px] bg-[#6B4525] shadow-sm animate-rock-chip-c" />
+    <div
+      className="absolute inset-[24%] rounded-full animate-rock-dust"
+      style={{
+        background: "radial-gradient(circle, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 46%, transparent 72%)",
+      }}
+    />
+  </div>
+);

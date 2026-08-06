@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import dinotoonUrl from "@/assets/dinotoon.png";
 import { CaveTile } from "@/components/tiles/CaveTile";
-import { CrackedRockTile } from "@/components/tiles/CrackedRockTile";
+import { CrackedRockTile, RockCrumbleEffect } from "@/components/tiles/CrackedRockTile";
 import { ArrowBg, ArrowGlyph, ArrowTile } from "@/components/tiles/ArrowTile";
 import { isArrowCell } from "@/game/arrows";
 import type { CellType } from "@/game/types";
@@ -330,9 +330,14 @@ export function TutorialOverlay({ queue, onDone, isMobilePortrait }: TutorialOve
                         >
                           <TileBg type={bgCellType} uid={`tut-${x}-${y}`} />
                           {isCrumblingRock ? (
-                            <div className="absolute inset-0 animate-crumble">
-                              <CrackedRockTile uid={`tut-crumble-${x}-${y}`} />
-                            </div>
+                            <>
+                              <div className="absolute inset-0 z-[1]">
+                                <RockCrumbleEffect />
+                              </div>
+                              <div className="absolute inset-0 z-[2] animate-crumble">
+                                <CrackedRockTile uid={`tut-crumble-${x}-${y}`} />
+                              </div>
+                            </>
                           ) : (
                             !isMovedArrowCell && (
                               <div className="absolute inset-0 flex items-center justify-center">
