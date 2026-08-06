@@ -3,7 +3,7 @@ import { loadCustomLevelDefinition, loadCustomLevelIds } from '@/lib/customLevel
 import promotedLevelDefaultsRaw from '@/data/promoted-levels.json';
 import { DEFAULT_LEVEL_TIME_LIMITS } from './defaultLevelTimes';
 
-// Stone Age DOS game levels
+// PhoneAge game levels
 // Legend: 
 // 0 = floor, 1 = wall/fire, 2 = stone, 3 = cave entrance, 4 = water, 5 = void/air, 6 = breakable rock
 // 7 = arrow up, 8 = arrow right, 9 = arrow down, 10 = arrow left

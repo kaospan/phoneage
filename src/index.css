@@ -19,7 +19,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Modern Stone Age Theme - Brighter */
+    /* Modern PhoneAge Theme - Brighter */
     --background: 32 35% 18%;
     --foreground: 40 70% 95%;
 

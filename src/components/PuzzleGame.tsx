@@ -3253,7 +3253,7 @@ export const PuzzleGame = () => {
               it reads as a distinct, important action among the neighboring same-size icon
               buttons — spelled out with text on desktop instead, where there's room for it. */}
           <span aria-hidden>↻</span>
-          {!isMobilePortrait && !isCompact3DView && <span className="text-sm">Restart Level</span>}
+          <span className="text-sm">Restart Level</span>
         </Button>
 
         {campaignDialog}

@@ -59,7 +59,7 @@ export default function ResetPassword() {
             <div className="absolute inset-0 bg-blue-900/40 scanline" />
             <div className="relative z-10 w-full max-w-sm rounded-[24px] border border-white/10 bg-stone-950/90 p-6 shadow-2xl backdrop-blur-xl">
                 <div className="text-center">
-                    <div className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">Stone Age</div>
+                    <div className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">PhoneAge</div>
                     <div className="mt-1 text-xl font-black text-stone-50">Reset Password</div>
                 </div>
 

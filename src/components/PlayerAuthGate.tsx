@@ -191,7 +191,7 @@ export function PlayerAuthGate({ children }: { children: ReactNode }) {
                     className="w-full max-w-sm rounded-[24px] border border-white/10 bg-stone-950/90 p-6 shadow-2xl backdrop-blur-xl"
                 >
                     <div className="text-center">
-                        <div className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">Stone Age</div>
+                        <div className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">PhoneAge</div>
                         <div className="mt-1 text-xl font-black text-stone-50">
                             {mode === "signin" ? "Sign In" : mode === "signup" ? "Create Account" : "Reset Password"}
                         </div>
