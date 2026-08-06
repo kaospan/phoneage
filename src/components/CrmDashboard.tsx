@@ -77,6 +77,17 @@ interface SessionRow {
     active_seconds: number | null;
 }
 
+interface RecentAttemptRow {
+    id: string;
+    level_id: number;
+    started_at: string;
+    ended_at: string | null;
+    completed: boolean;
+    moves: number | null;
+    time_left_seconds: number | null;
+    syntheticFromProgress: boolean;
+}
+
 interface PresenceMeta {
     email?: string | null;
     level_id?: number | null;
@@ -345,10 +356,37 @@ export function CrmDashboard() {
         () => progress.filter((p) => p.user_id === selectedUserId).sort((a, b) => a.level_id - b.level_id),
         [progress, selectedUserId],
     );
-    const selectedSessions = useMemo(
-        () => sessions.filter((s) => s.user_id === selectedUserId).slice(0, 100),
-        [sessions, selectedUserId],
-    );
+    const selectedRecentAttempts = useMemo(() => {
+        const userSessions: RecentAttemptRow[] = sessions
+            .filter((s) => s.user_id === selectedUserId)
+            .map((s) => ({ ...s, syntheticFromProgress: false }));
+        const completedSessionLevels = new Set(
+            userSessions.filter((s) => s.completed).map((s) => s.level_id),
+        );
+        const progressClearsWithoutSession: RecentAttemptRow[] = selectedProgress
+            .filter((p) => p.completed && !completedSessionLevels.has(p.level_id))
+            .map((p) => {
+                const completedAt = p.last_completed_at ?? "1970-01-01T00:00:00.000Z";
+                return {
+                    id: `progress-clear-${p.user_id}-${p.level_id}`,
+                    level_id: p.level_id,
+                    started_at: completedAt,
+                    ended_at: completedAt,
+                    completed: true,
+                    moves: p.last_moves ?? p.best_moves,
+                    time_left_seconds: p.last_time_left_seconds ?? p.best_time_left_seconds,
+                    syntheticFromProgress: true,
+                };
+            });
+
+        return [...userSessions, ...progressClearsWithoutSession]
+            .sort((a, b) => {
+                const aMs = new Date(a.ended_at ?? a.started_at).getTime() || 0;
+                const bMs = new Date(b.ended_at ?? b.started_at).getTime() || 0;
+                return bMs - aMs;
+            })
+            .slice(0, 100);
+    }, [sessions, selectedUserId, selectedProgress]);
     const selectedProfile = profiles.find((p) => p.id === selectedUserId) ?? null;
 
     const toggleTestUser = async (userId: string, current: boolean) => {
@@ -910,8 +948,8 @@ export function CrmDashboard() {
 
                     <div className="mt-4 text-xs font-black uppercase tracking-wide text-stone-400">Recent attempts</div>
                     <div className="mt-2 space-y-1.5">
-                        {selectedSessions.length === 0 && <div className="text-xs text-stone-500">No sessions logged yet.</div>}
-                        {selectedSessions.map((s) => (
+                        {selectedRecentAttempts.length === 0 && <div className="text-xs text-stone-500">No sessions logged yet.</div>}
+                        {selectedRecentAttempts.map((s) => (
                             <div key={s.id} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs">
                                 <div className="flex items-center justify-between">
                                     <span className="font-bold text-stone-200">L{s.level_id}</span>
@@ -922,6 +960,7 @@ export function CrmDashboard() {
                                     {s.time_left_seconds != null && (
                                         <span className="text-stone-400">clock {formatClock(s.time_left_seconds)}</span>
                                     )}
+                                    {s.syntheticFromProgress && <span className="text-stone-500">progress record</span>}
                                     <span className="text-stone-500" title={formatTimestamp(s.started_at)}>{timeAgo(s.started_at)}</span>
                                 </div>
                                 <div className="mt-0.5 text-[10px] text-stone-600">{formatTimestamp(s.started_at)}</div>
