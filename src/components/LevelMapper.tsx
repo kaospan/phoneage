@@ -5,9 +5,10 @@ import BulkAddContextMenu from '@/components/level-mapper/BulkAddContextMenu';
 import LeftPanel from '@/components/level-mapper/LeftPanel';
 import GridEditorPanel from '@/components/level-mapper/GridEditorPanel';
 import JsonPanel from '@/components/level-mapper/JsonPanel';
+import LevelLab from '@/components/level-mapper/LevelLab';
 import LevelSolutionsBrowser from '@/components/level-mapper/LevelSolutionsBrowser';
 import { MapperDockButton } from '@/components/level-mapper/MapperChrome';
-import { ChevronLeft, ChevronRight, LayoutGrid, Route } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FlaskConical, LayoutGrid, Route } from 'lucide-react';
 import { toast } from 'sonner';
 
 const MAPPER_COMPACT_VIEWPORT_BREAKPOINT = 1280;
@@ -121,7 +122,7 @@ const LayoutInner: React.FC = () => {
 
     const showCompactDockBar = isCompactViewport && leftCollapsed && rightCollapsed;
 
-    const [mapperMode, setMapperMode] = useState<'editor' | 'solutions'>('editor');
+    const [mapperMode, setMapperMode] = useState<'editor' | 'solutions' | 'lab'>('editor');
 
     return (
         <div className="relative h-full min-h-0 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_26%),linear-gradient(180deg,#1c1917_0%,#0c0a09_100%)] text-stone-100">
@@ -156,6 +157,20 @@ const LayoutInner: React.FC = () => {
                             <Route className="h-3.5 w-3.5" />
                             Solutions
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setMapperMode('lab')}
+                            className={[
+                                'inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors',
+                                mapperMode === 'lab'
+                                    ? 'border-amber-300/40 bg-amber-500/15 text-amber-100'
+                                    : 'border-white/10 bg-white/[0.04] text-stone-400 hover:text-stone-100',
+                            ].join(' ')}
+                            title="Generate solver-checked level candidates and keep the best drafts"
+                        >
+                            <FlaskConical className="h-3.5 w-3.5" />
+                            Lab
+                        </button>
                     </div>
 
                     <div
@@ -163,6 +178,13 @@ const LayoutInner: React.FC = () => {
                         style={{ display: mapperMode === 'solutions' ? 'flex' : 'none' }}
                     >
                         <LevelSolutionsBrowser />
+                    </div>
+
+                    <div
+                        className="min-h-0 flex-1"
+                        style={{ display: mapperMode === 'lab' ? 'flex' : 'none' }}
+                    >
+                        <LevelLab />
                     </div>
 
                     <div
