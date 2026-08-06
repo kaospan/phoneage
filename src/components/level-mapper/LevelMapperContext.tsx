@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getAllLevels, isPlaceholderGrid, type ColorTheme, type LevelProvenance } from '@/data/levels';
+import { DEFAULT_3D_HUD_SETTINGS, getAllLevels, isPlaceholderGrid, normalizeHud3DSettings, type ColorTheme, type Hud3DSettings, type LevelProvenance } from '@/data/levels';
 import { emptyGrid, formatGridRowsOneLine, voidGrid } from '@/lib/levelgrid';
 import { detectGridLines } from './gridDetection';
 import { LevelMapperContext, type BulkContextType, type LevelMapperContextValue } from './LevelMapperStore';
@@ -276,6 +276,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 return null;
             }
         });
+        const [hud3d, setHud3d] = useState<Hud3DSettings>(() => normalizeHud3DSettings(DEFAULT_3D_HUD_SETTINGS));
         console.log('✓ Grid state initialized');
 
         const [allLevels, setAllLevels] = useState(() => {
@@ -322,6 +323,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             provenance?: LevelProvenance;
             theme: ColorTheme | undefined;
             timeLimitSeconds: number | null;
+            hud3d: Hud3DSettings;
             hourglassBonusByCell: Record<string, number>;
             imageURL: string | null;
             overlayEnabled: boolean;
@@ -363,6 +365,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 draft.timeLimitSeconds != null && Number.isFinite(draft.timeLimitSeconds)
                     ? Math.max(0, Math.round(draft.timeLimitSeconds))
                     : null;
+            const nextHud3d = normalizeHud3DSettings(draft.hud3d);
             const nextProvenance =
                 draft.provenance === 'user-edited' || draft.provenance === 'ai-detected'
                     ? draft.provenance
@@ -419,6 +422,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setCurrentLevelProvenance(nextProvenance);
             setTheme(draft.theme);
             setTimeLimitSeconds(nextTimeLimitSeconds);
+            setHud3d(nextHud3d);
             setHourglassBonusByCell(nextHourglassBonusByCell);
             setOverlayEnabled(Boolean(draft.overlayEnabled));
             setOverlayOpacity(nextOverlayOpacity);
@@ -535,6 +539,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     provenance: currentLevelProvenance,
                     theme,
                     timeLimitSeconds,
+                    hud3d,
                     hourglassBonusByCell: { ...(hourglassBonusByCell ?? {}) },
                     overlayEnabled,
                     overlayOpacity,
@@ -567,6 +572,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             currentLevelProvenance,
             theme,
             timeLimitSeconds,
+            hud3d,
             hourglassBonusByCell,
             overlayEnabled,
             overlayOpacity,
@@ -625,6 +631,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         setGrid(cloneGrid(fittedGrid));
                         setHourglassBonusByCell({ ...(baseline.hourglassBonusByCell ?? {}) });
                         setTimeLimitSeconds(baseline.timeLimitSeconds);
+                        setHud3d(baseline.hud3d);
                         setImageURL(baseline.imageURL);
                         setOverlayEnabled(baseline.overlayEnabled);
                         setOverlayOpacity(baseline.overlayOpacity);
@@ -649,6 +656,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                             provenance: baseline.provenance,
                             theme: baseline.theme,
                             timeLimitSeconds: baseline.timeLimitSeconds,
+                            hud3d: baseline.hud3d,
                             hourglassBonusByCell: baseline.hourglassBonusByCell,
                             imageURL: baseline.imageURL,
                             overlayEnabled: baseline.overlayEnabled,
@@ -1326,6 +1334,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             provenance?: LevelProvenance;
             theme: ColorTheme | undefined;
             timeLimitSeconds: number | null;
+            hud3d?: Hud3DSettings;
             hourglassBonusByCell?: Record<string, number>;
             imageURL: string | null;
             overlayEnabled: boolean;
@@ -1349,6 +1358,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 grid: snapshot.grid.map((row) => [...row]),
                 playerStart: snapshot.playerStart ? { ...snapshot.playerStart } : null,
                 provenance: snapshot.provenance,
+                hud3d: normalizeHud3DSettings(snapshot.hud3d),
                 hourglassBonusByCell: { ...(snapshot.hourglassBonusByCell ?? {}) },
             };
         };
@@ -1369,6 +1379,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setCurrentLevelProvenance(snapshot.provenance);
             setTheme(snapshot.theme);
             setTimeLimitSeconds(snapshot.timeLimitSeconds ?? null);
+            setHud3d(normalizeHud3DSettings(snapshot.hud3d));
             setHourglassBonusByCell({ ...(snapshot.hourglassBonusByCell ?? {}) });
             setImageURL(snapshot.imageURL);
             setOverlayEnabled(snapshot.overlayEnabled);
@@ -1425,7 +1436,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
 
             const nextProvenance: LevelProvenance = 'user-edited';
-            const res = saveGridChanges(grid, playerStart, nextProvenance, theme, timeLimitSeconds, hourglassBonusByCell, importLevelIndex, allLevels);
+            const res = saveGridChanges(grid, playerStart, nextProvenance, theme, timeLimitSeconds, hud3d, hourglassBonusByCell, importLevelIndex, allLevels);
             setAllLevels(res.levels);
             // Keep editor state in sync with the *actual* persisted payload (e.g. start-marker cave conversion).
             setGrid(res.gridSaved.map((row) => [...row]));
@@ -1447,6 +1458,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     provenance: nextProvenance,
                     theme,
                     timeLimitSeconds,
+                    hud3d,
                     hourglassBonusByCell: { ...(res.hourglassBonusByCellSaved ?? {}) },
                     overlayEnabled,
                     overlayOpacity,
@@ -1472,6 +1484,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     provenance: nextProvenance,
                     theme,
                     timeLimitSeconds,
+                    hud3d,
                     hourglassBonusByCell: { ...(res.hourglassBonusByCellSaved ?? {}) },
                     overlayEnabled,
                     overlayOpacity,
@@ -1502,6 +1515,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 provenance: nextProvenance,
                 theme,
                 timeLimitSeconds,
+                hud3d,
                 hourglassBonusByCell: res.hourglassBonusByCellSaved,
                 imageURL,
                 overlayEnabled,
@@ -1552,6 +1566,7 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 if (timeLimitSeconds != null && Number.isFinite(timeLimitSeconds) && timeLimitSeconds > 0) {
                     payload.timeLimitSeconds = Math.round(timeLimitSeconds);
                 }
+                payload.hud3d = normalizeHud3DSettings(hud3d);
                 if (res.hourglassBonusByCellSaved && Object.keys(res.hourglassBonusByCellSaved).length > 0) {
                     payload.hourglassBonusByCell = res.hourglassBonusByCellSaved;
                 }
@@ -1658,6 +1673,8 @@ export const LevelMapperProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setTheme,
             timeLimitSeconds,
             setTimeLimitSeconds,
+            hud3d,
+            setHud3d,
             imageURL,
             setImageURL,
             canvasRef,

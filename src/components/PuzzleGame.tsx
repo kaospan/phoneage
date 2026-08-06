@@ -23,7 +23,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { getAllLevels, themes, manualFallbackById } from "@/data/levels";
+import { DEFAULT_3D_HUD_SETTINGS, getAllLevels, normalizeHud3DSettings, themes, manualFallbackById } from "@/data/levels";
 import { getMusicEnabled, setMusicEnabled, MUSIC_ENABLED_UPDATED_EVENT } from "@/lib/musicPrefs";
 import phoneageMusicUrl from "@/assets/phoneage.mp3";
 import { Game3D } from "./Game3D";
@@ -343,6 +343,7 @@ interface LevelCompletionSummary {
 
 interface StoredLevelOverrideShape {
   grid?: unknown;
+  hud3d?: unknown;
 }
 
 type BrowserFullscreenDocument = Document & {
@@ -2292,6 +2293,7 @@ export const PuzzleGame = () => {
     }, [isIdleOnArrow, renderGrid, localPlayerPos.x, localPlayerPos.y]);
     const redKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.red) || 0));
     const greenKeyCount = Math.max(0, Math.floor(Number(localPlayer?.keys.green) || 0));
+    const hud3d = normalizeHud3DSettings(currentLevel.hud3d ?? DEFAULT_3D_HUD_SETTINGS);
     const timeLeftText = timeLeftSeconds == null
       ? null
       : (() => {
@@ -2985,7 +2987,8 @@ export const PuzzleGame = () => {
       }
     }, [cameraZoomIndex, isFullscreenMode]);
 
-    const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite" || viewMode === "top";
+    const isCompact3DView = viewMode === "3d";
+    const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite" || viewMode === "top" || isCompact3DView;
     const desktopShellActive = !useSplitHud && !shouldRotateGate;
     const desktopTopInsetClass =
       leftShellPanelOpen && rightShellPanelOpen ? "xl:left-[22rem] xl:right-[22rem]" :
@@ -3510,14 +3513,20 @@ export const PuzzleGame = () => {
         {useSplitHud ? (
           <div
             ref={topHudBarRef}
-            className="relative z-50 flex w-full items-start justify-between px-1.5"
-            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)' }}
+            className={[
+              "relative z-50 flex w-full items-start justify-between",
+              "px-1.5",
+            ].join(" ")}
+            style={{ paddingTop: isCompact3DView ? 'calc(env(safe-area-inset-top) + 0.125rem)' : 'calc(env(safe-area-inset-top) + 0.25rem)' }}
           >
             {/* Left HUD cluster (full-width in mobile portrait, since secondary controls move to the bottom HUD bar) */}
             <div
               className={[
-                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 overflow-x-auto",
-                isMobilePortrait ? "max-w-[calc(100vw-16px)]" : "max-w-[calc(50vw-12px)]",
+                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center overflow-x-auto",
+                isCompact3DView ? "gap-1 px-1.5 py-0.5" : "gap-1 px-2 py-1.5",
+                isCompact3DView
+                  ? "max-w-[calc(100vw-96px)]"
+                  : isMobilePortrait ? "max-w-[calc(100vw-16px)]" : "max-w-[calc(50vw-12px)]",
               ].join(" ")}
             >
               <Button
@@ -3526,7 +3535,7 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="default"
-                className="h-8 w-8 p-0 text-base font-bold hover:bg-primary/20"
+                className={isCompact3DView ? "h-7 w-7 p-0 text-base font-bold hover:bg-primary/20" : "h-8 w-8 p-0 text-base font-bold hover:bg-primary/20"}
                 disabled={currentLevelIndex === 0}
                 aria-label="Previous level"
                 title="Previous level (P)"
@@ -3535,10 +3544,14 @@ export const PuzzleGame = () => {
               </Button>
 
                <div className="flex items-center gap-2 px-1 whitespace-nowrap">
-                  <span className="text-primary font-bold text-sm">
-                    {`L${currentLevel.id}`}
-                  </span>
-                  <span className="text-foreground font-medium text-xs">{`M:${moves}`}</span>
+                 <span className="text-primary font-black text-sm">
+                   {isCompact3DView ? `Level ${currentLevel.id}` : `L${currentLevel.id}`}
+                 </span>
+                 {(!isCompact3DView || hud3d.showMoves) && (
+                   <span className="text-foreground font-medium text-xs">{`M:${moves}`}</span>
+                 )}
+                 {!isCompact3DView && (
+                 <>
                  {/* Always rendered (even with no PB yet) at a fixed min-width so the HUD's
                      total width — and the next-level arrow at the end of this row — doesn't
                      shift depending on whether a level has a personal best recorded. */}
@@ -3554,10 +3567,14 @@ export const PuzzleGame = () => {
                  >
                    PB {currentBestMoves ?? 0}
                  </span>
-                  {timeLeftText && (
+                 </>
+                 )}
+                  {timeLeftText && (!isCompact3DView || hud3d.showTimer) && (
                      <span
                        className={[
-                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums shadow-md",
+                         isCompact3DView
+                           ? "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[13px] font-black tabular-nums shadow-md"
+                           : "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums shadow-md",
                          isTimerUrgent
                            ? "border-red-200/80 bg-red-700 text-white shadow-lg ring-2 ring-red-200/40"
                            : "border-border/60 bg-background/70 text-foreground ring-1 ring-black/10",
@@ -3580,40 +3597,48 @@ export const PuzzleGame = () => {
                      START
                    </Button>
                  )}
-                 <div className="flex items-center gap-1">
-                    <span
-                      className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[10px] font-black text-white px-1 py-0.5"
-                      title="Red keys collected"
-                    >
-                     <span aria-hidden>🗝</span>
-                     <span>{redKeyCount}</span>
-                   </span>
-                   <span
-                     className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-[10px] font-black text-white px-1 py-0.5"
-                     title="Green keys collected"
-                   >
-                     <span aria-hidden>🔑</span>
-                     <span>{greenKeyCount}</span>
-                   </span>
-                </div>
+                 {(!isCompact3DView || hud3d.showRedKeys || hud3d.showGreenKeys) && (
+                   <div className="flex items-center gap-1">
+                     {(!isCompact3DView || hud3d.showRedKeys) && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[10px] font-black text-white px-1 py-0.5"
+                        title="Red keys collected"
+                      >
+                        <span aria-hidden>{isCompact3DView ? "🔴" : "🗝"}</span>
+                        <span>{redKeyCount}</span>
+                      </span>
+                     )}
+                    {(!isCompact3DView || hud3d.showGreenKeys) && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-[10px] font-black text-white px-1 py-0.5"
+                        title="Green keys collected"
+                      >
+                        <span aria-hidden>{isCompact3DView ? "🟢" : "🔑"}</span>
+                        <span>{greenKeyCount}</span>
+                      </span>
+                    )}
+                  </div>
+                 )}
               </div>
 
-              <Button
-                onClick={() => {
-                  if (currentLevelIndex < allLevels.length - 1) {
-                    if (goToLevelIndex(currentLevelIndex + 1)) pushHudMessage("Next level");
-                  } else {
-                    pushHudMessage("No more levels");
-                  }
-                }}
-                variant="ghost"
-                size="default"
-                className="h-8 w-8 p-0 text-base font-bold hover:bg-primary/20"
-                aria-label="Next level"
-                title={nextLevelTitle}
-              >
-                →
-              </Button>
+              {!isCompact3DView && (
+                <Button
+                  onClick={() => {
+                    if (currentLevelIndex < allLevels.length - 1) {
+                      if (goToLevelIndex(currentLevelIndex + 1)) pushHudMessage("Next level");
+                    } else {
+                      pushHudMessage("No more levels");
+                    }
+                  }}
+                  variant="ghost"
+                  size="default"
+                  className="h-8 w-8 p-0 text-base font-bold hover:bg-primary/20"
+                  aria-label="Next level"
+                  title={nextLevelTitle}
+                >
+                  →
+                </Button>
+              )}
             </div>
 
             {/* Right HUD cluster — hidden in mobile portrait, where these controls live in the bottom HUD bar instead */}
@@ -3954,14 +3979,25 @@ export const PuzzleGame = () => {
                 }}
               />
             ) : viewMode === "3d" ? (
-              <GameTop2D
+              // Reuses the "top" mode's own clean tile graphics rather than the separate
+              // Three.js engine below (still used for "fps"/"2d") — just tilted on a small
+              // CSS rotateX so it reads as a mild 3D perspective instead of a flat top-down view.
+              <div
+                className="h-full w-full"
+                style={{ perspective: "1400px", perspectiveOrigin: "50% 15%" }}
+              >
+                <div
+                  className="h-full w-full drop-shadow-[0_34px_44px_rgba(0,0,0,0.42)]"
+                  style={{ transform: "rotateX(22deg)", transformOrigin: "50% 50%" }}
+                >
+                  <GameTop2D
                     grid={renderGrid}
                     cavePos={renderCavePos}
                     playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
                     selectedArrow={selectedArrow}
                     selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
                     players={renderPlayers}
-                    zoomFactor={cameraZoomFactor}
+                    zoomFactor={cameraZoomFactor * 0.87}
                     fullBleed={isFullscreenMode}
                     rotateUpright={isMobilePortrait}
                     theme={currentLevel.theme}
@@ -3998,6 +4034,8 @@ export const PuzzleGame = () => {
                        }
                      }}
                     />
+                </div>
+              </div>
              ) : viewMode === "sprite" ? (
                <GameSprite2D
                  grid={renderGrid}

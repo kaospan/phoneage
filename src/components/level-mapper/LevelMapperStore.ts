@@ -1,5 +1,5 @@
 import { createContext, type Dispatch, type RefObject, type SetStateAction } from 'react';
-import { getAllLevels, type ColorTheme, type LevelProvenance } from '@/data/levels';
+import { getAllLevels, type ColorTheme, type Hud3DSettings, type LevelProvenance } from '@/data/levels';
 import type { DetectedGrid } from './gridDetection';
 
 // Centralized context/types to keep Fast Refresh stable.
@@ -31,6 +31,7 @@ export interface LevelMapperDraft {
   provenance?: LevelProvenance;
   theme: ColorTheme | undefined;
   timeLimitSeconds: number | null;
+  hud3d: Hud3DSettings;
   hourglassBonusByCell: Record<string, number>;
   overlayEnabled: boolean;
   overlayOpacity: number;
@@ -59,6 +60,7 @@ export interface LevelMapperSavedState {
   provenance?: LevelProvenance;
   theme: ColorTheme | undefined;
   timeLimitSeconds: number | null;
+  hud3d: Hud3DSettings;
   hourglassBonusByCell: Record<string, number>;
   overlayEnabled: boolean;
   overlayOpacity: number;
@@ -108,6 +110,8 @@ export interface LevelMapperContextValue {
   // Optional per-level countdown timer (seconds). null = no timer.
   timeLimitSeconds: number | null;
   setTimeLimitSeconds: (n: number | null) => void;
+  hud3d: Hud3DSettings;
+  setHud3d: Dispatch<SetStateAction<Hud3DSettings>>;
 
   // Image & canvas
   imageURL: string | null;
@@ -207,6 +211,7 @@ export interface LevelMapperContextValue {
     provenance?: LevelProvenance;
     theme: ColorTheme | undefined;
     timeLimitSeconds: number | null;
+    hud3d?: Hud3DSettings;
     // Per-cell hourglass bonuses keyed by "x,y" (column,row). Used only for tile id 20.
     hourglassBonusByCell?: Record<string, number>;
     imageURL: string | null;

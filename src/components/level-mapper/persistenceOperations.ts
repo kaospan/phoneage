@@ -1,4 +1,4 @@
-import { getAllLevels, isPlaceholderGrid, type ColorTheme, type LevelProvenance } from '@/data/levels';
+import { getAllLevels, isPlaceholderGrid, normalizeHud3DSettings, type ColorTheme, type Hud3DSettings, type LevelProvenance } from '@/data/levels';
 import { notifyLevelOverridesUpdated } from '@/lib/levelOverrides';
 import {
     LEVEL_IMAGE_SCALE_STORAGE_VERSION,
@@ -19,6 +19,7 @@ import type { LevelMapperDraft, LevelMapperSavedState } from './LevelMapperStore
  * @param playerStart - The player starting position (if any)
  * @param theme - The color theme for the level (if any)
  * @param timeLimitSeconds - Optional per-level countdown timer in seconds (null disables)
+ * @param hud3d - Per-level 3D HUD status bar visibility settings
  * @param hourglassBonusByCell - Optional per-cell hourglass bonuses keyed by "x,y" (column,row)
  * @param importLevelIndex - Index of the imported level (if any)
  * @param allLevels - Array of all available levels
@@ -30,6 +31,7 @@ export const saveGridChanges = (
     provenance: LevelProvenance | undefined,
     theme: ColorTheme | undefined,
     timeLimitSeconds: number | null,
+    hud3d: Hud3DSettings,
     hourglassBonusByCell: Record<string, number>,
     importLevelIndex: number | null,
     allLevels: ReturnType<typeof getAllLevels>
@@ -115,6 +117,7 @@ export const saveGridChanges = (
             ...(theme !== undefined ? { theme } : {}),
             // Preserve semantics: null means "no timer".
             timeLimitSeconds,
+            hud3d: normalizeHud3DSettings(hud3d),
         };
 
         if (Object.keys(hourglassToSave).length > 0) {

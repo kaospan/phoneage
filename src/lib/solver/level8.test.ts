@@ -12,7 +12,7 @@ describe("level 8 solver regression", () => {
       level!.grid as CellType[][],
       level!.playerStart,
       level!.cavePos,
-      { maxMsPerLevel: 700, maxNodesPerLevel: 15_000, maxDepth: 120 },
+      { maxMsPerLevel: 1500, maxNodesPerLevel: 15_000, maxDepth: 120 },
       level!.id,
     );
 

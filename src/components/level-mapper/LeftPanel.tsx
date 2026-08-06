@@ -65,7 +65,7 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         activeTile, setGrid, grid, setPlayerStart,
         hourglassBrushSeconds, setHourglassBrushSeconds, setHourglassBonusByCell,
-        theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, setIsSaved,
+        theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, hud3d, setHud3d, setIsSaved,
         addRowTop, addRowBottom, addColumnLeft, addColumnRight,
         removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
         setLoadedSnapshot, resetToLoadedSnapshot, replaceGridShape
@@ -106,6 +106,10 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
     const canGoNext = importLevelIndex !== null && importLevelIndex < allLevels.length - 1;
     const boardShapeLabel = `${rows} × ${cols}`;
     const imageStatusLabel = imageURL ? (overlayEnabled ? 'Overlay Active' : 'Image Loaded') : 'No Image';
+    const setHud3dOption = (key: keyof typeof hud3d, checked: boolean) => {
+        setHud3d((prev) => ({ ...prev, [key]: checked }));
+        setIsSaved(false);
+    };
     const tileFitSummary = imageURL
         ? tileFitStatus === 'detecting'
             ? 'Measuring screenshot tile size...'
@@ -639,6 +643,26 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                                 />
                                 <div className="text-[11px] text-stone-400">sec</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="rounded-[20px] border border-white/10 bg-white/[0.045] px-4 py-3">
+                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">3D HUD Status Bar</div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-stone-200">
+                            {[
+                                ['showTimer', 'Timer'],
+                                ['showMoves', 'Moves'],
+                                ['showRedKeys', 'Red keys'],
+                                ['showGreenKeys', 'Green keys'],
+                            ].map(([key, label]) => (
+                                <label key={key} className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-stone-900/45 px-2.5 py-2">
+                                    <Checkbox
+                                        checked={hud3d[key as keyof typeof hud3d]}
+                                        onCheckedChange={(checked) => setHud3dOption(key as keyof typeof hud3d, checked === true)}
+                                    />
+                                    <span>{label}</span>
+                                </label>
+                            ))}
                         </div>
                     </div>
 

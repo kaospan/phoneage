@@ -171,6 +171,7 @@ export interface Level {
    * Bonus Time tiles (20) add these seconds to the countdown when collected.
    */
   hourglassBonusByCell?: Record<string, number>;
+  hud3d?: Hud3DSettings;
   image?: string;
   sources?: string[];
   autoBuild?: boolean;
@@ -180,6 +181,32 @@ export interface Level {
    */
   lockOverride?: boolean;
 }
+
+export interface Hud3DSettings {
+  showMoves: boolean;
+  showTimer: boolean;
+  showRedKeys: boolean;
+  showGreenKeys: boolean;
+}
+
+export const DEFAULT_3D_HUD_SETTINGS: Hud3DSettings = {
+  showMoves: false,
+  showTimer: true,
+  showRedKeys: true,
+  showGreenKeys: true,
+};
+
+export const normalizeHud3DSettings = (value: unknown): Hud3DSettings => {
+  const input = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<Record<keyof Hud3DSettings, unknown>>
+    : {};
+  return {
+    showMoves: typeof input.showMoves === 'boolean' ? input.showMoves : DEFAULT_3D_HUD_SETTINGS.showMoves,
+    showTimer: typeof input.showTimer === 'boolean' ? input.showTimer : DEFAULT_3D_HUD_SETTINGS.showTimer,
+    showRedKeys: typeof input.showRedKeys === 'boolean' ? input.showRedKeys : DEFAULT_3D_HUD_SETTINGS.showRedKeys,
+    showGreenKeys: typeof input.showGreenKeys === 'boolean' ? input.showGreenKeys : DEFAULT_3D_HUD_SETTINGS.showGreenKeys,
+  };
+};
 
 export const isPlaceholderGrid = (grid?: number[][]) => {
   if (!grid || grid.length === 0) return true;
@@ -212,6 +239,7 @@ type PromotedLevelDefault = Pick<
   | 'theme'
   | 'timeLimitSeconds'
   | 'hourglassBonusByCell'
+  | 'hud3d'
   | 'lockOverride'
 >;
 
@@ -258,6 +286,7 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
 
     const hourglassBonusByCell =
       e.hourglassBonusByCell && typeof e.hourglassBonusByCell === 'object' ? (e.hourglassBonusByCell as Record<string, number>) : undefined;
+    const hud3d = e.hud3d === undefined ? undefined : normalizeHud3DSettings(e.hud3d);
 
     out.push({
       id,
@@ -268,6 +297,7 @@ const coercePromotedLevelDefaults = (value: unknown): PromotedLevelDefault[] => 
       ...(theme ? { theme } : {}),
       ...(Number.isFinite(timeLimitSeconds) ? { timeLimitSeconds } : {}),
       ...(hourglassBonusByCell ? { hourglassBonusByCell } : {}),
+      ...(hud3d ? { hud3d } : {}),
       ...(e.lockOverride !== undefined ? { lockOverride: Boolean(e.lockOverride) } : {}),
     });
   }
@@ -753,6 +783,9 @@ export const getAllLevels = (): Level[] => {
              } else {
                delete result.hourglassBonusByCell;
              }
+           }
+           if (parsed.hud3d !== undefined) {
+             result.hud3d = normalizeHud3DSettings(parsed.hud3d);
            }
            return result;
          }

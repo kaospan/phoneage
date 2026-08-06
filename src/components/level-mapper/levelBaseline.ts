@@ -1,4 +1,4 @@
-import { getAllLevels, isPlaceholderGrid, type ColorTheme, type LevelProvenance } from '@/data/levels';
+import { DEFAULT_3D_HUD_SETTINGS, getAllLevels, isPlaceholderGrid, normalizeHud3DSettings, type ColorTheme, type Hud3DSettings, type LevelProvenance } from '@/data/levels';
 import { voidGrid } from '@/lib/levelgrid';
 import { normalizeMapperImage } from './imageNormalization';
 import { DEFAULT_MAPPER_COLS, DEFAULT_MAPPER_ROWS, createDefaultMapperVoidGrid } from './mapperDefaults';
@@ -21,6 +21,7 @@ export interface ResolvedLevelMapperBaseline {
   provenance: LevelProvenance | undefined;
   theme: ColorTheme | undefined;
   timeLimitSeconds: number | null;
+  hud3d: Hud3DSettings;
   hourglassBonusByCell: Record<string, number>;
   imageURL: string | null;
   overlayEnabled: boolean;
@@ -63,6 +64,7 @@ export const resolveLevelMapperBaseline = async (
       provenance: savedState.provenance ?? level.provenance,
       theme: savedState.theme,
       timeLimitSeconds: sanitizeTimeLimit(savedState.timeLimitSeconds),
+      hud3d: normalizeHud3DSettings(savedState.hud3d),
       hourglassBonusByCell: { ...(savedState.hourglassBonusByCell ?? {}) },
       imageURL: normalizedURL,
       overlayEnabled: savedState.overlayEnabled ?? Boolean(normalizedURL),
@@ -119,6 +121,7 @@ export const resolveLevelMapperBaseline = async (
     provenance: level.provenance,
     theme: level.theme,
     timeLimitSeconds: sanitizeTimeLimit(level.timeLimitSeconds ?? null),
+    hud3d: normalizeHud3DSettings(level.hud3d ?? DEFAULT_3D_HUD_SETTINGS),
     hourglassBonusByCell: { ...(level.hourglassBonusByCell ?? {}) },
     imageURL: normalizedURL,
     overlayEnabled: Boolean(normalizedURL),
