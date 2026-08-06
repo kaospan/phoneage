@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveRecordedRun, type RecordedInputCommand } from "@/lib/moveRecording";
 import {
     Tabs,
     TabsContent,
@@ -75,6 +76,8 @@ interface SessionRow {
     moves: number | null;
     time_left_seconds: number | null;
     active_seconds: number | null;
+    end_reason?: string | null;
+    move_history?: unknown;
 }
 
 interface RecentAttemptRow {
@@ -85,6 +88,9 @@ interface RecentAttemptRow {
     completed: boolean;
     moves: number | null;
     time_left_seconds: number | null;
+    active_seconds: number | null;
+    end_reason: string | null;
+    move_history: RecordedInputCommand[] | null;
     syntheticFromProgress: boolean;
 }
 
@@ -140,6 +146,69 @@ const formatDuration = (ms: number): string => {
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
+};
+
+const isRecordedInputCommand = (value: unknown): value is RecordedInputCommand => {
+    if (!value || typeof value !== "object") return false;
+    const command = value as Partial<RecordedInputCommand>;
+    if (command.type === "deselect") return true;
+    if (command.type === "select") return Number.isFinite(command.x) && Number.isFinite(command.y);
+    if (command.type === "move") return Number.isFinite(command.dx) && Number.isFinite(command.dy);
+    return false;
+};
+
+const parseMoveHistory = (value: unknown): RecordedInputCommand[] | null => {
+    if (!Array.isArray(value)) return null;
+    const actions = value.filter(isRecordedInputCommand);
+    return actions.length > 0 ? actions : null;
+};
+
+const moveHistoryLines = (actions: RecordedInputCommand[] | null): string[] => {
+    if (!actions) return [];
+    let activeArrow: { x: number; y: number } | null = null;
+    return actions.map((action, index) => {
+        if (action.type === "select") {
+            activeArrow = { x: action.x, y: action.y };
+            return `${index + 1}. select arrow (${action.x},${action.y})`;
+        }
+        if (action.type === "deselect") {
+            activeArrow = null;
+            return `${index + 1}. deselect arrow`;
+        }
+        const dir = action.dy === -1 ? "U" : action.dy === 1 ? "D" : action.dx === -1 ? "L" : "R";
+        const prefix = activeArrow ? `A(${activeArrow.x},${activeArrow.y})` : "P";
+        return `${index + 1}. ${prefix}:${dir}`;
+    });
+};
+
+const attemptReasonLabel = (attempt: Pick<RecentAttemptRow, "completed" | "ended_at" | "end_reason" | "time_left_seconds">): string => {
+    if (attempt.completed) return "Cleared";
+    if (attempt.end_reason === "timed_out") return "Timer ran out";
+    if (attempt.end_reason === "restarted") return "Restarted";
+    if (attempt.end_reason === "tab_hidden") return "Left game";
+    if (attempt.end_reason === "level_changed") return "Changed level";
+    if (attempt.ended_at) return attempt.time_left_seconds === 0 ? "Timer ran out" : "Abandoned";
+    return "In progress";
+};
+
+const printMoveHistory = (attempt: RecentAttemptRow, playerLabel: string) => {
+    const lines = moveHistoryLines(attempt.move_history);
+    const text = [
+        `Player: ${playerLabel}`,
+        `Level: ${attempt.level_id}`,
+        `Outcome: ${attemptReasonLabel(attempt)}`,
+        `Moves: ${attempt.moves ?? "—"}`,
+        `Time remaining: ${formatClock(attempt.time_left_seconds)}`,
+        `Started: ${formatTimestamp(attempt.started_at)}`,
+        "",
+        "Move history:",
+        ...(lines.length > 0 ? lines : ["No move history recorded."]),
+    ].join("\n");
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<pre style="white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace">${text.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch] ?? ch))}</pre>`);
+    win.document.close();
+    win.print();
 };
 
 type TestUserFilter = "all" | "non-test" | "test-only";
@@ -359,7 +428,13 @@ export function CrmDashboard() {
     const selectedRecentAttempts = useMemo(() => {
         const userSessions: RecentAttemptRow[] = sessions
             .filter((s) => s.user_id === selectedUserId)
-            .map((s) => ({ ...s, syntheticFromProgress: false }));
+            .map((s) => ({
+                ...s,
+                active_seconds: s.active_seconds ?? null,
+                end_reason: s.end_reason ?? null,
+                move_history: parseMoveHistory(s.move_history),
+                syntheticFromProgress: false,
+            }));
         const completedSessionLevels = new Set(
             userSessions.filter((s) => s.completed).map((s) => s.level_id),
         );
@@ -375,6 +450,9 @@ export function CrmDashboard() {
                     completed: true,
                     moves: p.last_moves ?? p.best_moves,
                     time_left_seconds: p.last_time_left_seconds ?? p.best_time_left_seconds,
+                    active_seconds: null,
+                    end_reason: "completed",
+                    move_history: null,
                     syntheticFromProgress: true,
                 };
             });
@@ -951,19 +1029,55 @@ export function CrmDashboard() {
                         {selectedRecentAttempts.length === 0 && <div className="text-xs text-stone-500">No sessions logged yet.</div>}
                         {selectedRecentAttempts.map((s) => (
                             <div key={s.id} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
                                     <span className="font-bold text-stone-200">L{s.level_id}</span>
-                                    <span className={s.completed ? "text-emerald-300" : s.ended_at ? "text-stone-500" : "text-amber-300"}>
-                                        {s.completed ? "Cleared" : s.ended_at ? "Abandoned" : "In progress"}
+                                    <span className={s.completed ? "text-emerald-300" : s.end_reason === "timed_out" ? "text-red-300" : s.ended_at ? "text-stone-500" : "text-amber-300"}>
+                                        {attemptReasonLabel(s)}
                                     </span>
                                     <span className="text-stone-400">{s.moves ?? "—"} mv</span>
-                                    {s.time_left_seconds != null && (
-                                        <span className="text-stone-400">clock {formatClock(s.time_left_seconds)}</span>
-                                    )}
+                                    <span className="text-stone-400">left {formatClock(s.time_left_seconds)}</span>
+                                    {s.active_seconds != null && <span className="text-stone-400">played {formatDuration(s.active_seconds * 1000)}</span>}
                                     {s.syntheticFromProgress && <span className="text-stone-500">progress record</span>}
                                     <span className="text-stone-500" title={formatTimestamp(s.started_at)}>{timeAgo(s.started_at)}</span>
                                 </div>
                                 <div className="mt-0.5 text-[10px] text-stone-600">{formatTimestamp(s.started_at)}</div>
+                                {s.move_history && (
+                                    <details className="mt-1.5 rounded-md border border-white/10 bg-black/20 px-2 py-1">
+                                        <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wide text-stone-400">
+                                            Move history ({s.move_history.length})
+                                        </summary>
+                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => printMoveHistory(s, selectedProfile.display_name ?? selectedProfile.email ?? selectedProfile.id)}
+                                                className="rounded-md border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-stone-200 hover:bg-white/[0.1]"
+                                            >
+                                                Print
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    saveRecordedRun({
+                                                        levelId: s.level_id,
+                                                        actions: s.move_history ?? [],
+                                                        moves: s.moves ?? s.move_history?.filter((a) => a.type === "move").length ?? 0,
+                                                        recordedAt: new Date().toISOString(),
+                                                    });
+                                                    const base = `${window.location.origin}${import.meta.env.BASE_URL}`;
+                                                    window.open(`${base}?replayLevel=${s.level_id}`, "_blank");
+                                                }}
+                                                className="rounded-md border border-red-300/30 bg-red-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red-100 hover:bg-red-500/20"
+                                            >
+                                                Replay
+                                            </button>
+                                        </div>
+                                        <div className="mt-2 max-h-32 overflow-y-auto rounded bg-black/25 p-2 font-mono text-[10px] leading-relaxed text-stone-300">
+                                            {moveHistoryLines(s.move_history).map((line) => (
+                                                <div key={`${s.id}-${line}`}>{line}</div>
+                                            ))}
+                                        </div>
+                                    </details>
+                                )}
                             </div>
                         ))}
                     </div>

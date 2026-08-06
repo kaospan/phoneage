@@ -64,7 +64,7 @@ import {
 } from "@/lib/campaignProgress";
 import { usePlayerSession } from "@/contexts/PlayerSessionContext";
 import { fetchCloudProgress, pushLevelProgress, pushProfileMeta, resetCloudProgress, touchLastSeen } from "@/lib/cloudProgress";
-import { startPlaySession, endPlaySession } from "@/lib/playSessions";
+import { startPlaySession, endPlaySession, type PlaySessionEndReason } from "@/lib/playSessions";
 import { usePlayerPresence } from "@/hooks/usePlayerPresence";
 import { TutorialOverlay } from "./TutorialOverlay";
 import { TUTORIAL_DEFINITIONS, getTutorialDefinition } from "@/lib/tutorials/tutorialDefinitions";
@@ -277,6 +277,7 @@ const TELEPORT_WARP_FLASH_TICKS = 60;
 const CRUMBLE_ANIMATION_TICKS = 30;
 /** Height reserved for the secondary bottom HUD bar shown in mobile portrait, so overlapping controls (e.g. the thumbstick) can clear it. */
 const BOTTOM_HUD_CLEARANCE_PX = 60;
+const MAX_SESSION_RECORDED_INPUTS = 1000;
 
 const distanceBetweenTouches = (t1: Touch, t2: Touch) =>
   Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -712,6 +713,7 @@ export const PuzzleGame = () => {
   const recordMovesEnabledRef = useRef(false);
   const isReplayingRef = useRef(false);
   const replayIntervalRef = useRef<number | null>(null);
+  const pendingSessionEndReasonRef = useRef<PlaySessionEndReason>("level_changed");
   const selectedArrowLogRef = useRef<{ x: number; y: number } | null>(null);
   const arrowSelectHintSeenRef = useRef<boolean>(
     (() => {
@@ -743,6 +745,26 @@ export const PuzzleGame = () => {
   const remoteArrowHintMoveOriginRef = useRef<{ x: number; y: number } | null>(null);
   const [musicEnabled, setMusicEnabledState] = useState(() => getMusicEnabled());
   const musicElRef = useRef<HTMLAudioElement | null>(null);
+
+  const closeCurrentPlaySession = useCallback((outcome: {
+    completed: boolean;
+    moves: number | null;
+    timeLeftSeconds?: number | null;
+    endReason: PlaySessionEndReason;
+  }) => {
+    const openSessionId = currentPlaySessionIdRef.current;
+    if (!openSessionId) return;
+    accrueSessionActiveTime();
+    void endPlaySession(openSessionId, {
+      completed: outcome.completed,
+      moves: outcome.moves,
+      timeLeftSeconds: outcome.timeLeftSeconds ?? null,
+      activeSeconds: Math.round(sessionActiveMsRef.current / 1000),
+      endReason: outcome.endReason,
+      moveHistory: recordedActionsRef.current.length > 0 ? recordedActionsRef.current.slice() : null,
+    });
+    currentPlaySessionIdRef.current = null;
+  }, [accrueSessionActiveTime]);
 
   // Same-tab localStorage writes do not trigger the 'storage' event, so we also listen to a custom event.
   useEffect(() => {
@@ -1012,7 +1034,11 @@ export const PuzzleGame = () => {
     const levelId = currentLevel?.id;
     if (levelId == null || levelId > 3) return;
     arrowSelectHintSeenRef.current = true;
-    try { localStorage.setItem("arrowSelectHintSeen", "1"); } catch {}
+    try {
+      localStorage.setItem("arrowSelectHintSeen", "1");
+    } catch {
+      // ignore storage failures
+    }
     setShowArrowSelectHint(true);
     if (arrowSelectHintTimeoutRef.current !== null) window.clearTimeout(arrowSelectHintTimeoutRef.current);
     arrowSelectHintTimeoutRef.current = window.setTimeout(() => {
@@ -1355,20 +1381,18 @@ export const PuzzleGame = () => {
         (currentPlaySessionIdRef.current !== null || sessionStartInFlightRef.current);
 
       if (!isRedundantReapply) {
-        const openSessionId = currentPlaySessionIdRef.current;
-        if (openSessionId) {
+        if (currentPlaySessionIdRef.current) {
           const abandonedTimeLeftSeconds = timerEnabledRef.current
             ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
             : null;
-          accrueSessionActiveTime();
-          void endPlaySession(openSessionId, {
+          closeCurrentPlaySession({
             completed: false,
             moves: priorMoves || null,
             timeLeftSeconds: abandonedTimeLeftSeconds,
-            activeSeconds: Math.round(sessionActiveMsRef.current / 1000),
+            endReason: pendingSessionEndReasonRef.current,
           });
-          currentPlaySessionIdRef.current = null;
         }
+        pendingSessionEndReasonRef.current = "level_changed";
         const sessionUserId = playerUserIdRef.current;
         if (sessionUserId && !isReplayingRef.current) {
           currentPlaySessionLevelIdRef.current = level.id;
@@ -1457,7 +1481,7 @@ export const PuzzleGame = () => {
         cavePos: { ...cave },
       });
       resetLevelTimer(level.timeLimitSeconds);
-    }, [accrueSessionActiveTime, buildBaseGrid, resetLevelTimer, resetSessionActiveTime]);
+    }, [buildBaseGrid, closeCurrentPlaySession, resetLevelTimer, resetSessionActiveTime]);
 
   // Close the open play session the moment the tab is actually hidden (switched away, closed,
   // backgrounded) so it gets a real end time. Without this, a session that's never resumed sits
@@ -1467,24 +1491,21 @@ export const PuzzleGame = () => {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "hidden") return;
-      const openSessionId = currentPlaySessionIdRef.current;
-      if (!openSessionId) return;
+      if (!currentPlaySessionIdRef.current) return;
       const moves = simRef.current?.players.get(localPlayerIdRef.current)?.moves ?? 0;
       const timeLeftSeconds = timerEnabledRef.current
         ? Math.max(0, Math.ceil(timerRemainingMsRef.current / 1000))
         : null;
-      accrueSessionActiveTime();
-      void endPlaySession(openSessionId, {
+      closeCurrentPlaySession({
         completed: false,
         moves: moves || null,
         timeLeftSeconds,
-        activeSeconds: Math.round(sessionActiveMsRef.current / 1000),
+        endReason: "tab_hidden",
       });
-      currentPlaySessionIdRef.current = null;
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [accrueSessionActiveTime]);
+  }, [closeCurrentPlaySession]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1706,6 +1727,17 @@ export const PuzzleGame = () => {
       };
     }, [clearTimerInterval, hasStartedGame, isBuilding, isComplete, isTimeUp, isTimerArmed, levelTimeLimitSeconds, shouldRotateGate, currentLevelIndex]);
 
+    useEffect(() => {
+      if (!isTimeUp || !levelTimeLimitSeconds || isComplete || isBuilding) return;
+      const movesPlayed = simRef.current?.players.get(localPlayerIdRef.current)?.moves ?? moves;
+      closeCurrentPlaySession({
+        completed: false,
+        moves: movesPlayed || null,
+        timeLeftSeconds: 0,
+        endReason: "timed_out",
+      });
+    }, [closeCurrentPlaySession, isBuilding, isComplete, isTimeUp, levelTimeLimitSeconds, moves]);
+
     // Show drag hint on first load
     useEffect(() => {
       const hasSeenHint = sessionStorage.getItem('dragHintSeen');
@@ -1743,9 +1775,14 @@ export const PuzzleGame = () => {
       inputQueueRef.current.set(localId, queue);
 
       // Don't record inputs that replay itself is injecting — only capture live play.
-      if (!isReplayingRef.current && recordMovesEnabledRef.current) {
+      if (!isReplayingRef.current) {
         recordedActionsRef.current.push(command);
+        if (recordedActionsRef.current.length > MAX_SESSION_RECORDED_INPUTS) {
+          recordedActionsRef.current.shift();
+        }
+      }
 
+      if (!isReplayingRef.current && recordMovesEnabledRef.current) {
         if (command.type === "select") {
           selectedArrowLogRef.current = { x: command.x, y: command.y };
         } else if (command.type === "deselect") {
@@ -2161,14 +2198,12 @@ export const PuzzleGame = () => {
 
         commitCampaignProgress(clearUpdate.progress);
         if (currentPlaySessionIdRef.current) {
-          accrueSessionActiveTime();
-          void endPlaySession(currentPlaySessionIdRef.current, {
+          closeCurrentPlaySession({
             completed: true,
             moves: localPlayer.moves,
             timeLeftSeconds: clearTimeLeftSeconds,
-            activeSeconds: Math.round(sessionActiveMsRef.current / 1000),
+            endReason: "completed",
           });
-          currentPlaySessionIdRef.current = null;
         }
         if (recordMovesEnabledRef.current && !isReplayingRef.current && recordedActionsRef.current.length > 0) {
           saveRecordedRun({
@@ -2226,9 +2261,9 @@ export const PuzzleGame = () => {
       if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
       if (sim.cavePos.x !== renderCavePos.x || sim.cavePos.y !== renderCavePos.y) setRenderCavePos(sim.cavePos);
     }, [
-      accrueSessionActiveTime,
       addLevelTimeSeconds,
       allLevels,
+      closeCurrentPlaySession,
       commitCampaignProgress,
       currentLevel,
       currentLevelIndex,
@@ -2322,6 +2357,7 @@ export const PuzzleGame = () => {
         return false;
       }
 
+      pendingSessionEndReasonRef.current = "level_changed";
       setSelectedArrow(null);
       setCameraOffset({ x: 0, z: 0 });
       setCompletionSummary(null);
@@ -2436,6 +2472,7 @@ export const PuzzleGame = () => {
       if (isTutorialActive) return;
       const levelToReset = activeLevel ?? currentLevel;
       if (!levelToReset) return;
+      pendingSessionEndReasonRef.current = "restarted";
       applyLevelState(levelToReset);
       pushHudMessage("Level reset");
     }, [activeLevel, applyLevelState, currentLevel, isTutorialActive, pushHudMessage]);
@@ -2479,6 +2516,25 @@ export const PuzzleGame = () => {
       stepReplay();
       replayIntervalRef.current = window.setInterval(stepReplay, 220);
     }, [activeLevel, applyLevelState, currentLevel, enqueueInput, pushHudMessage, stopReplay]);
+
+    useEffect(() => {
+      if (typeof window === "undefined" || isReplaying) return;
+      const params = new URLSearchParams(window.location.search);
+      const replayLevelRaw = params.get("replayLevel");
+      const replayLevelId = replayLevelRaw ? Number(replayLevelRaw) : null;
+      if (!Number.isInteger(replayLevelId) || !replayLevelId) return;
+
+      const levelForReplay = activeLevel ?? currentLevel;
+      if (!levelForReplay || levelForReplay.id !== replayLevelId) {
+        goToLevelId(replayLevelId);
+        return;
+      }
+
+      params.delete("replayLevel");
+      const nextSearch = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`);
+      window.setTimeout(() => startReplay(), 250);
+    }, [activeLevel, currentLevel, goToLevelId, isReplaying, startReplay]);
 
     const startLevelWhenReady = useCallback(() => {
       if (!levelTimeLimitSeconds || isTimerArmed || isTimeUp || isBuilding || isComplete) return;
