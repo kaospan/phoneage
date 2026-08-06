@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const STORAGE_KEY = "phoneage:level-lab:candidates:v1";
+const KEPT_STORAGE_KEY = "phoneage:level-lab:kept:v1";
 const KEEP_LIMIT = 5;
 
 const difficulties: LevelLabDifficulty[] = ["easy", "medium", "hard", "expert"];
@@ -39,6 +40,27 @@ const saveCandidates = (items: LevelLabCandidate[]) => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, 300)));
   } catch {
     toast.warning("Level Lab history could not be saved in this browser.");
+  }
+};
+
+const loadKeptIds = (): Set<string> => {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(KEPT_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const saveKeptIds = (ids: Set<string>) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(KEPT_STORAGE_KEY, JSON.stringify([...ids].slice(0, KEEP_LIMIT)));
+  } catch {
+    toast.warning("Level Lab keep list could not be saved in this browser.");
   }
 };
 
@@ -73,7 +95,7 @@ export const LevelLab: React.FC = () => {
   });
   const [candidates, setCandidates] = useState<LevelLabCandidate[]>(loadCandidates);
   const [selectedId, setSelectedId] = useState<string | null>(() => loadCandidates()[0]?.id ?? null);
-  const [keptIds, setKeptIds] = useState<Set<string>>(() => new Set(loadCandidates().filter((c) => c.score >= 120).slice(0, KEEP_LIMIT).map((c) => c.id)));
+  const [keptIds, setKeptIds] = useState<Set<string>>(loadKeptIds);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const cancelRef = useRef(false);
@@ -81,6 +103,10 @@ export const LevelLab: React.FC = () => {
   useEffect(() => {
     saveCandidates(candidates);
   }, [candidates]);
+
+  useEffect(() => {
+    saveKeptIds(keptIds);
+  }, [keptIds]);
 
   const selected = useMemo(
     () => candidates.find((candidate) => candidate.id === selectedId) ?? candidates[0] ?? null,
