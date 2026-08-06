@@ -7,7 +7,11 @@ import { runBulkBuildAndDownload, runBulkBuildReport } from "@/lib/levelBulkBuil
 import { dumpLevel, runSolveAllLevels, runSolveLevel, solveGrid } from "@/lib/levelSolver";
 import { runLevelQaReport } from "@/lib/levelQa";
 
-console.log('🚀 main.tsx starting...');
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
+devLog('🚀 main.tsx starting...');
 
 type LocalStorageSeed = {
   version: 1;
@@ -147,7 +151,7 @@ const startVersionWatch = () => {
 
 try {
   const rootElement = document.getElementById("root");
-  console.log('📦 Root element:', rootElement);
+  devLog('📦 Root element:', rootElement);
 
   if (!rootElement) {
     throw new Error('Root element not found!');
@@ -156,7 +160,7 @@ try {
   maybeReloadOnceForNewBuild();
   startVersionWatch();
 
-  console.log('🎯 Creating React root...');
+  devLog('🎯 Creating React root...');
   const root = createRoot(rootElement);
 
   seedDefaultReferences().catch((error) => {
@@ -207,14 +211,14 @@ try {
     }
   }
 
-  console.log('⚛️ Rendering App...');
+  devLog('⚛️ Rendering App...');
   root.render(
     <StrictMode>
       <App />
     </StrictMode>
   );
 
-  console.log('✅ App rendered successfully!');
+  devLog('✅ App rendered successfully!');
 } catch (error) {
   console.error('❌ Fatal error in main.tsx:', error);
   const isDev = import.meta.env.DEV;

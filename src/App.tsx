@@ -12,6 +12,10 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
 // Error Boundary Component
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -53,10 +57,10 @@ class ErrorBoundary extends Component<
   }
 }
 
-console.log('📦 App.tsx loading...');
+devLog('📦 App.tsx loading...');
 
 const App = () => {
-  console.log('⚛️ App component rendering...');
+  devLog('⚛️ App component rendering...');
 
   const [dbLevels, setDbLevels] = useState<DbLevel[]>([]);
 
@@ -66,9 +70,11 @@ const App = () => {
       const { data: levels } = await supabase.from('levels').select();
       if (levels) {
         setDbLevels(levels as DbLevel[]);
-        console.log(`[supabase] ${levels.length} levels loaded from DB`);
-        // Expose on window for debug access in the browser console
-        (window as Window & { dbLevels?: DbLevel[] }).dbLevels = levels as DbLevel[];
+        devLog(`[supabase] ${levels.length} levels loaded from DB`);
+        if (import.meta.env.DEV) {
+          // Expose on window for debug access in the browser console.
+          (window as Window & { dbLevels?: DbLevel[] }).dbLevels = levels as DbLevel[];
+        }
       }
     }
     getLevels();
@@ -96,6 +102,6 @@ const App = () => {
   );
 };
 
-console.log('✅ App.tsx loaded');
+devLog('✅ App.tsx loaded');
 
 export default App;

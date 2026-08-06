@@ -10,3 +10,5 @@ services:
     envVars:
       - key: WS_HEARTBEAT_MS
         value: "30000"
+      - key: WS_ALLOWED_ORIGINS
+        value: "https://kaospan.github.io"

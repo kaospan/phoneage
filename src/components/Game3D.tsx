@@ -120,6 +120,7 @@ const smoothDampVec3 = (
 const WALL_HEIGHT = 0.62;
 const WALL_HALF_WIDTH = 0.49;
 const WALL_RADIUS = WALL_HALF_WIDTH * Math.SQRT2;
+const CRUMBLE_ANIMATION_TICKS = 42;
 
 const darkenHexColor = (hex: string, amount = 0.35) => {
   const normalized = hex.replace('#', '');
@@ -1619,6 +1620,59 @@ const InstancedMeshSet = ({
   );
 };
 
+const CrumblingBreakableRock = ({
+  position,
+  progress,
+  texture,
+}: {
+  position: [number, number, number];
+  progress: number;
+  texture?: THREE.Texture | null;
+}) => {
+  const t = THREE.MathUtils.clamp(progress / CRUMBLE_ANIMATION_TICKS, 0, 1);
+  const scale = 1.05 - t * 0.72;
+  const opacity = 1 - smoothstep(0.18, 1, t);
+  const lift = 0.03 + t * 0.08;
+  const chipOpacity = 1 - smoothstep(0.35, 1, t);
+
+  return (
+    <group position={position} scale={[scale, scale, scale]} rotation={[0, t * 0.7, 0]}>
+      <mesh position={[0, lift, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.92, 0.24, 0.92]} />
+        <meshStandardMaterial
+          map={texture ?? undefined}
+          color="#ffffff"
+          emissive="#2a1608"
+          emissiveIntensity={0.18}
+          roughness={0.88}
+          metalness={0.04}
+          transparent
+          opacity={opacity}
+          depthWrite={opacity > 0.45}
+        />
+      </mesh>
+      {[
+        [-0.22 - t * 0.18, 0.23 + t * 0.12, -0.12 - t * 0.16, -0.4],
+        [0.2 + t * 0.2, 0.2 + t * 0.1, -0.05 + t * 0.12, 0.55],
+        [0.02 + t * 0.06, 0.18 + t * 0.16, 0.23 + t * 0.18, 1.1],
+      ].map(([x, y, z, r], index) => (
+        <mesh key={index} position={[x, y, z]} rotation={[t * 1.8, r, t * 2.4]} castShadow>
+          <boxGeometry args={[0.16, 0.08, 0.13]} />
+          <meshStandardMaterial
+            color={index === 1 ? "#b08658" : "#8a6238"}
+            emissive="#281407"
+            emissiveIntensity={0.16}
+            roughness={0.9}
+            transparent
+            opacity={chipOpacity}
+            depthWrite={chipOpacity > 0.45}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+};
+
 // Animated sky background - floats across entire scene
 const AnimatedSkyBackground = ({ gridWidth, gridHeight, rotateUpright }: { gridWidth: number; gridHeight: number; rotateUpright?: boolean }) => {
   const cloudGroupRef = useRef<THREE.Group>(null);
@@ -1955,6 +2009,7 @@ export const Game3D = ({
   onPlayerClick,
   playerFlashCount = 0,
   rotateUpright = false,
+  crumbleAnimations = new Map(),
 }: Game3DProps) => {
   const gridHeight = grid.length;
   const gridWidth = grid[0]?.length || 0;
@@ -2299,6 +2354,20 @@ export const Game3D = ({
     () => tileData.floor.map(([x, y, z]) => [x, y + 0.003, z] as [number, number, number]),
     [tileData.floor]
   );
+  const crumblingBreakables = useMemo(
+    () => Array.from(crumbleAnimations.entries()).flatMap(([key, progress]) => {
+      const [rawX, rawY] = key.split(',');
+      const x = Number(rawX);
+      const y = Number(rawY);
+      if (!Number.isInteger(x) || !Number.isInteger(y)) return [];
+      return [{
+        key,
+        progress,
+        position: [x + offsetX, 0.16, y + offsetZ] as [number, number, number],
+      }];
+    }),
+    [crumbleAnimations, offsetX, offsetZ]
+  );
 
   return (
     <div className="w-full h-full bg-black overflow-hidden touch-none relative z-30">
@@ -2442,6 +2511,14 @@ export const Game3D = ({
           castShadow
           receiveShadow
         />
+        {crumblingBreakables.map((rock) => (
+          <CrumblingBreakableRock
+            key={rock.key}
+            position={rock.position}
+            progress={rock.progress}
+            texture={breakableTexture}
+          />
+        ))}
 
         {tileData.redKeys.map((position, index) => (
           <KeyTile

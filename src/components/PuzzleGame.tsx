@@ -92,7 +92,11 @@ import { TouchControls } from "./TouchControls";
 import { getLevelImageUrl } from "@/components/level-mapper/levelImageStore";
 import menuArt from "@/assets/menu.png";
 
-console.log('📦 PuzzleGame.tsx loading...');
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
+devLog('📦 PuzzleGame.tsx loading...');
 
 type PlayerId = string;
 type FacingDirection = "up" | "right" | "down" | "left";
@@ -111,6 +115,37 @@ type QueuedInputCommand =
   | { type: "move"; dx: number; dy: number }
   | { type: "select"; x: number; y: number }
   | { type: "deselect" };
+
+const isSafeIntegerInRange = (value: unknown, min: number, max: number): value is number =>
+  Number.isSafeInteger(value) && (value as number) >= min && (value as number) <= max;
+
+const isCardinalDelta = (dx: unknown, dy: unknown): dx is number =>
+  (dx === 0 && (dy === -1 || dy === 1)) || (dy === 0 && (dx === -1 || dx === 1));
+
+const parseInputCommand = (input: unknown): InputCommand | null => {
+  if (!input || typeof input !== "object") return null;
+  const candidate = input as Record<string, unknown>;
+
+  if (candidate.type === "move") {
+    if (!isCardinalDelta(candidate.dx, candidate.dy)) return null;
+    if (!isSafeIntegerInRange(candidate.seq, 1, Number.MAX_SAFE_INTEGER)) return null;
+    return { type: "move", dx: candidate.dx, dy: candidate.dy as number, seq: candidate.seq };
+  }
+
+  if (candidate.type === "select") {
+    if (!isSafeIntegerInRange(candidate.x, 0, 255)) return null;
+    if (!isSafeIntegerInRange(candidate.y, 0, 255)) return null;
+    if (!isSafeIntegerInRange(candidate.seq, 1, Number.MAX_SAFE_INTEGER)) return null;
+    return { type: "select", x: candidate.x, y: candidate.y, seq: candidate.seq };
+  }
+
+  if (candidate.type === "deselect") {
+    if (!isSafeIntegerInRange(candidate.seq, 1, Number.MAX_SAFE_INTEGER)) return null;
+    return { type: "deselect", seq: candidate.seq };
+  }
+
+  return null;
+};
 
 interface SimPlayer {
   id: PlayerId;
@@ -359,7 +394,7 @@ type BrowserFullscreenElement = HTMLElement & {
 };
 
 export const PuzzleGame = () => {
-  console.log('⚛️ PuzzleGame component rendering...');
+  devLog('⚛️ PuzzleGame component rendering...');
 
   const playerSession = usePlayerSession();
   const playerUserId = playerSession?.user?.id ?? null;
@@ -1868,6 +1903,8 @@ export const PuzzleGame = () => {
             }
             localPlayerIdRef.current = msg.id;
           } else if (msg.type === 'input' && msg.id && msg.input) {
+            const input = parseInputCommand(msg.input);
+            if (!input) return;
             const sim = simRef.current;
             if (sim && !sim.players.has(msg.id)) {
               const palette = ['#5fd5ff', '#ffb347', '#ff6b6b', '#9bffd0', '#c7a6ff'];
@@ -1893,7 +1930,7 @@ export const PuzzleGame = () => {
               setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
             }
             const queue = inputQueueRef.current.get(msg.id) ?? [];
-            queue.push(msg.input);
+            queue.push(input);
             inputQueueRef.current.set(msg.id, queue);
           }
         } catch (err) {
