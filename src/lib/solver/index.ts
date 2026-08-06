@@ -4,6 +4,7 @@ export * from "./actions";
 export * from "./trace/trace";
 export * from "./traceHtml";
 export * from "./replay";
+export * from "./recordedRun";
 export * from "./solver";
 export * from "./api";
 export * from "./utils";

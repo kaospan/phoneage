@@ -1,8 +1,10 @@
 import { getAllLevels, isPlaceholderGrid } from "@/data/levels";
 import { findGoalCaves } from "@/game/caves";
 import type { CellType, KeyInventory, Position } from "@/game/types";
+import { getRecordedRun } from "@/lib/moveRecording";
 import { solveLevel } from "./solver";
 import { buildBaseGrid, cloneGrid } from "./utils";
+import { replayRecordedInputsAsSolverActions } from "./recordedRun";
 import type { LevelSolution, LevelDump, SolveGridInitialState, SolveOptions } from "./types";
 import type { SolveState } from "./state";
 
@@ -186,11 +188,30 @@ export async function solveGrid(
       ? new Map(initialState.breakableRockStates)
       : new Map(),
   };
-  return solveLevel(levelId, start, goalCaves, {
+  const result = await solveLevel(levelId, start, goalCaves, {
     maxMsPerLevel: options.maxMsPerLevel ?? 15000,
     maxNodesPerLevel: options.maxNodesPerLevel ?? 200_000,
     maxDepth: options.maxDepth ?? 300,
     onProgress: options.onProgress,
     trace: options.trace,
   });
+
+  if (result.solved || levelId <= 0) return result;
+
+  const recordedRun = getRecordedRun(levelId);
+  if (!recordedRun) return result;
+
+  const learned = replayRecordedInputsAsSolverActions(start, goalCaves, recordedRun.actions);
+  if (!learned.solved) return result;
+
+  return {
+    levelId,
+    solved: true,
+    moves: learned.actions.length,
+    actions: learned.actions,
+    reason: "Learned from recorded run after bounded search failed",
+    nodesExpanded: result.nodesExpanded,
+    ms: result.ms,
+    trace: result.trace,
+  };
 }

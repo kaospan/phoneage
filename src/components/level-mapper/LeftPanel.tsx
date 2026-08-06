@@ -4,8 +4,6 @@ import { TILE_TYPES, voidGrid } from '@/lib/levelgrid';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { themes, type ColorTheme, type Level } from '@/data/levels';
 import { normalizeMapperImage } from './imageNormalization';
-import { detectGridLines } from './gridDetection';
-import { getAlignmentHints } from './alignmentProfile';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { guessThemeForLevelId, saveCustomLevelDefinition } from '@/lib/customLevels';
 import { putLevelImage } from './levelImageStore';
@@ -47,11 +45,6 @@ const fitGridToShape = (source: number[][], nextRows: number, nextCols: number, 
 };
 
 export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min: number; max: number; resizable?: boolean; }> = ({ width, onStartResize, min, max, resizable = true }) => {
-    type IdleWindow = Window & typeof globalThis & {
-        requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
-        cancelIdleCallback?: (id: number) => void;
-    };
-
     const {
         rows, cols, setRows, setCols,
         importLevelIndex, setImportLevelIndex,
@@ -59,24 +52,19 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         overlayEnabled, setOverlayEnabled, setOverlayOpacity, setOverlayStretch,
         allLevels, imageURL, setImageURL,
         setAllLevels,
-        detectGrid, snapToLockedCounts, detectCells,
+        detectGrid,
         zoom, setZoom, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY,
         gridFrameWidth, setGridFrameWidth, gridFrameHeight, setGridFrameHeight,
         imageScaleX, setImageScaleX, imageScaleY, setImageScaleY, imageOffsetX, setImageOffsetX, imageOffsetY, setImageOffsetY, lockImageAspect, setLockImageAspect,
         activeTile, setGrid, grid, setPlayerStart,
         hourglassBrushSeconds, setHourglassBrushSeconds, setHourglassBonusByCell,
         theme, setTheme, timeLimitSeconds, setTimeLimitSeconds, hud3d, setHud3d, setIsSaved,
-        addRowTop, addRowBottom, addColumnLeft, addColumnRight,
-        removeRowTop, removeRowBottom, removeColumnLeft, removeColumnRight,
-        setLoadedSnapshot, resetToLoadedSnapshot, replaceGridShape
+        setLoadedSnapshot, replaceGridShape
     } = useLevelMapper();
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [isDetecting, setIsDetecting] = useState(false);
     const [detectionProgress, setDetectionProgress] = useState<string>('');
-    const [autoDetectStatus, setAutoDetectStatus] = useState<string>('');
-    const [tileFitStatus, setTileFitStatus] = useState<'idle' | 'detecting' | 'ready' | 'failed'>('idle');
-    const [tileFit, setTileFit] = useState<null | { rows: number; cols: number; cellWidth: number; cellHeight: number }>(null);
 
     // Upload flow: choose an image, then decide which level id to apply it to.
     const [applyDialogOpen, setApplyDialogOpen] = useState(false);
@@ -110,13 +98,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         setHud3d((prev) => ({ ...prev, [key]: checked }));
         setIsSaved(false);
     };
-    const tileFitSummary = imageURL
-        ? tileFitStatus === 'detecting'
-            ? 'Measuring screenshot tile size...'
-            : tileFit
-                ? `Detected floor tile ~${Math.round(tileFit.cellWidth)}×${Math.round(tileFit.cellHeight)}px across ${tileFit.cols}×${tileFit.rows}`
-                : 'No reliable floor-tile measurement yet.'
-        : 'Upload a screenshot to enable alignment and scan tools.';
     const triggerFileUpload = () => fileInputRef.current?.click();
 
     // Expose a console helper for exporting current calibrations as a factory-defaults snippet.
@@ -145,91 +126,12 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
         return () => { delete w.__mapperExportCalibrations; };
     }, []);
 
-    // Per-image measurement: estimate the cell size (px) and how many cell-widths fit across/down.
-    // This is intentionally fast and only needs floor-tile regularity, not full tile classification.
-    useEffect(() => {
-        if (!imageURL) {
-            setTileFit(null);
-            setTileFitStatus('idle');
-            return;
-        }
-
-        let cancelled = false;
-        setTileFitStatus('detecting');
-
-        const run = async () => {
-            try {
-                const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-                    const i = new Image();
-                    i.onload = () => resolve(i);
-                    i.onerror = () => reject(new Error('Failed to load image for tile sizing'));
-                    i.src = imageURL;
-                });
-                if (cancelled) return;
-
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) throw new Error('No canvas context for tile sizing');
-                ctx.drawImage(img, 0, 0);
-
-                const detected = detectGridLines(canvas, false, 0, 0, getAlignmentHints());
-                if (cancelled) return;
-
-                if (!detected) {
-                    setTileFit(null);
-                    setTileFitStatus('failed');
-                    return;
-                }
-
-                setTileFit({
-                    rows: detected.rows,
-                    cols: detected.cols,
-                    cellWidth: detected.cellWidth,
-                    cellHeight: detected.cellHeight,
-                });
-                setTileFitStatus('ready');
-            } catch (error) {
-                if (cancelled) return;
-                console.warn('Tile sizing failed:', error);
-                setTileFit(null);
-                setTileFitStatus('failed');
-            }
-        };
-
-        const idleWindow = window as IdleWindow;
-        const idle = idleWindow.requestIdleCallback;
-        const cancelIdle = idleWindow.cancelIdleCallback;
-        let handle: number | null = null;
-        if (idle) {
-            handle = idle(() => { void run(); }, { timeout: 450 });
-        } else {
-            handle = window.setTimeout(() => { void run(); }, 0);
-        }
-
-        return () => {
-            cancelled = true;
-            if (handle !== null) {
-                if (idle && cancelIdle) cancelIdle(handle);
-                else window.clearTimeout(handle);
-            }
-        };
-    }, [imageURL]);
-
     const runCellDetection = async () => {
         try {
             setIsDetecting(true);
             setDetectionProgress('Snapping grid to floor tiles...');
-            setAutoDetectStatus('');
             await new Promise((resolve) => setTimeout(resolve, 50));
-            // Fast path: snap rows/cols + offsets. User can manually fill remaining cells.
-            const res = await detectGrid();
-            if (res) {
-                setAutoDetectStatus(
-                    `Detected: ${res.rows}×${res.cols} | Tile: ${Math.round(res.cellWidth)}×${Math.round(res.cellHeight)}px | Confidence: ${res.confidence.toFixed(2)} | Snapped`
-                );
-            }
+            await detectGrid();
         } catch (error) {
             console.error('❌ Error running image cell detection:', error);
             alert(`Auto-detect failed: ${(error as Error).message}`);
@@ -666,12 +568,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                         </div>
                     </div>
 
-                    <div className="rounded-[20px] border border-white/10 bg-white/[0.045] px-4 py-3">
-                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Alignment Readiness</div>
-                        <div className="mt-3 text-xs leading-relaxed text-stone-300">
-                            {tileFitSummary}
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -835,170 +731,6 @@ export const LeftPanel: React.FC<{ width: number; onStartResize: () => void; min
                             </div>
                         </div>
                     )}
-
-                    <MapperSection
-                        title="Board Shape"
-                        eyebrow="Layout Control"
-                        description="Adjust rows, columns, and edge padding for the board currently loaded in the mapper."
-                        contentClassName="space-y-3 pt-3"
-                    >
-                        <div className="flex flex-wrap items-center gap-2">
-                            <label className="text-xs font-semibold uppercase tracking-wide text-stone-400">Rows</label>
-                            <input
-                                className="h-10 w-16 rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-sm text-stone-100 [color-scheme:dark]"
-                                type="number"
-                                min={1}
-                                value={rows}
-                                onChange={(e) => {
-                                    const next = Math.max(1, parseInt(e.target.value || String(DEFAULT_MAPPER_ROWS), 10));
-                                    if (Number.isFinite(next) && next !== rows) setIsSaved(false);
-                                    setRows(next);
-                                }}
-                            />
-                            <label className="text-xs font-semibold uppercase tracking-wide text-stone-400">Cols</label>
-                            <input
-                                className="h-10 w-16 rounded-2xl border border-white/10 bg-stone-900/85 px-3 text-sm text-stone-100 [color-scheme:dark]"
-                                type="number"
-                                min={1}
-                                value={cols}
-                                onChange={(e) => {
-                                    const next = Math.max(1, parseInt(e.target.value || String(DEFAULT_MAPPER_COLS), 10));
-                                    if (Number.isFinite(next) && next !== cols) setIsSaved(false);
-                                    setCols(next);
-                                }}
-                            />
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
-                                onClick={resetToLoadedSnapshot}
-                                disabled={importLevelIndex === null}
-                                title="Snap back to the layout as it was loaded"
-                            >
-                                Reset Layout
-                            </Button>
-                        </div>
-
-                        <div className="grid gap-2 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-white/10 bg-stone-900/55 p-3">
-                                <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Rows</div>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addRowTop} title="Add a void row at the top">+ Top</Button>
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addRowBottom} title="Add a void row at the bottom">+ Bottom</Button>
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeRowTop} title="Remove the top row">- Top</Button>
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeRowBottom} title="Remove the bottom row">- Bottom</Button>
-                                </div>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-stone-900/55 p-3">
-                                <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Columns</div>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addColumnLeft} title="Add a void column on the left">+ Left</Button>
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={addColumnRight} title="Add a void column on the right">+ Right</Button>
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeColumnLeft} title="Remove the left column">- Left</Button>
-                                    <Button size="sm" variant="outline" className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]" onClick={removeColumnRight} title="Remove the right column">- Right</Button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-100">
-                            Resizing rows or columns changes the level layout. Use <strong>Reset Layout</strong> if you want to return to the currently loaded baseline before saving.
-                        </div>
-                    </MapperSection>
-
-                    <MapperSection
-                        title="Detection Workflow"
-                        eyebrow="Alignment"
-                        description="Snap the board to a screenshot first, then optionally scan tiles into the aligned grid."
-                        contentClassName="space-y-3 pt-3"
-                    >
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                size="sm"
-                                variant="secondary"
-                                className="bg-sky-600 text-white hover:bg-sky-500"
-                                onClick={runCellDetection}
-                                disabled={!imageURL || isDetecting}
-                                title="Auto-detect the grid (rows/cols + snap frame/offset). Does not analyze cell types."
-                            >
-                                Auto-detect Grid
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
-                                onClick={async () => {
-                                    setIsDetecting(true);
-                                    setDetectionProgress('Snapping grid to the screenshot before scanning...');
-                                    try {
-                                        await new Promise((resolve) => setTimeout(resolve, 50));
-                                        const snapResult = await snapToLockedCounts();
-                                        if (!snapResult) return;
-                                        setAutoDetectStatus(
-                                            `Snapped (kept ${rows}×${cols}) | Tile: ${Math.round(snapResult.cellWidth)}×${Math.round(snapResult.cellHeight)}px | Confidence: ${snapResult.confidence.toFixed(2)}`
-                                        );
-                                        setDetectionProgress('Scanning cell types into the aligned grid...');
-                                        await detectCells();
-                                    } finally {
-                                        setIsDetecting(false);
-                                        setDetectionProgress('');
-                                    }
-                                }}
-                                disabled={!imageURL || isDetecting}
-                                title="Snap the overlay/grid to the screenshot first, then scan saved reference sprites. Fills only void (unknown) cells so manual fixes are preserved."
-                            >
-                                Align + Scan Cells
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-white/10 bg-white/[0.03] text-stone-100 hover:bg-white/[0.08]"
-                                onClick={async () => {
-                                    setIsDetecting(true);
-                                    setDetectionProgress('Snapping frame (keeping rows/cols)...');
-                                    setAutoDetectStatus('');
-                                    try {
-                                        const res = await snapToLockedCounts();
-                                        if (res) {
-                                            setAutoDetectStatus(
-                                                `Snapped (kept ${rows}×${cols}) | Tile: ${Math.round(res.cellWidth)}×${Math.round(res.cellHeight)}px | Confidence: ${res.confidence.toFixed(2)}`
-                                            );
-                                        }
-                                    } finally {
-                                        setIsDetecting(false);
-                                        setDetectionProgress('');
-                                    }
-                                }}
-                                disabled={!imageURL || isDetecting}
-                                title="Snap frame/offset using current rows/cols (does not change rows/cols)"
-                            >
-                                Snap (Keep Rows/Cols)
-                            </Button>
-                        </div>
-
-                        {autoDetectStatus && (
-                            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
-                                {autoDetectStatus}
-                            </div>
-                        )}
-
-                        <div className="rounded-2xl border border-white/10 bg-stone-900/55 px-3 py-3 text-[11px] leading-relaxed text-stone-300">
-                            {tileFitSummary}
-                            {imageURL && tileFit && ((tileFit.rows !== rows) || (tileFit.cols !== cols)) && (
-                                <span className="ml-2 text-amber-100">
-                                    Current grid is {rows}×{cols}.
-                                </span>
-                            )}
-                        </div>
-
-                        <details className="rounded-2xl border border-white/10 bg-stone-900/40 p-3">
-                            <summary className="cursor-pointer select-none text-xs font-semibold text-stone-300">
-                                Advanced
-                            </summary>
-                            <div className="mt-2 text-xs leading-relaxed text-stone-400">
-                                Auto-detect may change rows and columns. Use the snap-only path when you want to keep your existing board shape and only realign the frame.
-                            </div>
-                        </details>
-                    </MapperSection>
 
                     {activeTile === 20 && (
                         <MapperSection
