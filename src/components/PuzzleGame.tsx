@@ -1414,6 +1414,7 @@ export const PuzzleGame = () => {
       };
 
       setRenderGrid(gridCopy.map(row => [...row]));
+      setCrumbleAnimations(new Map());
       setRenderPlayers(Array.from(players.values()));
       setRenderCavePos(cave);
       setMoves(0);
@@ -2195,7 +2196,7 @@ export const PuzzleGame = () => {
       }
 
         if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
-       if (sim.crumbleAnimations.size > 0) setCrumbleAnimations(new Map(sim.crumbleAnimations));
+        setCrumbleAnimations(new Map(sim.crumbleAnimations));
       if (playersDirty || gridDirty) setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
       if (localMoves !== moves) setMoves(localMoves);
       if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
@@ -3954,36 +3955,37 @@ export const PuzzleGame = () => {
                     theme={currentLevel.theme}
                     idleArrowHintDirections={idleArrowHintDirections}
                       levelId={currentLevel?.id ?? null}
+                      crumbleAnimations={crumbleAnimations}
                      onArrowClick={(x, y) => {
-                      if (localPlayer?.isGliding) return;
-                      const cell = renderGrid[y]?.[x];
-                      if (cell !== undefined && isArrowCell(cell)) {
-                        if (localPlayerPos.x === x && localPlayerPos.y === y) {
-                          pushHudMessage("Step off the arrow before selecting it.", 2200);
-                          return;
-                        }
-                        const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
-                        if (isSameArrow) {
-                          enqueueInput({ type: "deselect" });
-                          resetSelectorToPlayer();
-                          flashPlayerHighlight();
-                          pushHudMessage("Arrow deselected");
-                        } else {
-                          enqueueInput({ type: "select", x, y });
-                          setIsSelectorActive(false);
-                          setSelectorPos({ x, y });
-                          pushHudMessage("Arrow selected — use the controls to move it.", 2200);
-                        }
-                      }
-                    }}
-                    onCancelSelection={() => {
-                      if (selectedArrow) {
-                        enqueueInput({ type: "deselect" });
-                        resetSelectorToPlayer();
-                        pushHudMessage("Arrow deselected");
-                      }
-                    }}
-                  />
+                       if (localPlayer?.isGliding) return;
+                       const cell = renderGrid[y]?.[x];
+                       if (cell !== undefined && isArrowCell(cell)) {
+                         if (localPlayerPos.x === x && localPlayerPos.y === y) {
+                           pushHudMessage("Step off the arrow before selecting it.", 2200);
+                           return;
+                         }
+                         const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                         if (isSameArrow) {
+                           enqueueInput({ type: "deselect" });
+                           resetSelectorToPlayer();
+                           flashPlayerHighlight();
+                           pushHudMessage("Arrow deselected");
+                         } else {
+                           enqueueInput({ type: "select", x, y });
+                           setIsSelectorActive(false);
+                           setSelectorPos({ x, y });
+                           pushHudMessage("Arrow selected — use the controls to move it.", 2200);
+                         }
+                       }
+                     }}
+                     onCancelSelection={() => {
+                       if (selectedArrow) {
+                         enqueueInput({ type: "deselect" });
+                         resetSelectorToPlayer();
+                         pushHudMessage("Arrow deselected");
+                       }
+                     }}
+                   />
                 </div>
               </div>
             ) : viewMode === "sprite" ? (

@@ -35,8 +35,10 @@ interface GameTop2DProps {
    theme?: ColorTheme;
    /** Non-empty while the player has been idle on an arrow tile long enough to flash a hint. */
    idleArrowHintDirections?: { dx: number; dy: number }[];
-   /** Identifies the current level so a fresh load (new id) can play its one-shot intro beat. */
+    /** Identifies the current level so a fresh load (new id) can play its one-shot intro beat. */
     levelId?: number | string | null;
+    /** Active crumble-animation progress keyed by "x,y" tile coordinate. */
+    crumbleAnimations?: Map<string, number>;
     onArrowClick?: (x: number, y: number) => void;
     onCancelSelection?: () => void;
   }
