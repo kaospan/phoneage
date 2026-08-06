@@ -174,6 +174,7 @@ const SESSION_ACTIVE_TIME_TICK_MS = 1_000;
 const LAST_SEEN_TOUCH_INTERVAL_MS = 60_000;
 export const VIEW_MODES = ["3d", "fps", "2d", "sprite", "top"] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
+const VIEW_SWITCHER_ADMIN_EMAIL = "kaospen@gmail.com";
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   "3d": "3D",
   fps: "FPS",
@@ -363,6 +364,7 @@ export const PuzzleGame = () => {
   const playerSession = usePlayerSession();
   const playerUserId = playerSession?.user?.id ?? null;
   const playerEmail = playerSession?.user?.email ?? null;
+  const canUseViewSwitcher = playerEmail?.trim().toLowerCase() === VIEW_SWITCHER_ADMIN_EMAIL;
   const playerUserIdRef = useRef<string | null>(playerUserId);
   useEffect(() => { playerUserIdRef.current = playerUserId; }, [playerUserId]);
   const currentPlaySessionIdRef = useRef<string | null>(null);
@@ -468,15 +470,22 @@ export const PuzzleGame = () => {
   }, [disabledViewModes]);
   // If the active mode gets disabled, hop to the nearest still-enabled mode immediately.
   useEffect(() => {
+    if (!canUseViewSwitcher) return;
     if (!cyclableViewModes.includes(viewMode)) {
       setViewMode(cyclableViewModes[0]);
     }
-  }, [cyclableViewModes, viewMode]);
+  }, [canUseViewSwitcher, cyclableViewModes, viewMode]);
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
   const [cameraZoomIndex, setCameraZoomIndex] = useState(() => (
     isMobile ? MOBILE_DEFAULT_CAMERA_ZOOM_INDEX : DEFAULT_CAMERA_ZOOM_INDEX
   ));
+  useEffect(() => {
+    if (canUseViewSwitcher || viewMode === "top") return;
+    setViewMode("top");
+    setCameraOffset({ x: 0, z: 0 });
+    setUserZoomTouched(false);
+  }, [canUseViewSwitcher, viewMode]);
   // Selector navigation state for keyboard-based arrow selection
   const [selectorPos, setSelectorPos] = useState<{ x: number; y: number } | null>(null);
   const [isSelectorActive, setIsSelectorActive] = useState(false);
@@ -3132,20 +3141,22 @@ export const PuzzleGame = () => {
           +
         </Button>
 
-        <Button
-          onClick={() => {
-            setViewMode(nextViewMode);
-            setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
-            setUserZoomTouched(false);
-            setCameraOffset({ x: 0, z: 0 });
-          }}
-          variant="ghost"
-          size="sm"
-          className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
-          title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
-        >
-          {VIEW_MODE_LABELS[viewMode]}
-        </Button>
+        {canUseViewSwitcher && (
+          <Button
+            onClick={() => {
+              setViewMode(nextViewMode);
+              setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
+              setUserZoomTouched(false);
+              setCameraOffset({ x: 0, z: 0 });
+            }}
+            variant="ghost"
+            size="sm"
+            className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
+            title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
+          >
+            {VIEW_MODE_LABELS[viewMode]}
+          </Button>
+        )}
 
         <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
 
@@ -3852,20 +3863,22 @@ export const PuzzleGame = () => {
                     <ZoomIn className="h-4 w-4" />
                   </Button>
 
-                  <Button
-                    onClick={() => {
-                      setViewMode(nextViewMode);
-                      setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
-                      setUserZoomTouched(false);
-                      setCameraOffset({ x: 0, z: 0 });
-                    }}
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 rounded-2xl border border-white/10 bg-white/5 px-2 text-xs font-black tracking-[0.14em] text-stone-50 hover:bg-white/10"
-                    title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
-                  >
-                    {VIEW_MODE_LABELS[viewMode]}
-                  </Button>
+                  {canUseViewSwitcher && (
+                    <Button
+                      onClick={() => {
+                        setViewMode(nextViewMode);
+                        setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
+                        setUserZoomTouched(false);
+                        setCameraOffset({ x: 0, z: 0 });
+                      }}
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 rounded-2xl border border-white/10 bg-white/5 px-2 text-xs font-black tracking-[0.14em] text-stone-50 hover:bg-white/10"
+                      title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
+                    >
+                      {VIEW_MODE_LABELS[viewMode]}
+                    </Button>
+                  )}
 
                   <TutorialSettingsPopover enabled={tutorialsEnabled} onToggleEnabled={handleToggleTutorialsEnabled} onReplay={handleReplayAllTutorials} onReplaySingle={handleReplaySingleTutorial} />
 
