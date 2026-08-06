@@ -121,6 +121,7 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
   </div>
 </div>
 <script>
+  const CELL_COLORS = ${JSON.stringify(CELL_COLORS)};
   const nodes = ${nodesJson};
   const goalSet = new Set(${JSON.stringify(Array.from(goalSet))});
   const startStateId = ${trace.startStateId};
