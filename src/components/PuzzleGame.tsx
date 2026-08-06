@@ -198,7 +198,7 @@ const TutorialSettingsPopover = ({
       <Button
         variant="ghost"
         size="default"
-        className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+        className="h-8 w-8 p-0 text-stone-300 hover:bg-primary/20"
         aria-label="Tutorial settings"
         title="Tutorial settings"
       >
@@ -3094,7 +3094,7 @@ export const PuzzleGame = () => {
           onClick={handleToggleMusic}
           variant="ghost"
           size="sm"
-          className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+          className="h-8 w-8 p-0 text-stone-300 hover:bg-primary/20"
           title={musicEnabled ? "Mute music" : "Unmute music"}
           aria-label={musicEnabled ? "Mute music" : "Unmute music"}
           aria-pressed={musicEnabled}
@@ -3107,7 +3107,7 @@ export const PuzzleGame = () => {
             onClick={() => playerSession.signOut()}
             variant="ghost"
             size="sm"
-            className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+            className="h-8 w-8 p-0 text-stone-300 hover:bg-primary/20"
             title="Sign out"
             aria-label="Sign out"
           >
@@ -3510,13 +3510,13 @@ export const PuzzleGame = () => {
         {useSplitHud ? (
           <div
             ref={topHudBarRef}
-            className="relative z-50 flex w-full items-start justify-between px-2"
+            className="relative z-50 flex w-full items-start justify-between px-1.5"
             style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.25rem)' }}
           >
             {/* Left HUD cluster (full-width in mobile portrait, since secondary controls move to the bottom HUD bar) */}
             <div
               className={[
-                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-2 py-1.5 overflow-x-auto",
+                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 overflow-x-auto",
                 isMobilePortrait ? "max-w-[calc(100vw-16px)]" : "max-w-[calc(50vw-12px)]",
               ].join(" ")}
             >
@@ -3526,7 +3526,7 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="default"
-                className="h-9 w-9 p-0 text-lg font-bold hover:bg-primary/20"
+                className="h-8 w-8 p-0 text-base font-bold hover:bg-primary/20"
                 disabled={currentLevelIndex === 0}
                 aria-label="Previous level"
                 title="Previous level (P)"
@@ -3535,16 +3535,16 @@ export const PuzzleGame = () => {
               </Button>
 
                <div className="flex items-center gap-2 px-1 whitespace-nowrap">
-                 <span className="text-primary font-bold text-base">
-                   {`L${currentLevel.id}`}
-                 </span>
-                 <span className="text-foreground font-medium text-sm">{`M:${moves}`}</span>
+                  <span className="text-primary font-bold text-sm">
+                    {`L${currentLevel.id}`}
+                  </span>
+                  <span className="text-foreground font-medium text-xs">{`M:${moves}`}</span>
                  {/* Always rendered (even with no PB yet) at a fixed min-width so the HUD's
                      total width — and the next-level arrow at the end of this row — doesn't
                      shift depending on whether a level has a personal best recorded. */}
                  <span
                    className={[
-                     "inline-flex min-w-[60px] items-center justify-center rounded-md border px-2 py-1 text-[11px] font-black tracking-wide",
+                      "inline-flex min-w-[50px] items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-black tracking-wide",
                      currentBestMoves != null
                        ? "border-amber-300/50 bg-amber-500/10 text-amber-100"
                        : "border-transparent bg-transparent text-transparent pointer-events-none",
@@ -3557,7 +3557,7 @@ export const PuzzleGame = () => {
                   {timeLeftText && (
                      <span
                        className={[
-                         "inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-[13px] font-black tabular-nums shadow-md",
+                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-black tabular-nums shadow-md",
                          isTimerUrgent
                            ? "border-red-200/80 bg-red-700 text-white shadow-lg ring-2 ring-red-200/40"
                            : "border-border/60 bg-background/70 text-foreground ring-1 ring-black/10",
@@ -3573,7 +3573,7 @@ export const PuzzleGame = () => {
                      onClick={startLevelWhenReady}
                      variant="default"
                      size="sm"
-                     className="h-8 px-2 text-[11px] font-black tracking-wide"
+                      className="h-7 px-1.5 text-[10px] font-black tracking-wide"
                      title="Start timer when ready"
                    >
                      <Play className="mr-1 h-3.5 w-3.5" />
@@ -3581,20 +3581,20 @@ export const PuzzleGame = () => {
                    </Button>
                  )}
                  <div className="flex items-center gap-1">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[10px] font-black text-white px-1 py-0.5"
+                      title="Red keys collected"
+                    >
+                     <span aria-hidden>🗝</span>
+                     <span>{redKeyCount}</span>
+                   </span>
                    <span
-                     className="inline-flex items-center gap-1 rounded-md border border-red-300/70 bg-red-600 text-[11px] font-black text-white px-1.5 py-0.5"
-                     title="Red keys collected"
+                     className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-[10px] font-black text-white px-1 py-0.5"
+                     title="Green keys collected"
                    >
-                    <span aria-hidden>🗝</span>
-                    <span>{redKeyCount}</span>
-                  </span>
-                  <span
-                    className="inline-flex items-center gap-1 rounded-md border border-green-300/70 bg-green-600 text-[11px] font-black text-white px-1.5 py-0.5"
-                    title="Green keys collected"
-                  >
-                    <span aria-hidden>🔑</span>
-                    <span>{greenKeyCount}</span>
-                  </span>
+                     <span aria-hidden>🔑</span>
+                     <span>{greenKeyCount}</span>
+                   </span>
                 </div>
               </div>
 
@@ -3608,7 +3608,7 @@ export const PuzzleGame = () => {
                 }}
                 variant="ghost"
                 size="default"
-                className="h-9 w-9 p-0 text-lg font-bold hover:bg-primary/20"
+                className="h-8 w-8 p-0 text-base font-bold hover:bg-primary/20"
                 aria-label="Next level"
                 title={nextLevelTitle}
               >
@@ -3618,8 +3618,8 @@ export const PuzzleGame = () => {
 
             {/* Right HUD cluster — hidden in mobile portrait, where these controls live in the bottom HUD bar instead */}
             {!isMobilePortrait && (
-              <div className="flex shrink-0 items-center gap-1.5">
-                <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-[calc(50vw-56px)] overflow-x-auto">
+              <div className="flex shrink-0 items-center gap-1">
+                <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1 py-0.5 max-w-[calc(50vw-56px)] overflow-x-auto">
                   {secondaryHudButtons}
                 </div>
                 {/* Kept OUTSIDE the scrollable cluster above (not just another item in
@@ -3630,7 +3630,7 @@ export const PuzzleGame = () => {
                   onClick={() => void toggleFullscreenMode()}
                   variant="ghost"
                   size="sm"
-                  className="h-9 w-9 shrink-0 rounded-lg border border-amber-300/50 bg-amber-400/15 p-0 text-amber-200 hover:bg-amber-400/25"
+                  className="h-8 w-8 shrink-0 rounded-lg border border-amber-300/50 bg-amber-400/15 p-0 text-amber-200 hover:bg-amber-400/25"
                   title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
                   aria-pressed={isFullscreenMode}
                   aria-label={isFullscreenMode ? "Exit fullscreen layout" : "Enter fullscreen layout"}
@@ -3645,8 +3645,8 @@ export const PuzzleGame = () => {
             className={`absolute left-4 right-4 z-50 ${desktopTopInsetClass}`}
             style={{ top: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
           >
-            <div className="rounded-[28px] border border-[#7b6043]/60 bg-[#1c140e]/78 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-[28px] border border-[#7b6043]/60 bg-[#1c140e]/78 p-2 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     onClick={() => {
@@ -3654,7 +3654,7 @@ export const PuzzleGame = () => {
                     }}
                     variant="ghost"
                     size="default"
-                    className="h-11 w-11 rounded-2xl border border-white/10 bg-white/5 p-0 text-xl font-bold text-stone-50 hover:bg-white/10"
+                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-lg font-bold text-stone-50 hover:bg-white/10"
                     disabled={currentLevelIndex === 0}
                     aria-label="Previous level"
                     title="Previous level (P)"
@@ -3662,32 +3662,32 @@ export const PuzzleGame = () => {
                     ←
                   </Button>
 
-                  <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-white/10 bg-black/20 px-3 py-2">
-                    <div className="rounded-2xl border border-amber-300/25 bg-amber-500/10 px-3 py-2">
-                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Stage</div>
-                      <div className="mt-1 text-lg font-black text-amber-100">L{currentLevel.id}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Moves</div>
-                      <div className="mt-1 text-lg font-black text-stone-50">{moves}</div>
-                    </div>
-                    <div className={[
-                      'rounded-2xl border px-3 py-2',
-                      isTimerUrgent ? 'border-red-300/40 bg-red-500/14' : 'border-white/10 bg-white/5',
-                    ].join(' ')}>
-                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Clock</div>
-                      <div className="mt-1 text-lg font-black text-stone-50">{timeLeftText ?? '∞'}</div>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-stone-200">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-red-300/60 bg-red-600/85 px-2 py-1 text-xs font-black text-white">
-                        <span aria-hidden>🗝</span>
-                        <span>{redKeyCount}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-green-300/60 bg-green-600/85 px-2 py-1 text-xs font-black text-white">
-                        <span aria-hidden>🔑</span>
-                        <span>{greenKeyCount}</span>
-                      </span>
-                    </div>
+                   <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-white/10 bg-black/20 px-2 py-1.5">
+                     <div className="rounded-2xl border border-amber-300/25 bg-amber-500/10 px-2 py-1.5">
+                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Stage</div>
+                       <div className="mt-1 text-base font-black text-amber-100">L{currentLevel.id}</div>
+                     </div>
+                     <div className="rounded-2xl border border-white/10 bg-white/5 px-2 py-1.5">
+                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Moves</div>
+                       <div className="mt-1 text-base font-black text-stone-50">{moves}</div>
+                     </div>
+                     <div className={[
+                       'rounded-2xl border px-2 py-1.5',
+                       isTimerUrgent ? 'border-red-300/40 bg-red-500/14' : 'border-white/10 bg-white/5',
+                     ].join(' ')}>
+                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Clock</div>
+                       <div className="mt-1 text-base font-black text-stone-50">{timeLeftText ?? '∞'}</div>
+                     </div>
+                     <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-semibold text-stone-200">
+                       <span className="inline-flex items-center gap-1 rounded-full border border-red-300/60 bg-red-600/85 px-1.5 py-0.5 text-[10px] font-black text-white">
+                         <span aria-hidden>🗝</span>
+                         <span>{redKeyCount}</span>
+                       </span>
+                       <span className="inline-flex items-center gap-1 rounded-full border border-green-300/60 bg-green-600/85 px-1.5 py-0.5 text-[10px] font-black text-white">
+                         <span aria-hidden>🔑</span>
+                         <span>{greenKeyCount}</span>
+                       </span>
+                     </div>
                   </div>
 
                   <Button
@@ -3700,7 +3700,7 @@ export const PuzzleGame = () => {
                     }}
                     variant="ghost"
                     size="default"
-                    className="h-11 w-11 rounded-2xl border border-white/10 bg-white/5 p-0 text-xl font-bold text-stone-50 hover:bg-white/10"
+                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-lg font-bold text-stone-50 hover:bg-white/10"
                     aria-label="Next level"
                     title={nextLevelTitle}
                   >
@@ -3714,7 +3714,7 @@ export const PuzzleGame = () => {
                       onClick={startLevelWhenReady}
                       variant="default"
                       size="sm"
-                      className="h-10 rounded-2xl bg-emerald-500 px-3 text-xs font-black tracking-[0.12em] text-emerald-950 hover:bg-emerald-400"
+                      className="h-9 rounded-2xl bg-emerald-500 px-2 text-[10px] font-black tracking-[0.12em] text-emerald-950 hover:bg-emerald-400"
                       title="Start timer when ready"
                     >
                       <Play className="mr-2 h-4 w-4" />
@@ -3728,7 +3728,7 @@ export const PuzzleGame = () => {
                     size="sm"
                     disabled={isComplete || localPlayer?.isGliding}
                     className={[
-                      "h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-stone-50 hover:bg-white/10",
+                      "h-9 rounded-2xl border border-white/10 bg-white/5 px-2 text-stone-50 hover:bg-white/10",
                       isStuck ? "animate-stuck-hint-pulse" : "",
                     ].join(" ")}
                     title="Restart level (R)"
@@ -3746,14 +3746,14 @@ export const PuzzleGame = () => {
                     }}
                     variant="ghost"
                     size="sm"
-                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
+                    className="h-9 w-9 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
                     title="Zoom out"
                     disabled={!canZoomOut}
                   >
                     <ZoomOut className="h-4 w-4" />
                   </Button>
 
-                  <div className="min-w-14 text-center text-sm font-black text-stone-300">
+                  <div className="min-w-14 text-center text-xs font-black text-stone-300">
                     {cameraZoomPercent}%
                   </div>
 
@@ -3764,7 +3764,7 @@ export const PuzzleGame = () => {
                     }}
                     variant="ghost"
                     size="sm"
-                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
+                    className="h-9 w-9 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
                     title="Zoom in"
                     disabled={!canZoomIn}
                   >
@@ -3780,7 +3780,7 @@ export const PuzzleGame = () => {
                     }}
                     variant="ghost"
                     size="sm"
-                    className="h-10 rounded-2xl border border-white/10 bg-white/5 px-3 text-sm font-black tracking-[0.14em] text-stone-50 hover:bg-white/10"
+                    className="h-9 rounded-2xl border border-white/10 bg-white/5 px-2 text-xs font-black tracking-[0.14em] text-stone-50 hover:bg-white/10"
                     title={`Switch to ${VIEW_MODE_LABELS[nextViewMode]} view`}
                   >
                     {VIEW_MODE_LABELS[viewMode]}
@@ -3792,7 +3792,7 @@ export const PuzzleGame = () => {
           onClick={handleToggleMusic}
           variant="ghost"
           size="sm"
-          className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+          className="h-8 w-8 p-0 text-stone-300 hover:bg-primary/20"
           title={musicEnabled ? "Mute music" : "Unmute music"}
           aria-label={musicEnabled ? "Mute music" : "Unmute music"}
           aria-pressed={musicEnabled}
@@ -3805,7 +3805,7 @@ export const PuzzleGame = () => {
             onClick={() => playerSession.signOut()}
             variant="ghost"
             size="sm"
-            className="h-9 w-9 p-0 text-stone-300 hover:bg-primary/20"
+            className="h-8 w-8 p-0 text-stone-300 hover:bg-primary/20"
             title="Sign out"
             aria-label="Sign out"
           >
@@ -3817,7 +3817,7 @@ export const PuzzleGame = () => {
                     onClick={() => void toggleFullscreenMode()}
                     variant="ghost"
                     size="sm"
-                    className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
+                    className="h-9 w-9 rounded-2xl border border-white/10 bg-white/5 p-0 text-stone-50 hover:bg-white/10"
                     title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
                     aria-pressed={isFullscreenMode}
                   >
@@ -3834,7 +3834,7 @@ export const PuzzleGame = () => {
             className="fixed inset-x-2 bottom-0 z-50 flex justify-center"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.25rem)' }}
           >
-            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1.5 py-1 max-w-full overflow-x-auto">
+            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1 py-0.5 max-w-full overflow-x-auto">
               {secondaryHudButtons}
             </div>
           </div>
@@ -3954,18 +3954,7 @@ export const PuzzleGame = () => {
                 }}
               />
             ) : viewMode === "3d" ? (
-              // Reuses the "top" mode's own clean tile graphics rather than the separate
-              // Three.js engine below (still used for "fps"/"2d") — just tilted on a small
-              // CSS rotateX so it reads as a mild 3D perspective instead of a flat top-down view.
-              <div
-                className="h-full w-full"
-                style={{ perspective: "1400px", perspectiveOrigin: "50% 15%" }}
-              >
-                <div
-                  className="h-full w-full"
-                  style={{ transform: "rotateX(22deg)", transformOrigin: "50% 50%" }}
-                >
-                  <GameTop2D
+              <GameTop2D
                     grid={renderGrid}
                     cavePos={renderCavePos}
                     playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
@@ -4008,10 +3997,8 @@ export const PuzzleGame = () => {
                          pushHudMessage("Arrow deselected");
                        }
                      }}
-                   />
-                </div>
-              </div>
-            ) : viewMode === "sprite" ? (
+                    />
+             ) : viewMode === "sprite" ? (
                <GameSprite2D
                  grid={renderGrid}
                  atlasSourceGrid={activeLevel?.grid ?? currentLevel?.grid ?? renderGrid}
