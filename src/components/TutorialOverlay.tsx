@@ -287,6 +287,7 @@ export function TutorialOverlay({ queue, onDone, isMobilePortrait }: TutorialOve
             </div>
 
             <div
+              data-testid="tutorial-mini-grid"
               className="relative mt-4 w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl"
               style={{ height: isMobilePortrait ? "min(55vh, 520px)" : 220 }}
             >
