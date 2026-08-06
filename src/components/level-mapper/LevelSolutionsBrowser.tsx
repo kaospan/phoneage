@@ -11,6 +11,7 @@ import {
   createEmptyTrace,
   type LevelSolution,
   type SolutionFrame,
+  type SolverTrace,
 } from '@/lib/levelSolver';
 import type { CellType } from '@/game/types';
 import { cn } from '@/lib/utils';
@@ -27,11 +28,40 @@ interface SolveEntry {
   error?: string;
 }
 
+type SolutionsPage = 'browser' | 'logs';
 type ScopeFilter = 'all' | 'original' | 'procedural';
+
+interface SolverLogEntry {
+  id: string;
+  levelId: number;
+  status: Exclude<SolveStatus, 'unattempted' | 'solving'>;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  solved: boolean;
+  moves: number | null;
+  reason: string;
+  nodesExpanded: number;
+  statesGenerated: number;
+  endReason: string;
+  collisions: number;
+  deadEnds: number;
+  options: {
+    maxMsPerLevel: number;
+    maxNodesPerLevel: number;
+    maxDepth: number;
+  };
+  moveHistory: string[];
+  details: string[];
+  traceAvailable: boolean;
+  error?: string;
+}
 
 const SINGLE_SOLVE_OPTS = { maxMsPerLevel: 6000, maxNodesPerLevel: 80_000, maxDepth: 220 };
 const BATCH_SOLVE_OPTS = { maxMsPerLevel: 2000, maxNodesPerLevel: 20_000, maxDepth: 160 };
 const PLAYBACK_INTERVAL_MS = 550;
+const SOLVER_LOG_STORAGE_KEY = 'phoneage:mapper-solver-logs:v1';
+const MAX_SOLVER_LOG_ENTRIES = 500;
 
 const statusStyle: Record<SolveStatus, string> = {
   unattempted: 'border-white/10 bg-white/[0.04] text-stone-400',
@@ -49,11 +79,129 @@ const statusLabel = (entry: SolveEntry | undefined): string => {
   return entry.solution?.reason ?? 'Unsolved';
 };
 
+const createLogId = (levelId: number, startedAt: string) =>
+  `solver-log-${levelId}-${startedAt}-${Math.random().toString(36).slice(2, 8)}`;
+
+const formatLogTime = (iso: string): string =>
+  new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+const loadSolverLogs = (): SolverLogEntry[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(SOLVER_LOG_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveSolverLogs = (logs: SolverLogEntry[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SOLVER_LOG_STORAGE_KEY, JSON.stringify(logs.slice(0, MAX_SOLVER_LOG_ENTRIES)));
+  } catch {
+    // The UI still keeps the in-memory log if localStorage is full or unavailable.
+  }
+};
+
+const tracePathToNode = (trace: SolverTrace, nodeId: number | null): string[] => {
+  if (nodeId == null) return [];
+  const path: string[] = [];
+  let cur: number | null | undefined = nodeId;
+  while (cur != null && cur !== trace.startStateId) {
+    const node = trace.nodes.get(cur);
+    if (!node) break;
+    path.unshift(node.action);
+    cur = node.parentId;
+  }
+  return path;
+};
+
+const traceFocusNodeId = (trace: SolverTrace): number | null =>
+  trace.lastExpandedStateId ?? trace.furthestStateId ?? trace.startStateId ?? null;
+
+const traceDetails = (trace: SolverTrace): string[] => {
+  const nodeId = traceFocusNodeId(trace);
+  const node = nodeId != null ? trace.nodes.get(nodeId) : undefined;
+  const lines = [
+    `End reason: ${trace.endReason}`,
+    `Nodes expanded: ${trace.nodesExpanded}`,
+    `States generated: ${trace.statesGenerated}`,
+    `Closest Manhattan distance: ${Number.isFinite(trace.closestManhattan) ? trace.closestManhattan : 'unknown'}`,
+    `Collisions: ${trace.collisions.length}`,
+    `Dead ends: ${trace.deadEnds.length}`,
+  ];
+  if (!node) return lines;
+  lines.push(`Focus state: #${node.id}`);
+  lines.push(`Depth: ${node.depth}`);
+  lines.push(`Player: ${node.playerPos.x},${node.playerPos.y}`);
+  lines.push(`Inventory: red ${node.inventory.red}, green ${node.inventory.green}`);
+  if (node.attemptedActions.length > 0) {
+    for (const action of node.attemptedActions.slice(0, 80)) {
+      lines.push(
+        `${action.accepted ? 'accepted' : 'rejected'} ${action.actionString}: ${action.description}${
+          action.rejectionReason ? ` (${action.rejectionReason})` : ''
+        }`,
+      );
+    }
+    if (node.attemptedActions.length > 80) {
+      lines.push(`... ${node.attemptedActions.length - 80} more attempted moves omitted from this compact log`);
+    }
+  }
+  return lines;
+};
+
+const buildSolverLogEntry = (
+  levelId: number,
+  startedAt: string,
+  finishedAt: string,
+  result: LevelSolution | null,
+  error: Error | null,
+  trace: SolverTrace | null,
+  options: typeof SINGLE_SOLVE_OPTS,
+): SolverLogEntry => {
+  const status: SolverLogEntry['status'] = error ? 'error' : result?.solved ? 'solved' : 'unsolved';
+  const focusPath = trace ? tracePathToNode(trace, traceFocusNodeId(trace)) : [];
+  const moveHistory = result?.solved ? result.actions : focusPath;
+  return {
+    id: createLogId(levelId, startedAt),
+    levelId,
+    status,
+    startedAt,
+    finishedAt,
+    durationMs: new Date(finishedAt).getTime() - new Date(startedAt).getTime(),
+    solved: Boolean(result?.solved),
+    moves: result?.moves ?? (moveHistory.length > 0 ? moveHistory.length : null),
+    reason: error?.message ?? result?.reason ?? (result?.solved ? 'Solved' : 'Unknown solver result'),
+    nodesExpanded: result?.nodesExpanded ?? trace?.nodesExpanded ?? 0,
+    statesGenerated: trace?.statesGenerated ?? 0,
+    endReason: trace?.endReason ?? (error ? 'error' : 'unknown'),
+    collisions: trace?.collisions.length ?? 0,
+    deadEnds: trace?.deadEnds.length ?? 0,
+    options,
+    moveHistory,
+    details: trace ? traceDetails(trace) : [error?.stack ?? error?.message ?? 'No trace was produced.'],
+    traceAvailable: Boolean(trace && trace.nodes.size > 0),
+    error: error?.message,
+  };
+};
+
 export const LevelSolutionsBrowser: React.FC = () => {
   const { allLevels } = useLevelMapper();
 
   const [selectedId, setSelectedId] = useState<number | null>(allLevels[0]?.id ?? null);
   const [solveStatus, setSolveStatus] = useState<Record<number, SolveEntry>>({});
+  const [page, setPage] = useState<SolutionsPage>('browser');
+  const [solverLogs, setSolverLogs] = useState<SolverLogEntry[]>(loadSolverLogs);
+  const logTraceRef = useRef<Map<string, SolverTrace>>(new Map());
   const solveStatusRef = useRef(solveStatus);
   useEffect(() => {
     solveStatusRef.current = solveStatus;
@@ -70,26 +218,45 @@ export const LevelSolutionsBrowser: React.FC = () => {
   const [stepIndex, setStepIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
 
+  useEffect(() => {
+    saveSolverLogs(solverLogs);
+  }, [solverLogs]);
+
+  const appendSolverLog = useCallback((entry: SolverLogEntry, trace: SolverTrace | null) => {
+    if (trace && trace.nodes.size > 0) logTraceRef.current.set(entry.id, trace);
+    setSolverLogs((prev) => [entry, ...prev].slice(0, MAX_SOLVER_LOG_ENTRIES));
+  }, []);
+
+  const openTrace = useCallback((trace: SolverTrace) => {
+    const html = generateSolverTraceHTML(trace);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, []);
+
   const solveOne = useCallback(async (id: number) => {
     setSolveStatus((prev) => ({ ...prev, [id]: { status: 'solving' } }));
+    const startedAt = new Date().toISOString();
+    const trace = createEmptyTrace();
     try {
-      const trace = createEmptyTrace();
       const result = await runSolveLevel(id, { ...SINGLE_SOLVE_OPTS, trace });
+      const finishedAt = new Date().toISOString();
       setSolveStatus((prev) => ({
         ...prev,
         [id]: { status: result.solved ? 'solved' : 'unsolved', solution: result },
       }));
+      appendSolverLog(buildSolverLogEntry(id, startedAt, finishedAt, result, null, result.trace ?? trace, SINGLE_SOLVE_OPTS), result.trace ?? trace);
       if (!result.solved && result.trace) {
-        const html = generateSolverTraceHTML(result.trace);
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        openTrace(result.trace);
       }
     } catch (err) {
-      setSolveStatus((prev) => ({ ...prev, [id]: { status: 'error', error: (err as Error).message } }));
+      const error = err instanceof Error ? err : new Error(String(err));
+      const finishedAt = new Date().toISOString();
+      setSolveStatus((prev) => ({ ...prev, [id]: { status: 'error', error: error.message } }));
+      appendSolverLog(buildSolverLogEntry(id, startedAt, finishedAt, null, error, trace, SINGLE_SOLVE_OPTS), trace);
     }
-  }, []);
+  }, [appendSolverLog, openTrace]);
 
   const filteredLevels = useMemo(() => {
     const q = search.trim();
@@ -143,22 +310,24 @@ export const LevelSolutionsBrowser: React.FC = () => {
         const existing = solveStatusRef.current[id]?.status;
         if (existing !== 'solved') {
           setSolveStatus((prev) => ({ ...prev, [id]: { status: 'solving' } }));
+          const startedAt = new Date().toISOString();
+          const trace = createEmptyTrace();
           try {
-            const trace = createEmptyTrace();
             const result = await runSolveLevel(id, { ...BATCH_SOLVE_OPTS, trace });
+            const finishedAt = new Date().toISOString();
             setSolveStatus((prev) => ({
               ...prev,
               [id]: { status: result.solved ? 'solved' : 'unsolved', solution: result },
             }));
+            appendSolverLog(buildSolverLogEntry(id, startedAt, finishedAt, result, null, result.trace ?? trace, BATCH_SOLVE_OPTS), result.trace ?? trace);
             if (!result.solved && result.trace) {
-              const html = generateSolverTraceHTML(result.trace);
-              const blob = new Blob([html], { type: 'text/html' });
-              const url = URL.createObjectURL(blob);
-              window.open(url, '_blank');
-              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              openTrace(result.trace);
             }
           } catch (err) {
-            setSolveStatus((prev) => ({ ...prev, [id]: { status: 'error', error: (err as Error).message } }));
+            const error = err instanceof Error ? err : new Error(String(err));
+            const finishedAt = new Date().toISOString();
+            setSolveStatus((prev) => ({ ...prev, [id]: { status: 'error', error: error.message } }));
+            appendSolverLog(buildSolverLogEntry(id, startedAt, finishedAt, null, error, trace, BATCH_SOLVE_OPTS), trace);
           }
         }
         done += 1;
@@ -167,7 +336,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
       }
       setBatchRunning(false);
     },
-    [],
+    [appendSolverLog, openTrace],
   );
 
   const selectedLevel = useMemo(
@@ -207,6 +376,25 @@ export const LevelSolutionsBrowser: React.FC = () => {
   const currentFrame = frames[Math.min(stepIndex, Math.max(0, frames.length - 1))] ?? null;
   const displayGrid = currentFrame ? currentFrame.grid : selectedLevel?.grid ?? null;
   const displayPlayerPos = currentFrame ? currentFrame.playerPos : selectedLevel?.playerStart ?? null;
+  const solverLogGroups = useMemo(() => {
+    const groups = new Map<number, SolverLogEntry[]>();
+    for (const log of solverLogs) {
+      const rows = groups.get(log.levelId) ?? [];
+      rows.push(log);
+      groups.set(log.levelId, rows);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([levelId, entries]) => ({
+        levelId,
+        entries: entries.sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime()),
+      }));
+  }, [solverLogs]);
+  const logCounts = useMemo(() => ({
+    solved: solverLogs.filter((l) => l.status === 'solved').length,
+    unsolved: solverLogs.filter((l) => l.status === 'unsolved').length,
+    error: solverLogs.filter((l) => l.status === 'error').length,
+  }), [solverLogs]);
 
   return (
     <div className="flex h-full min-h-0 w-full gap-3">
@@ -217,6 +405,24 @@ export const LevelSolutionsBrowser: React.FC = () => {
             <div className="text-sm font-semibold text-stone-50">Level Solutions</div>
             <div className="mt-0.5 text-[11px] leading-snug text-stone-400">
               Top-view preview + solved playthrough for every level.
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-1.5">
+              {(['browser', 'logs'] as SolutionsPage[]).map((target) => (
+                <button
+                  key={target}
+                  type="button"
+                  onClick={() => setPage(target)}
+                  className={cn(
+                    'h-8 rounded-lg border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors',
+                    page === target
+                      ? 'border-sky-300/40 bg-sky-500/15 text-sky-100'
+                      : 'border-white/10 bg-white/[0.04] text-stone-400 hover:text-stone-100',
+                  )}
+                >
+                  {target === 'browser' ? 'Browser' : `Solver Log ${solverLogs.length ? `(${solverLogs.length})` : ''}`}
+                </button>
+              ))}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -367,7 +573,128 @@ export const LevelSolutionsBrowser: React.FC = () => {
 
       {/* Detail / playback */}
       <MapperPanelFrame className="min-w-0 flex-1">
-        {!selectedLevel ? (
+        {page === 'logs' ? (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold text-stone-50">Solver Monitoring Log</div>
+                <div className="mt-0.5 text-[11px] text-stone-500">
+                  Timestamped solve runs grouped by level. Failed runs keep their move history and final-state details.
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <MapperMetricPill label="Solved" value={logCounts.solved} tone="success" />
+                <MapperMetricPill label="Unsolved" value={logCounts.unsolved} tone="warning" />
+                <MapperMetricPill label="Errors" value={logCounts.error} tone="warning" />
+                <button
+                  type="button"
+                  disabled={solverLogs.length === 0}
+                  onClick={() => {
+                    if (!window.confirm('Clear all saved solver logs from this browser?')) return;
+                    logTraceRef.current.clear();
+                    setSolverLogs([]);
+                  }}
+                  className="h-8 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-stone-200 hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear Logs
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+              {solverLogGroups.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-stone-500">
+                  No solver logs yet. Run a single solve or batch solve to start recording.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {solverLogGroups.map((group) => (
+                    <section key={group.levelId}>
+                      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-stone-950/95 py-2 backdrop-blur">
+                        <div className="text-xs font-black uppercase tracking-[0.16em] text-stone-300">Level {group.levelId}</div>
+                        <div className="text-[10px] text-stone-500">{group.entries.length} run{group.entries.length === 1 ? '' : 's'}</div>
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {group.entries.map((log) => {
+                          const trace = logTraceRef.current.get(log.id);
+                          return (
+                            <div key={log.id} className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={cn(
+                                        'rounded-md border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide',
+                                        statusStyle[log.status],
+                                      )}
+                                    >
+                                      {log.status}
+                                    </span>
+                                    <span className="font-semibold text-stone-100">{formatLogTime(log.finishedAt)}</span>
+                                    <span className="text-stone-500">{Math.max(0, log.durationMs)}ms</span>
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-stone-400">
+                                    <span>{log.moves ?? '—'} moves</span>
+                                    <span>{log.nodesExpanded} expanded</span>
+                                    <span>{log.statesGenerated} generated</span>
+                                    <span>{log.endReason}</span>
+                                  </div>
+                                </div>
+                                {trace ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openTrace(trace)}
+                                    className="h-8 rounded-xl border border-amber-300/30 bg-amber-500/15 px-2.5 text-[10px] font-bold uppercase tracking-wide text-amber-100 hover:bg-amber-500/25"
+                                  >
+                                    View Trace
+                                  </button>
+                                ) : log.traceAvailable ? (
+                                  <span className="text-[10px] text-stone-500">Full trace expired after reload</span>
+                                ) : null}
+                              </div>
+                              <div className="mt-2 text-[11px] text-stone-400">{log.reason}</div>
+                              <details className="mt-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5">
+                                <summary className="cursor-pointer text-[10px] font-black uppercase tracking-[0.12em] text-stone-300">
+                                  Move history and details
+                                </summary>
+                                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                                  <div>
+                                    <div className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-stone-500">Move history</div>
+                                    <div className="max-h-56 overflow-y-auto rounded-md bg-black/25 p-2 font-mono text-[11px] leading-relaxed text-stone-300">
+                                      {log.moveHistory.length > 0 ? log.moveHistory.map((move, idx) => (
+                                        <div key={`${log.id}-move-${idx}`}>
+                                          {String(idx + 1).padStart(2, '0')}. {move}
+                                        </div>
+                                      )) : <div className="text-stone-500">No accepted moves were recorded.</div>}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-stone-500">Details</div>
+                                    <div className="max-h-56 overflow-y-auto rounded-md bg-black/25 p-2 font-mono text-[11px] leading-relaxed text-stone-300">
+                                      {log.details.map((line, idx) => (
+                                        <div key={`${log.id}-detail-${idx}`}>{line}</div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-stone-500">
+                                  <span>Started {formatLogTime(log.startedAt)}</span>
+                                  <span>Limits {log.options.maxMsPerLevel}ms / {log.options.maxNodesPerLevel} nodes / depth {log.options.maxDepth}</span>
+                                  <span>{log.collisions} collisions</span>
+                                  <span>{log.deadEnds} dead ends</span>
+                                </div>
+                              </details>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : !selectedLevel ? (
           <div className="flex h-full items-center justify-center text-sm text-stone-500">
             Select a level to preview its solution.
           </div>
@@ -516,13 +843,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
                           return (
                             <button
                               type="button"
-                              onClick={() => {
-                                const html = generateSolverTraceHTML(selectedEntry.solution.trace!);
-                                const blob = new Blob([html], { type: 'text/html' });
-                                const url = URL.createObjectURL(blob);
-                                window.open(url, '_blank');
-                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                              }}
+                              onClick={() => openTrace(selectedEntry.solution!.trace!)}
                               className="ml-2 rounded-lg border border-amber-300/30 bg-amber-500/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-100 hover:bg-amber-500/25"
                             >
                               {traceLabel}

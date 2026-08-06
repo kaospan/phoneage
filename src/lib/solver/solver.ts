@@ -330,7 +330,7 @@ export async function solveLevel(
     if (opts.trace && acceptedMoves === 0 && currentNodeId !== null) {
       const node = trace.nodes.get(currentNodeId);
       if (node && !node.attemptedActions.some((a) => a.accepted)) {
-        // Dead end recorded implicitly by having no accepted children
+        trace.deadEnds.push(currentNodeId);
       }
     }
   }
