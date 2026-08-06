@@ -152,6 +152,7 @@ const isRecordedInputCommand = (value: unknown): value is RecordedInputCommand =
     if (!value || typeof value !== "object") return false;
     const command = value as Partial<RecordedInputCommand>;
     if (command.type === "deselect") return true;
+    if (command.type === "wait") return command.durationMs === undefined || Number.isFinite(command.durationMs);
     if (command.type === "select") return Number.isFinite(command.x) && Number.isFinite(command.y);
     if (command.type === "move") return Number.isFinite(command.dx) && Number.isFinite(command.dy);
     return false;
@@ -174,6 +175,10 @@ const moveHistoryLines = (actions: RecordedInputCommand[] | null): string[] => {
         if (action.type === "deselect") {
             activeArrow = null;
             return `${index + 1}. deselect arrow`;
+        }
+        if (action.type === "wait") {
+            activeArrow = null;
+            return `${index + 1}. wait${action.durationMs ? ` ${Math.round(action.durationMs / 1000)}s` : ""}`;
         }
         const dir = action.dy === -1 ? "U" : action.dy === 1 ? "D" : action.dx === -1 ? "L" : "R";
         const prefix = activeArrow ? `A(${activeArrow.x},${activeArrow.y})` : "P";

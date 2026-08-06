@@ -2,7 +2,7 @@ import { getArrowDirections, isArrowCell } from "@/game/arrows";
 import { computeRemoteArrowGlidePath } from "@/game/glide";
 import type { CellType, Position } from "@/game/types";
 import type { RecordedInputCommand } from "@/lib/moveRecording";
-import { applyPlayerMoveAtomic, applyRemoteArrowMoveAtomic } from "./actions";
+import { applyPlayerMoveAtomic, applyRemoteArrowMoveAtomic, applyTeleportCycleAtomic } from "./actions";
 import { DIR_VECTORS, type DirKey, type SolveState } from "./state";
 
 const dirKeyFromDelta = (dx: number, dy: number): DirKey | null => {
@@ -47,6 +47,15 @@ export const replayRecordedInputsAsSolverActions = (
     }
 
     if (input.type === "deselect") {
+      selectedArrow = null;
+      continue;
+    }
+
+    if (input.type === "wait") {
+      const result = applyTeleportCycleAtomic(state);
+      if (!result.ok || !result.state) continue;
+      actions.push("T");
+      state = result.state;
       selectedArrow = null;
       continue;
     }

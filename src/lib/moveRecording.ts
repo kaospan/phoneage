@@ -5,7 +5,8 @@ const RECORDED_RUN_KEY_PREFIX = 'stone-age-recorded-run-';
 export type RecordedInputCommand =
   | { type: 'move'; dx: number; dy: number }
   | { type: 'select'; x: number; y: number }
-  | { type: 'deselect' };
+  | { type: 'deselect' }
+  | { type: 'wait'; durationMs?: number };
 
 export interface RecordedRun {
   levelId: number;

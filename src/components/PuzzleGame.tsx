@@ -225,6 +225,7 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   sprite: "SPR",
   top: "TOP",
 };
+const DEFAULT_VIEW_MODE: ViewMode = "3d";
 
 const TutorialSettingsPopover = ({
   enabled,
@@ -310,13 +311,12 @@ const EMPTY_KEYS: KeyInventory = { red: 0, green: 0 };
 const DEFAULT_BONUS_TIME_SECONDS = 50;
 /** How long a player can stand on a teleport pad before it auto-advances to the next pad in the
  *  cycle. Simulation runs at a fixed 60Hz tick (see the requestAnimationFrame loop below), so this
- *  is expressed in ticks: 3000ms * 60 ticks/sec / 1000ms = 180 ticks. Bumped up from 2s to 3s —
- *  2s wasn't always enough reaction time to step off before the next cycle fires, which could
- *  bounce a player back and forth between two linked pads with no way out. */
-const TELEPORT_CYCLE_DELAY_TICKS = 180;
+ *  is expressed in ticks: 2000ms * 60 ticks/sec / 1000ms = 120 ticks. */
+const TELEPORT_CYCLE_DELAY_TICKS = 120;
 /** Once a cycle commits, how long the origin pad flashes and the dino stays hidden before
  *  reappearing on the destination pad: 1000ms * 60 ticks/sec / 1000ms = 60 ticks. */
 const TELEPORT_WARP_FLASH_TICKS = 60;
+const DEFAULT_RECORDED_WAIT_MS = Math.ceil(((TELEPORT_CYCLE_DELAY_TICKS + TELEPORT_WARP_FLASH_TICKS) / 60) * 1000);
 /** How long a breakable rock takes to crumble after being stepped off, in simulation ticks (60Hz). */
 const CRUMBLE_ANIMATION_TICKS = 42;
 /** Height reserved for the secondary bottom HUD bar shown in mobile portrait, so overlapping controls (e.g. the thumbstick) can clear it. */
@@ -478,9 +478,9 @@ export const PuzzleGame = () => {
   const [moves, setMoves] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [completionSummary, setCompletionSummary] = useState<LevelCompletionSummary | null>(null);
-  // Keep the user's chosen view mode persistent; default to top-down if not set.
+  // Keep the user's chosen view mode persistent; default to 3D if not set.
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window === "undefined") return "top";
+    if (typeof window === "undefined") return DEFAULT_VIEW_MODE;
     try {
       const stored = localStorage.getItem("stone-age-view-mode");
       if (stored && (VIEW_MODES as readonly string[]).includes(stored)) {
@@ -489,7 +489,7 @@ export const PuzzleGame = () => {
     } catch {
       // ignore storage failures
     }
-    return "top";
+    return DEFAULT_VIEW_MODE;
   });
   // Which camera modes the view-cycle button skips — a universal, admin-only, Supabase-backed
   // setting (see viewModePrefs.ts + schema_disabled_view_modes.sql) that affects every player,
@@ -511,24 +511,35 @@ export const PuzzleGame = () => {
     const remaining = VIEW_MODES.filter((m) => !disabledViewModes.has(m));
     return remaining.length > 0 ? remaining : VIEW_MODES;
   }, [disabledViewModes]);
+  const defaultCyclableViewMode = cyclableViewModes.includes(DEFAULT_VIEW_MODE)
+    ? DEFAULT_VIEW_MODE
+    : cyclableViewModes[0] ?? DEFAULT_VIEW_MODE;
   // If the active mode gets disabled, hop to the nearest still-enabled mode immediately.
+  // When the mapper leaves only one view enabled, make that universal for all players.
   useEffect(() => {
-    if (!canUseViewSwitcher) return;
-    if (!cyclableViewModes.includes(viewMode)) {
+    if (cyclableViewModes.length === 1 && viewMode !== cyclableViewModes[0]) {
+      setViewMode(cyclableViewModes[0]);
+      return;
+    }
+    if (!canUseViewSwitcher && viewMode !== defaultCyclableViewMode) {
+      setViewMode(defaultCyclableViewMode);
+      return;
+    }
+    if (canUseViewSwitcher && !cyclableViewModes.includes(viewMode)) {
       setViewMode(cyclableViewModes[0]);
     }
-  }, [canUseViewSwitcher, cyclableViewModes, viewMode]);
+  }, [canUseViewSwitcher, cyclableViewModes, defaultCyclableViewMode, viewMode]);
   const [selectedArrow, setSelectedArrow] = useState<{ x: number, y: number } | null>(null); // For remote arrow control
   const [cameraOffset, setCameraOffset] = useState({ x: 0, z: 0 }); // Camera pan offset when arrow selected
   const [cameraZoomIndex, setCameraZoomIndex] = useState(() => (
     isMobile ? MOBILE_DEFAULT_CAMERA_ZOOM_INDEX : DEFAULT_CAMERA_ZOOM_INDEX
   ));
   useEffect(() => {
-    if (canUseViewSwitcher || viewMode === "top") return;
-    setViewMode("top");
+    if (canUseViewSwitcher || cyclableViewModes.includes(viewMode)) return;
+    setViewMode(defaultCyclableViewMode);
     setCameraOffset({ x: 0, z: 0 });
     setUserZoomTouched(false);
-  }, [canUseViewSwitcher, viewMode]);
+  }, [canUseViewSwitcher, cyclableViewModes, defaultCyclableViewMode, viewMode]);
   // Selector navigation state for keyboard-based arrow selection
   const [selectorPos, setSelectorPos] = useState<{ x: number; y: number } | null>(null);
   const [isSelectorActive, setIsSelectorActive] = useState(false);
@@ -2096,6 +2107,13 @@ export const PuzzleGame = () => {
             if (player.teleportCycleTicksLeft <= 0) {
               const dest = getNextTeleport(sim.grid, player.pos);
               if (dest) {
+                if (player.isLocal && !isReplayingRef.current && recordMovesEnabledRef.current) {
+                  recordedActionsRef.current.push({ type: "wait", durationMs: DEFAULT_RECORDED_WAIT_MS });
+                  if (recordedActionsRef.current.length > MAX_SESSION_RECORDED_INPUTS) {
+                    recordedActionsRef.current.shift();
+                  }
+                  console.log("T");
+                }
                 // Commit to the warp: hide the dino and flash the origin pad for ~1s before
                 // actually moving the player to the destination pad.
                 player.teleportWarpFrom = { ...player.pos };
@@ -2294,6 +2312,9 @@ export const PuzzleGame = () => {
               activeArrow = { x: action.x, y: action.y };
             } else if (action.type === "deselect") {
               activeArrow = null;
+            } else if (action.type === "wait") {
+              activeArrow = null;
+              moveLines.push("T");
             } else if (action.type === "move") {
               const dir = action.dy === -1 ? "U" : action.dy === 1 ? "D" : action.dx === -1 ? "L" : "R";
               moveLines.push(activeArrow ? `A(${activeArrow.x},${activeArrow.y}):${dir}` : `P:${dir}`);
@@ -2567,13 +2588,29 @@ export const PuzzleGame = () => {
         setReplayPlaying(false);
         return;
       }
-      enqueueInput(actions[index]);
+      const action = actions[index];
       const nextIndex = index + 1;
       setReplayIndex(nextIndex);
+      if (action.type === "wait") {
+        if (nextIndex >= actions.length) {
+          setReplayPlaying(false);
+          return;
+        }
+        clearReplayTimer();
+        setReplayPlaying(false);
+        const durationMs = Math.max(0, Math.round(Number(action.durationMs ?? DEFAULT_RECORDED_WAIT_MS)));
+        replayIntervalRef.current = window.setTimeout(() => {
+          if (!isReplayingRef.current) return;
+          setReplayPlaying(true);
+          runReplayStep();
+        }, Math.max(50, Math.round(durationMs / replaySpeed)));
+        return;
+      }
+      enqueueInput(action);
       if (nextIndex >= actions.length) {
         setReplayPlaying(false);
       }
-    }, [enqueueInput, setReplayIndex]);
+    }, [clearReplayTimer, enqueueInput, replaySpeed, setReplayIndex]);
 
     useEffect(() => {
       clearReplayTimer();
@@ -2597,7 +2634,8 @@ export const PuzzleGame = () => {
       applyLevelState(levelForReplay);
       inputQueueRef.current.set(localPlayerIdRef.current, []);
       for (let i = 0; i < clampedIndex; i += 1) {
-        enqueueInput(actions[i]);
+        const action = actions[i];
+        if (action.type !== "wait") enqueueInput(action);
       }
       setReplayIndex(clampedIndex);
     }, [activeLevel, applyLevelState, clearReplayTimer, currentLevel, enqueueInput, setReplayIndex]);
