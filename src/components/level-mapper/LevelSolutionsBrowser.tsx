@@ -60,6 +60,9 @@ interface SolverLogEntry {
 const SINGLE_SOLVE_OPTS = { maxMsPerLevel: 6000, maxNodesPerLevel: 80_000, maxDepth: 220 };
 const BATCH_SOLVE_OPTS = { maxMsPerLevel: 2000, maxNodesPerLevel: 20_000, maxDepth: 160 };
 const PLAYBACK_INTERVAL_MS = 550;
+const PLAYBACK_SPEED_MIN = 0.25;
+const PLAYBACK_SPEED_MAX = 3;
+const PLAYBACK_SPEED_STEP = 0.25;
 const SOLVER_LOG_STORAGE_KEY = 'phoneage:mapper-solver-logs:v1';
 const MAX_SOLVER_LOG_ENTRIES = 500;
 
@@ -217,6 +220,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
 
   const [stepIndex, setStepIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   useEffect(() => {
     saveSolverLogs(solverLogs);
@@ -381,9 +385,16 @@ export const LevelSolutionsBrowser: React.FC = () => {
         }
         return i + 1;
       });
-    }, PLAYBACK_INTERVAL_MS);
+    }, Math.max(50, Math.round(PLAYBACK_INTERVAL_MS / playbackSpeed)));
     return () => window.clearInterval(id);
-  }, [playing, frames.length]);
+  }, [playing, frames.length, playbackSpeed]);
+
+  const adjustPlaybackSpeed = useCallback((delta: number) => {
+    setPlaybackSpeed((speed) => {
+      const next = Math.round((speed + delta) / PLAYBACK_SPEED_STEP) * PLAYBACK_SPEED_STEP;
+      return Math.max(PLAYBACK_SPEED_MIN, Math.min(PLAYBACK_SPEED_MAX, Number(next.toFixed(2))));
+    });
+  }, []);
 
   const currentFrame = frames[Math.min(stepIndex, Math.max(0, frames.length - 1))] ?? null;
   const displayGrid = currentFrame ? currentFrame.grid : selectedLevel?.grid ?? null;
@@ -844,6 +855,28 @@ export const LevelSolutionsBrowser: React.FC = () => {
                       title="Next step"
                     >
                       <SkipForward className="h-3.5 w-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => adjustPlaybackSpeed(-PLAYBACK_SPEED_STEP)}
+                      disabled={playbackSpeed <= PLAYBACK_SPEED_MIN}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.05] px-2 text-[10px] font-bold text-stone-200 hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
+                      title="Slow playback by 0.25x"
+                    >
+                      -0.25x
+                    </button>
+                    <div className="min-w-12 text-center text-[11px] font-black tabular-nums text-stone-200">
+                      {playbackSpeed.toFixed(2)}x
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => adjustPlaybackSpeed(PLAYBACK_SPEED_STEP)}
+                      disabled={playbackSpeed >= PLAYBACK_SPEED_MAX}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.05] px-2 text-[10px] font-bold text-stone-200 hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
+                      title="Speed playback by 0.25x"
+                    >
+                      +0.25x
                     </button>
 
                     <input

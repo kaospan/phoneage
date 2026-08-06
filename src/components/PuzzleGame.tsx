@@ -13,8 +13,11 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Pause,
   Play,
   RotateCcw,
+  SkipBack,
+  SkipForward,
   Sparkles,
   Star,
   TimerReset,
@@ -91,6 +94,11 @@ import { HowToPlayDialog } from "./HowToPlayDialog";
 import { TouchControls } from "./TouchControls";
 import { getLevelImageUrl } from "@/components/level-mapper/levelImageStore";
 import menuArt from "@/assets/menu.png";
+
+const RECORDED_REPLAY_BASE_INTERVAL_MS = 220;
+const REPLAY_SPEED_MIN = 0.25;
+const REPLAY_SPEED_MAX = 3;
+const REPLAY_SPEED_STEP = 0.25;
 
 const devLog = (...args: unknown[]) => {
   if (import.meta.env.DEV) console.log(...args);
@@ -757,6 +765,8 @@ export const PuzzleGame = () => {
   const recordMovesEnabledRef = useRef(false);
   const isReplayingRef = useRef(false);
   const replayIntervalRef = useRef<number | null>(null);
+  const replayActionsRef = useRef<RecordedInputCommand[]>([]);
+  const replayStepIndexRef = useRef(0);
   const pendingSessionEndReasonRef = useRef<PlaySessionEndReason>("level_changed");
   const selectedArrowLogRef = useRef<{ x: number; y: number } | null>(null);
   const arrowSelectHintSeenRef = useRef<boolean>(
@@ -777,6 +787,10 @@ export const PuzzleGame = () => {
   const [isVerifiedBetaTester, setIsVerifiedBetaTester] = useState(false);
   const canSkipLevels = isVerifiedAdminAccount || isVerifiedBetaTester;
   const [isReplaying, setIsReplaying] = useState(false);
+  const [replayActions, setReplayActions] = useState<RecordedInputCommand[]>([]);
+  const [replayStepIndex, setReplayStepIndex] = useState(0);
+  const [replayPlaying, setReplayPlaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState(1);
   const [resolvedLevelImageUrl, setResolvedLevelImageUrl] = useState<string | null>(null);
   const [tutorialQueue, setTutorialQueue] = useState<TutorialDefinition[]>([]);
   const [tutorialsEnabled, setTutorialsEnabledState] = useState(() => getTutorialsEnabled());
@@ -2523,13 +2537,86 @@ export const PuzzleGame = () => {
       pushHudMessage("Level reset");
     }, [activeLevel, applyLevelState, currentLevel, isTutorialActive, pushHudMessage]);
 
-    const stopReplay = useCallback(() => {
+    const clearReplayTimer = useCallback(() => {
       if (replayIntervalRef.current != null) {
         window.clearInterval(replayIntervalRef.current);
         replayIntervalRef.current = null;
       }
+    }, []);
+
+    const stopReplay = useCallback(() => {
+      clearReplayTimer();
       isReplayingRef.current = false;
       setIsReplaying(false);
+      setReplayPlaying(false);
+      setReplayActions([]);
+      replayActionsRef.current = [];
+      replayStepIndexRef.current = 0;
+      setReplayStepIndex(0);
+    }, [clearReplayTimer]);
+
+    const setReplayIndex = useCallback((nextIndex: number) => {
+      replayStepIndexRef.current = nextIndex;
+      setReplayStepIndex(nextIndex);
+    }, []);
+
+    const runReplayStep = useCallback(() => {
+      const actions = replayActionsRef.current;
+      const index = replayStepIndexRef.current;
+      if (!isReplayingRef.current || index >= actions.length) {
+        setReplayPlaying(false);
+        return;
+      }
+      enqueueInput(actions[index]);
+      const nextIndex = index + 1;
+      setReplayIndex(nextIndex);
+      if (nextIndex >= actions.length) {
+        setReplayPlaying(false);
+      }
+    }, [enqueueInput, setReplayIndex]);
+
+    useEffect(() => {
+      clearReplayTimer();
+      if (!isReplaying || !replayPlaying || replayActions.length === 0) return;
+      if (replayStepIndex >= replayActions.length) {
+        setReplayPlaying(false);
+        return;
+      }
+      const delay = Math.max(50, Math.round(RECORDED_REPLAY_BASE_INTERVAL_MS / replaySpeed));
+      replayIntervalRef.current = window.setInterval(runReplayStep, delay);
+      return clearReplayTimer;
+    }, [clearReplayTimer, isReplaying, replayActions.length, replayPlaying, replaySpeed, replayStepIndex, runReplayStep]);
+
+    const replayToIndex = useCallback((targetIndex: number) => {
+      const levelForReplay = activeLevel ?? currentLevel;
+      if (!levelForReplay || !isReplayingRef.current) return;
+      const actions = replayActionsRef.current;
+      const clampedIndex = Math.max(0, Math.min(actions.length, targetIndex));
+      clearReplayTimer();
+      setReplayPlaying(false);
+      applyLevelState(levelForReplay);
+      inputQueueRef.current.set(localPlayerIdRef.current, []);
+      for (let i = 0; i < clampedIndex; i += 1) {
+        enqueueInput(actions[i]);
+      }
+      setReplayIndex(clampedIndex);
+    }, [activeLevel, applyLevelState, clearReplayTimer, currentLevel, enqueueInput, setReplayIndex]);
+
+    const stepReplayBackward = useCallback(() => {
+      replayToIndex(replayStepIndexRef.current - 1);
+    }, [replayToIndex]);
+
+    const stepReplayForward = useCallback(() => {
+      clearReplayTimer();
+      setReplayPlaying(false);
+      runReplayStep();
+    }, [clearReplayTimer, runReplayStep]);
+
+    const adjustReplaySpeed = useCallback((delta: number) => {
+      setReplaySpeed((speed) => {
+        const next = Math.round((speed + delta) / REPLAY_SPEED_STEP) * REPLAY_SPEED_STEP;
+        return Math.max(REPLAY_SPEED_MIN, Math.min(REPLAY_SPEED_MAX, Number(next.toFixed(2))));
+      });
     }, []);
 
     // Replays a previously recorded run by resetting the level and re-feeding the recorded
@@ -2547,21 +2634,13 @@ export const PuzzleGame = () => {
       isReplayingRef.current = true;
       applyLevelState(levelForReplay);
       inputQueueRef.current.set(localPlayerIdRef.current, []);
+      replayActionsRef.current = run.actions;
+      setReplayActions(run.actions);
+      setReplayIndex(0);
       setIsReplaying(true);
-
-      const actions = run.actions;
-      let i = 0;
-      const stepReplay = () => {
-        if (i >= actions.length) {
-          stopReplay();
-          return;
-        }
-        enqueueInput(actions[i]);
-        i += 1;
-      };
-      stepReplay();
-      replayIntervalRef.current = window.setInterval(stepReplay, 220);
-    }, [activeLevel, applyLevelState, currentLevel, enqueueInput, pushHudMessage, stopReplay]);
+      setReplayPlaying(true);
+      window.setTimeout(runReplayStep, 0);
+    }, [activeLevel, applyLevelState, currentLevel, pushHudMessage, runReplayStep, setReplayIndex, stopReplay]);
 
     useEffect(() => {
       if (typeof window === "undefined" || isReplaying) return;
@@ -4248,15 +4327,80 @@ export const PuzzleGame = () => {
           </div>
         )}
         {isReplaying && (
-          <div className="pointer-events-none absolute left-1/2 top-16 z-[65] -translate-x-1/2 px-4">
-            <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-red-300/30 bg-red-950/85 px-4 py-2 text-sm font-black uppercase tracking-[0.12em] text-red-100 shadow-xl backdrop-blur-md">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-400" />
-              Watching Recorded Run
+          <div className="pointer-events-none absolute left-1/2 top-16 z-[65] w-full max-w-[min(96vw,44rem)] -translate-x-1/2 px-4">
+            <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-xl border border-red-300/30 bg-red-950/85 px-3 py-2 text-red-100 shadow-xl backdrop-blur-md">
+              <div className="mr-1 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em]">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-400" />
+                Recorded Run
+              </div>
+              <Button
+                onClick={() => replayToIndex(0)}
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0 text-red-100 hover:bg-red-500/20"
+                title="Restart replay"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                onClick={stepReplayBackward}
+                disabled={replayStepIndex <= 0}
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0 text-red-100 hover:bg-red-500/20 disabled:opacity-40"
+                title="Previous recorded input"
+              >
+                <SkipBack className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                onClick={() => setReplayPlaying((playing) => !playing)}
+                disabled={replayActions.length === 0 || replayStepIndex >= replayActions.length}
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0 text-red-100 hover:bg-red-500/20 disabled:opacity-40"
+                title={replayPlaying ? "Pause replay" : "Play replay"}
+              >
+                {replayPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              </Button>
+              <Button
+                onClick={stepReplayForward}
+                disabled={replayStepIndex >= replayActions.length}
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0 text-red-100 hover:bg-red-500/20 disabled:opacity-40"
+                title="Next recorded input"
+              >
+                <SkipForward className="h-3.5 w-3.5" />
+              </Button>
+              <div className="mx-1 min-w-[5.75rem] text-center text-[11px] font-semibold text-red-100/85">
+                {replayStepIndex}/{replayActions.length}
+              </div>
+              <Button
+                onClick={() => adjustReplaySpeed(-REPLAY_SPEED_STEP)}
+                disabled={replaySpeed <= REPLAY_SPEED_MIN}
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs font-bold text-red-100 hover:bg-red-500/20 disabled:opacity-40"
+                title="Slow replay by 0.25x"
+              >
+                -0.25x
+              </Button>
+              <div className="min-w-12 text-center text-xs font-black tabular-nums">{replaySpeed.toFixed(2)}x</div>
+              <Button
+                onClick={() => adjustReplaySpeed(REPLAY_SPEED_STEP)}
+                disabled={replaySpeed >= REPLAY_SPEED_MAX}
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs font-bold text-red-100 hover:bg-red-500/20 disabled:opacity-40"
+                title="Speed replay by 0.25x"
+              >
+                +0.25x
+              </Button>
               <Button
                 onClick={stopReplay}
                 size="sm"
                 variant="ghost"
-                className="h-6 px-2 text-[10px] text-red-100 hover:bg-red-500/20"
+                className="h-7 px-2 text-[10px] font-bold uppercase tracking-wide text-red-100 hover:bg-red-500/20"
               >
                 Stop
               </Button>
