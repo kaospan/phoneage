@@ -25,12 +25,27 @@ export interface LevelLabCandidate {
   nodesExpanded: number;
   ms: number;
   score: number;
+  promotedLevelId?: number;
 }
 
 export interface GenerateLevelLabCandidateOptions {
   seed: number;
   difficulty: LevelLabDifficulty;
   mechanics: LevelLabMechanics;
+}
+
+export interface GenerateLevelLabCampaignOptions {
+  seed: number;
+  candidateCount?: number;
+  levelsToPromote?: number;
+  onProgress?: (done: number, total: number, selected: number) => void;
+  shouldCancel?: () => boolean;
+}
+
+export interface LevelLabCampaignResult {
+  generated: LevelLabCandidate[];
+  promoted: LevelLabCandidate[];
+  attempted: number;
 }
 
 const ROWS = 11;
@@ -50,6 +65,20 @@ const difficultyConfig: Record<LevelLabDifficulty, {
   expert: { wander: 0.58, obstacleChance: 0.31, solveMs: 3200, solveNodes: 60000, maxDepth: 220, targetMoves: 40 },
 };
 
+export const levelLabDifficultyForPromotedIndex = (index: number): LevelLabDifficulty => {
+  if (index < 25) return "easy";
+  if (index < 50) return "medium";
+  if (index < 75) return "hard";
+  return "expert";
+};
+
+export const levelLabMechanicsForDifficulty = (difficulty: LevelLabDifficulty): LevelLabMechanics => {
+  if (difficulty === "easy") return { keys: false, arrows: true, teleports: false };
+  if (difficulty === "medium") return { keys: true, arrows: true, teleports: false };
+  if (difficulty === "hard") return { keys: true, arrows: true, teleports: true };
+  return { keys: true, arrows: true, teleports: true };
+};
+
 const createRng = (seed: number) => {
   let state = seed >>> 0;
   return () => {
@@ -62,6 +91,9 @@ const randomInt = (rng: () => number, min: number, max: number) =>
   min + Math.floor(rng() * (max - min + 1));
 
 const keyFor = (p: Position) => `${p.x},${p.y}`;
+
+export const fingerprintLevelLabGrid = (grid: CellType[][]): string =>
+  grid.map((row) => row.join(",")).join("|");
 
 const directionCell = (from: Position, to: Position): CellType => {
   const dx = to.x - from.x;
@@ -221,5 +253,73 @@ export const generateLevelLabCandidate = async ({
     nodesExpanded: result.nodesExpanded,
     ms: result.ms,
     score,
+  };
+};
+
+export const generateLevelLabCampaign = async ({
+  seed,
+  candidateCount = 1000,
+  levelsToPromote = 100,
+  onProgress,
+  shouldCancel,
+}: GenerateLevelLabCampaignOptions): Promise<LevelLabCampaignResult> => {
+  const generated: LevelLabCandidate[] = [];
+  const selectedByDifficulty: Record<LevelLabDifficulty, LevelLabCandidate[]> = {
+    easy: [],
+    medium: [],
+    hard: [],
+    expert: [],
+  };
+  const seen = new Set<string>();
+  const perBandTarget = Math.ceil(levelsToPromote / 4);
+
+  for (let i = 0; i < candidateCount; i += 1) {
+    if (shouldCancel?.()) break;
+    const targetIndex = Math.min(levelsToPromote - 1, Math.floor((i / Math.max(1, candidateCount)) * levelsToPromote));
+    const difficulty = levelLabDifficultyForPromotedIndex(targetIndex);
+    const mechanics = levelLabMechanicsForDifficulty(difficulty);
+    const candidate = await generateLevelLabCandidate({
+      seed: seed + i * 104729,
+      difficulty,
+      mechanics,
+    });
+    const fingerprint = fingerprintLevelLabGrid(candidate.grid);
+    const unique = !seen.has(fingerprint);
+    seen.add(fingerprint);
+    generated.push(candidate);
+
+    if (candidate.solved && unique) {
+      const bucket = selectedByDifficulty[difficulty];
+      bucket.push(candidate);
+      bucket.sort((a, b) => b.score - a.score || (b.moves ?? 0) - (a.moves ?? 0));
+      selectedByDifficulty[difficulty] = bucket.slice(0, perBandTarget + 10);
+    }
+
+    onProgress?.(i + 1, candidateCount, Object.values(selectedByDifficulty).reduce((sum, bucket) => sum + bucket.length, 0));
+  }
+
+  const promoted: LevelLabCandidate[] = [];
+  for (let i = 0; i < levelsToPromote; i += 1) {
+    const difficulty = levelLabDifficultyForPromotedIndex(i);
+    const bucket = selectedByDifficulty[difficulty];
+    const picked = bucket.shift();
+    if (!picked) continue;
+    promoted.push({ ...picked, promotedLevelId: 101 + i });
+  }
+
+  if (promoted.length < levelsToPromote) {
+    const fallback = generated
+      .filter((candidate) => candidate.solved && !promoted.some((picked) => picked.id === candidate.id))
+      .sort((a, b) => b.score - a.score);
+    for (const candidate of fallback) {
+      if (promoted.length >= levelsToPromote) break;
+      promoted.push({ ...candidate, promotedLevelId: 101 + promoted.length });
+    }
+  }
+
+  return {
+    generated,
+    promoted,
+    attempted: generated.length,
   };
 };

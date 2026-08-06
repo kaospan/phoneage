@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateLevelLabCandidate, scoreLevelLabCandidate } from "./levelLab";
+import { generateLevelLabCampaign, generateLevelLabCandidate, scoreLevelLabCandidate } from "./levelLab";
 
 describe("level lab generator", () => {
   it("generates a playable candidate shape and solve result", async () => {
@@ -19,5 +19,18 @@ describe("level lab generator", () => {
 
   it("scores unsolved candidates as zero", () => {
     expect(scoreLevelLabCandidate("hard", { keys: true, arrows: true, teleports: true }, null, 5000)).toBe(0);
+  });
+
+  it("selects solved campaign candidates for promoted level slots", async () => {
+    const result = await generateLevelLabCampaign({
+      seed: 98765,
+      candidateCount: 24,
+      levelsToPromote: 8,
+    });
+
+    expect(result.attempted).toBe(24);
+    expect(result.promoted.length).toBeGreaterThan(0);
+    expect(result.promoted.every((candidate) => candidate.solved)).toBe(true);
+    expect(result.promoted[0]?.promotedLevelId).toBe(101);
   });
 });

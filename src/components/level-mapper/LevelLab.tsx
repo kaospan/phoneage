@@ -8,11 +8,14 @@ import { GameTop2D } from "@/components/GameTop2D";
 import { useLevelMapper } from "@/components/level-mapper/useLevelMapper";
 import { MapperMetricPill, MapperPanelFrame, MapperSection } from "./MapperChrome";
 import {
+  generateLevelLabCampaign,
   generateLevelLabCandidate,
   type LevelLabCandidate,
   type LevelLabDifficulty,
   type LevelLabMechanics,
 } from "@/lib/levelLab";
+import { getAllLevels, type ColorTheme } from "@/data/levels";
+import { saveLevelOverride } from "@/lib/levelOverrides";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -21,6 +24,7 @@ const KEPT_STORAGE_KEY = "phoneage:level-lab:kept:v1";
 const KEEP_LIMIT = 5;
 
 const difficulties: LevelLabDifficulty[] = ["easy", "medium", "hard", "expert"];
+const promotedThemeCycle: ColorTheme[] = ["default", "ocean", "forest", "sunset", "lava", "crystal", "snow", "gray"];
 
 const loadCandidates = (): LevelLabCandidate[] => {
   if (typeof window === "undefined") return [];
@@ -83,6 +87,7 @@ export const LevelLab: React.FC = () => {
     setImageURL,
     setOverlayEnabled,
     setImportLevelIndex,
+    setAllLevels,
     setIsSaved,
     setLoadedSnapshot,
   } = useLevelMapper();
@@ -98,6 +103,7 @@ export const LevelLab: React.FC = () => {
   const [keptIds, setKeptIds] = useState<Set<string>>(loadKeptIds);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [campaignSummary, setCampaignSummary] = useState<string | null>(null);
   const cancelRef = useRef(false);
 
   useEffect(() => {
@@ -150,6 +156,56 @@ export const LevelLab: React.FC = () => {
         const merged = [...generated, ...candidates].sort((a, b) => b.score - a.score).slice(0, 300);
         setCandidates(merged);
         setSelectedId(merged[0]?.id ?? null);
+      }
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const generateCampaignAndWrite = async () => {
+    if (isGenerating) return;
+    const confirmed = window.confirm(
+      "Generate 1000 candidates and overwrite local level overrides 101-200 with the best 100 solved levels?",
+    );
+    if (!confirmed) return;
+
+    cancelRef.current = false;
+    setIsGenerating(true);
+    setProgress({ done: 0, total: 1000 });
+    setCampaignSummary(null);
+
+    try {
+      const result = await generateLevelLabCampaign({
+        seed: Date.now() % 1_000_000_000,
+        candidateCount: 1000,
+        levelsToPromote: 100,
+        shouldCancel: () => cancelRef.current,
+        onProgress: (done, total) => setProgress({ done, total }),
+      });
+
+      for (const candidate of result.promoted) {
+        if (!candidate.promotedLevelId) continue;
+        saveLevelOverride(
+          candidate.promotedLevelId,
+          candidate.grid,
+          candidate.playerStart,
+          promotedThemeCycle[(candidate.promotedLevelId - 101) % promotedThemeCycle.length],
+          null,
+        );
+      }
+
+      const merged = [...result.promoted, ...result.generated, ...candidates]
+        .sort((a, b) => (b.promotedLevelId ? 1 : 0) - (a.promotedLevelId ? 1 : 0) || b.score - a.score)
+        .slice(0, 300);
+      setCandidates(merged);
+      setSelectedId(result.promoted[0]?.id ?? merged[0]?.id ?? null);
+      setAllLevels(getAllLevels());
+      const message = `Generated ${result.attempted} candidates and wrote ${result.promoted.length} solved levels to 101-200.`;
+      setCampaignSummary(message);
+      if (result.promoted.length === 100) {
+        toast.success(message);
+      } else {
+        toast.warning(message);
       }
     } finally {
       setIsGenerating(false);
@@ -281,10 +337,21 @@ export const LevelLab: React.FC = () => {
               </Button>
             </div>
 
+            <Button disabled={isGenerating} variant="outline" onClick={() => void generateCampaignAndWrite()} className="w-full gap-2">
+              {isGenerating && progress.total === 1000 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Generate 1000 → write 101-200
+            </Button>
+
             {isGenerating && (
               <Button variant="outline" className="w-full" onClick={() => { cancelRef.current = true; }}>
                 Stop after current candidate ({progress.done}/{progress.total})
               </Button>
+            )}
+
+            {campaignSummary && (
+              <div className="rounded-xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-xs leading-snug text-emerald-100">
+                {campaignSummary}
+              </div>
             )}
 
             <div className="grid grid-cols-3 gap-2">
@@ -377,7 +444,9 @@ export const LevelLab: React.FC = () => {
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-stone-100">Seed {candidate.seed}</span>
+                      <span className="text-xs font-semibold text-stone-100">
+                        {candidate.promotedLevelId ? `Level ${candidate.promotedLevelId}` : `Seed ${candidate.seed}`}
+                      </span>
                       <span className={cn("text-[10px] font-black uppercase tracking-[0.14em]", candidate.solved ? "text-emerald-200" : "text-red-200")}>
                         {candidate.solved ? "Solved" : "Unsolved"}
                       </span>
