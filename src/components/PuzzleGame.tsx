@@ -4202,18 +4202,7 @@ export const PuzzleGame = () => {
                 }}
               />
             ) : viewMode === "3d" ? (
-              // Reuses the "top" mode's own clean tile graphics rather than the separate
-              // Three.js engine below (still used for "fps"/"2d") — just tilted on a small
-              // CSS rotateX so it reads as a mild 3D perspective instead of a flat top-down view.
-              <div
-                className="h-full w-full"
-                style={{ perspective: "1400px", perspectiveOrigin: "50% 15%" }}
-              >
-                <div
-                  className="h-full w-full drop-shadow-[0_34px_44px_rgba(0,0,0,0.42)]"
-                  style={{ transform: "rotateX(22deg)", transformOrigin: "50% 50%" }}
-                >
-                  <GameTop2D
+              <GameTop2D
                     grid={renderGrid}
                     cavePos={renderCavePos}
                     playerStart={activeLevel?.playerStart ?? currentLevel?.playerStart ?? null}
@@ -4257,8 +4246,6 @@ export const PuzzleGame = () => {
                        }
                      }}
                     />
-                </div>
-              </div>
              ) : viewMode === "sprite" ? (
                <GameSprite2D
                  grid={renderGrid}
