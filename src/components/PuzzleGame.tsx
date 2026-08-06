@@ -33,7 +33,6 @@ import phoneageMusicUrl from "@/assets/phoneage.mp3";
 import { Game3D } from "./Game3D";
 import { GameSprite2D } from "./GameSprite2D";
 import { GameTop2D } from "./GameTop2D";
-import { checkIsAdminAccount } from "@/lib/adminAccount";
 import { checkIsBetaTester } from "@/lib/betaTesters";
 import {
   RECORD_MOVES_UPDATED_EVENT,
@@ -408,7 +407,8 @@ export const PuzzleGame = () => {
   const playerSession = usePlayerSession();
   const playerUserId = playerSession?.user?.id ?? null;
   const playerEmail = playerSession?.user?.email ?? null;
-  const canUseViewSwitcher = playerEmail?.trim().toLowerCase() === VIEW_SWITCHER_ADMIN_EMAIL;
+  const isPrimaryLevelSkipAdmin = playerEmail?.trim().toLowerCase() === VIEW_SWITCHER_ADMIN_EMAIL;
+  const canUseViewSwitcher = isPrimaryLevelSkipAdmin;
   const playerUserIdRef = useRef<string | null>(playerUserId);
   useEffect(() => { playerUserIdRef.current = playerUserId; }, [playerUserId]);
   const currentPlaySessionIdRef = useRef<string | null>(null);
@@ -791,14 +791,11 @@ export const PuzzleGame = () => {
   const [showArrowSelectHint, setShowArrowSelectHint] = useState(false);
 
   const [overrideRevision, setOverrideRevision] = useState(0);
-  // Server-verified admins (admin_users) and beta testers (beta_testers) always get unrestricted
-  // level access in the main game — no separate local toggle to remember. The mapper's own
-  // "Admin" toggle (adminMode.ts) is a different, mapper-only concern (forcing level
-  // rebuilds/saves) and doesn't gate this. Beta testers get ONLY this — never /mapper or /crm,
-  // which are gated purely by admin_users (MapperAuthGate) and don't consult beta_testers at all.
-  const [isVerifiedAdminAccount, setIsVerifiedAdminAccount] = useState(false);
+  // Level navigation is deliberately more limited than mapper/CRM administration: only the
+  // primary admin account or a server-verified beta tester may freely move between levels.
+  // Beta access never implies /mapper or /crm access.
   const [isVerifiedBetaTester, setIsVerifiedBetaTester] = useState(false);
-  const canSkipLevels = isVerifiedAdminAccount || isVerifiedBetaTester;
+  const canSkipLevels = isPrimaryLevelSkipAdmin || isVerifiedBetaTester;
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayActions, setReplayActions] = useState<RecordedInputCommand[]>([]);
   const [replayStepIndex, setReplayStepIndex] = useState(0);
@@ -852,16 +849,6 @@ export const PuzzleGame = () => {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
-
-  // Server-verified: is the currently signed-in player account an admin? (see admin_users)
-  useEffect(() => {
-    if (!playerUserId) { setIsVerifiedAdminAccount(false); return; }
-    let cancelled = false;
-    checkIsAdminAccount(playerUserId).then((admin) => {
-      if (!cancelled) setIsVerifiedAdminAccount(admin);
-    });
-    return () => { cancelled = true; };
-  }, [playerUserId]);
 
   // Server-verified: is the currently signed-in player account a beta tester? (see beta_testers)
   useEffect(() => {
