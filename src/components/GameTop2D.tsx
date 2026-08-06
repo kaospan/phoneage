@@ -516,8 +516,24 @@ export function GameTop2D({
                    case 2:  return <StoneTile uid={uid} />;
                    case 6: {
                      return (
-                       <div className={isCrumblingRock ? "animate-crumble" : undefined}>
-                         <CrackedRockTile uid={uid} />
+                       <div className="relative h-full w-full">
+                         {isCrumblingRock && <VoidTile />}
+                         {isCrumblingRock && (
+                           <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+                             <div className="absolute inset-[10%] rounded-full bg-stone-300/25 blur-[2px] animate-rock-dust" />
+                             <div className="absolute left-[18%] top-[22%] h-[18%] w-[18%] rotate-12 rounded-[2px] bg-stone-500 shadow-sm animate-rock-chip-a" />
+                             <div className="absolute right-[20%] top-[28%] h-[14%] w-[20%] -rotate-6 rounded-[2px] bg-stone-400 shadow-sm animate-rock-chip-b" />
+                             <div className="absolute bottom-[20%] left-[42%] h-[16%] w-[16%] rotate-45 rounded-[2px] bg-stone-600 shadow-sm animate-rock-chip-c" />
+                           </div>
+                         )}
+                         <div
+                           className={[
+                             "h-full w-full transform-gpu",
+                             isCrumblingRock ? "absolute inset-0 z-[2] animate-crumble" : "",
+                           ].join(" ")}
+                         >
+                           <CrackedRockTile uid={uid} />
+                         </div>
                        </div>
                      );
                    }

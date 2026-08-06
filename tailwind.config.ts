@@ -129,6 +129,27 @@ export default {
           "75%": { transform: "scale(0.6) rotate(-1deg)", opacity: "0.3" },
           "100%": { transform: "scale(0.3) rotate(0deg)", opacity: "0" },
         },
+        "rock-dust": {
+          "0%": { transform: "scale(0.55)", opacity: "0" },
+          "20%": { transform: "scale(0.95)", opacity: "0.75" },
+          "70%": { transform: "scale(1.2)", opacity: "0.45" },
+          "100%": { transform: "scale(1.35)", opacity: "0" },
+        },
+        "rock-chip-a": {
+          "0%": { transform: "translate(0, 0) rotate(12deg) scale(1)", opacity: "0" },
+          "18%": { opacity: "1" },
+          "100%": { transform: "translate(-45%, -35%) rotate(-24deg) scale(0.45)", opacity: "0" },
+        },
+        "rock-chip-b": {
+          "0%": { transform: "translate(0, 0) rotate(-6deg) scale(1)", opacity: "0" },
+          "18%": { opacity: "1" },
+          "100%": { transform: "translate(42%, -24%) rotate(28deg) scale(0.45)", opacity: "0" },
+        },
+        "rock-chip-c": {
+          "0%": { transform: "translate(0, 0) rotate(45deg) scale(1)", opacity: "0" },
+          "18%": { opacity: "1" },
+          "100%": { transform: "translate(8%, 48%) rotate(96deg) scale(0.45)", opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -142,6 +163,10 @@ export default {
         "climb-out-of-cave": "climb-out-of-cave 0.8s cubic-bezier(0.34,1.56,0.64,1) backwards",
         "stuck-hint-pulse": "stuck-hint-pulse 1.6s ease-in-out infinite",
         "crumble": "crumble 0.5s ease-in-out forwards",
+        "rock-dust": "rock-dust 0.5s ease-out forwards",
+        "rock-chip-a": "rock-chip-a 0.5s ease-out forwards",
+        "rock-chip-b": "rock-chip-b 0.5s ease-out forwards",
+        "rock-chip-c": "rock-chip-c 0.5s ease-out forwards",
       },
     },
   },

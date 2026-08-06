@@ -1867,6 +1867,7 @@ export const PuzzleGame = () => {
 
       let gridDirty = false;
       let playersDirty = false;
+      let crumbleDirty = false;
       let localMoves = moves;
       let localSelected = selectedArrow;
       let localComplete = isComplete;
@@ -1914,9 +1915,9 @@ export const PuzzleGame = () => {
          });
        }
 
-       // Advance crumble animations — remove completed ones
+       // Advance crumble animations every simulation tick so the fading rock does not stall
+       // behind unrelated grid/player state changes.
        if (sim.crumbleAnimations.size > 0) {
-         let crumbleDirty = false;
          for (const [key, progress] of sim.crumbleAnimations.entries()) {
            const nextProgress = progress + 1;
            if (nextProgress >= CRUMBLE_ANIMATION_TICKS) {
@@ -1924,9 +1925,9 @@ export const PuzzleGame = () => {
              crumbleDirty = true;
            } else {
              sim.crumbleAnimations.set(key, nextProgress);
+             crumbleDirty = true;
            }
          }
-         if (crumbleDirty) gridDirty = true;
        }
 
       // Advance player glides and inputs
@@ -2110,10 +2111,11 @@ export const PuzzleGame = () => {
                 pushHudMessage("Teleporting in 3s — move to break free!", 1800);
               }
             }
-            if (outcome.brokeRock && player.isLocal) {
+            if (outcome.brokeRock) {
               const rockKey = `${oldPos.x},${oldPos.y}`;
               sim.crumbleAnimations.set(rockKey, 0);
-              pushHudMessage("Rock crumbled");
+              crumbleDirty = true;
+              if (player.isLocal) pushHudMessage("Rock crumbled");
             }
           }
           if (outcome.collectedKey && player.isLocal) {
@@ -2216,9 +2218,9 @@ export const PuzzleGame = () => {
         );
       }
 
-        if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
-        setCrumbleAnimations(new Map(sim.crumbleAnimations));
-      if (playersDirty || gridDirty) setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
+      if (gridDirty) setRenderGrid(sim.grid.map(row => [...row]));
+      if (crumbleDirty) setCrumbleAnimations(new Map(sim.crumbleAnimations));
+      if (playersDirty || gridDirty || crumbleDirty) setRenderPlayers(Array.from(sim.players.values()).map(p => ({ ...p, pos: { ...p.pos } })));
       if (localMoves !== moves) setMoves(localMoves);
       if (localSelected !== selectedArrow) setSelectedArrow(localSelected);
       if (sim.cavePos.x !== renderCavePos.x || sim.cavePos.y !== renderCavePos.y) setRenderCavePos(sim.cavePos);
