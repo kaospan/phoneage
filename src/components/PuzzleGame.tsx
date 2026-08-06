@@ -4080,7 +4080,7 @@ export const PuzzleGame = () => {
             )}
           </div>
         </div>
-        {selectedArrow && (
+        {selectedArrow && recordMovesEnabledRef.current && (
           <div className="absolute top-1 right-1 z-50 bg-primary/90 backdrop-blur px-2 py-0.5 rounded text-xs font-semibold text-primary-foreground shadow-md">Arrow ({selectedArrow.x},{selectedArrow.y})</div>
         )}
         {isWaitingToStart && (
