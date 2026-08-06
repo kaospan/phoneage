@@ -16,6 +16,68 @@ function fmtAction(a: Action): string {
   return `A(${a.x},${a.y}):${a.d}`;
 }
 
+interface QueueItem {
+  k: string;
+  s: SolveState;
+  priority: number;
+  distanceToGoal: number;
+  seq: number;
+}
+
+class PriorityFrontier {
+  private heap: QueueItem[] = [];
+
+  get length() {
+    return this.heap.length;
+  }
+
+  push(item: QueueItem) {
+    this.heap.push(item);
+    this.bubbleUp(this.heap.length - 1);
+  }
+
+  pop(): QueueItem | undefined {
+    const first = this.heap[0];
+    const last = this.heap.pop();
+    if (!first || !last) return first;
+    if (this.heap.length > 0) {
+      this.heap[0] = last;
+      this.bubbleDown(0);
+    }
+    return first;
+  }
+
+  private isBefore(a: QueueItem, b: QueueItem) {
+    if (a.priority !== b.priority) return a.priority < b.priority;
+    if (a.distanceToGoal !== b.distanceToGoal) return a.distanceToGoal < b.distanceToGoal;
+    return a.seq < b.seq;
+  }
+
+  private bubbleUp(index: number) {
+    let i = index;
+    while (i > 0) {
+      const parent = Math.floor((i - 1) / 2);
+      if (!this.isBefore(this.heap[i], this.heap[parent])) break;
+      [this.heap[i], this.heap[parent]] = [this.heap[parent], this.heap[i]];
+      i = parent;
+    }
+  }
+
+  private bubbleDown(index: number) {
+    let i = index;
+    while (true) {
+      const left = i * 2 + 1;
+      const right = left + 1;
+      let best = i;
+      if (left < this.heap.length && this.isBefore(this.heap[left], this.heap[best])) best = left;
+      if (right < this.heap.length && this.isBefore(this.heap[right], this.heap[best])) best = right;
+      if (best === i) break;
+      [this.heap[i], this.heap[best]] = [this.heap[best], this.heap[i]];
+      i = best;
+    }
+  }
+}
+
 export async function solveLevel(
   levelId: number,
   start: SolveState,
@@ -70,11 +132,19 @@ export async function solveLevel(
 
   const prev = new Map<string, { p: string; a: Action }>();
   const depth = new Map<string, number>();
-  const q: Array<{ k: string; s: SolveState }> = [{ k: startKey, s: start }];
+  const frontier = new PriorityFrontier();
+  let queueSeq = 0;
+  const startDistance = manhattanToGoal(start.playerPos, goalCaves);
+  frontier.push({
+    k: startKey,
+    s: start,
+    priority: startDistance,
+    distanceToGoal: startDistance,
+    seq: queueSeq++,
+  });
   depth.set(startKey, 0);
 
   let nodesExpanded = 0;
-  let idx = 0;
   let nextId = opts.trace ? 1 : 0;
   const stateIdByKey = new Map<string, number>();
   if (opts.trace) stateIdByKey.set(startKey, 0);
@@ -94,7 +164,7 @@ export async function solveLevel(
     };
   }
 
-  while (idx < q.length) {
+  while (frontier.length > 0) {
     const now = performance.now();
     if (now - t0 > opts.maxMsPerLevel) {
       if (opts.trace) trace.endReason = "timeout";
@@ -123,7 +193,9 @@ export async function solveLevel(
       };
     }
 
-    const { k, s } = q[idx++];
+    const item = frontier.pop();
+    if (!item) break;
+    const { k, s } = item;
     const d0 = depth.get(k) ?? 0;
     if (d0 >= opts.maxDepth) {
       if (opts.trace) trace.endReason = "depth_limit";
@@ -154,7 +226,7 @@ export async function solveLevel(
     }
 
     if (opts.onProgress && nodesExpanded % 2000 === 0) {
-      opts.onProgress(`Level ${levelId}: expanded ${nodesExpanded} (queue ${q.length})`);
+      opts.onProgress(`Level ${levelId}: expanded ${nodesExpanded} (queue ${frontier.length})`);
     }
 
     if (nodesExpanded % 1500 === 0) {
@@ -244,7 +316,14 @@ export async function solveLevel(
           trace: opts.trace,
         };
       }
-      q.push({ k: nk, s: succ.state });
+      const distanceToGoal = manhattanToGoal(succ.state.playerPos, goalCaves);
+      frontier.push({
+        k: nk,
+        s: succ.state,
+        priority: nd + distanceToGoal,
+        distanceToGoal,
+        seq: queueSeq++,
+      });
       acceptedMoves += 1;
     }
 
