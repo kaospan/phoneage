@@ -4103,19 +4103,9 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        {useSplitHud && isMobilePortrait && !isCompact3DView && (
+        {useSplitHud && (isMobilePortrait || isCompact3DView) && (
           <div
-            ref={bottomHudBarRef}
-            className="fixed inset-x-2 bottom-0 z-50 flex justify-center"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.25rem)' }}
-          >
-            <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1 py-0.5 max-w-full overflow-x-auto">
-              {secondaryHudButtons}
-            </div>
-          </div>
-        )}
-        {useSplitHud && isCompact3DView && (
-          <div
+            ref={isMobilePortrait ? bottomHudBarRef : undefined}
             className="pointer-events-none fixed bottom-2 right-2 z-50 flex max-w-[calc(100vw-1rem)] items-end justify-end gap-2"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
