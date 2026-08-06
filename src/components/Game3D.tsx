@@ -1876,7 +1876,7 @@ const CameraController = ({
     const is2D = viewMode === '2d';
     const isFps = viewMode === 'fps';
     const baseCameraHeight = is2D ? 24 : 18;
-    const baseCameraDistance = is2D ? 0.5 : 6;
+    const baseCameraDistance = is2D ? 0.5 : 0;
     const cameraHeight = baseCameraHeight * zoomFactor;
     const cameraDistance = baseCameraDistance * zoomFactor;
     const fov = isFps ? 72 : is2D ? 42 : 50;

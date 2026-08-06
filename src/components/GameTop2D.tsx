@@ -65,6 +65,13 @@ const mixHex = (hex: string, amount: number, toward: 0 | 255): string => {
 const lightenHex = (hex: string, amount: number) => mixHex(hex, amount, 255);
 const darkenHex = (hex: string, amount: number) => mixHex(hex, amount, 0);
 
+const blendHex = (source: string, target: string, amount: number): string => {
+  const [sr, sg, sb] = hexToRgbTriple(source);
+  const [tr, tg, tb] = hexToRgbTriple(target);
+  const mix = (from: number, to: number) => Math.round(from + (to - from) * amount);
+  return `rgb(${mix(sr, tr)}, ${mix(sg, tg)}, ${mix(sb, tb)})`;
+};
+
 /** Small stable hash so per-tile texture flecks are deterministic (no re-randomizing on re-render). */
 const hashUid = (uid: string): number => {
   let h = 0;
@@ -80,19 +87,19 @@ const VoidTile = () => (
   <div className="w-full h-full" style={{ background: "#060508" }} />
 );
 
-/** Sandy dirt-path floor — amber/orange with scattered pebbles and grain marks */
+/** Muted cave sand with enough texture to read without competing with objectives. */
 const FloorTile = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`fg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#D49A3C" />
-        <stop offset="50%" stopColor="#B87C24" />
-        <stop offset="100%" stopColor="#96601A" />
+        <stop offset="0%" stopColor="#947A55" />
+        <stop offset="50%" stopColor="#766044" />
+        <stop offset="100%" stopColor="#584531" />
       </linearGradient>
       {/* Warm top-light bloom */}
       <radialGradient id={`fgl${uid}`} cx="28%" cy="28%" r="55%">
-        <stop offset="0%" stopColor="rgba(255,215,100,0.16)" />
-        <stop offset="100%" stopColor="rgba(255,215,100,0)" />
+        <stop offset="0%" stopColor="rgba(238,218,168,0.16)" />
+        <stop offset="100%" stopColor="rgba(238,218,168,0)" />
       </radialGradient>
     </defs>
     {/* Sandy dirt base */}
@@ -138,7 +145,8 @@ const FloorTile = ({ uid }: { uid: string }) => (
     <path d="M70,76 Q76,73 82,76" fill="none" stroke="rgba(65,32,4,0.12)" strokeWidth="0.9" strokeLinecap="round" />
     <path d="M24,92 Q29,89 34,92" fill="none" stroke="rgba(65,32,4,0.11)" strokeWidth="0.9" strokeLinecap="round" />
     {/* Edge border */}
-    <rect width="100" height="100" fill="none" stroke="rgba(65,32,4,0.20)" strokeWidth="1.5" />
+    <polygon points="0,0 100,0 94,6 6,6" fill="rgba(255,244,210,0.08)" />
+    <rect width="100" height="100" fill="none" stroke="rgba(32,24,16,0.34)" strokeWidth="1.5" />
   </svg>
 );
 
@@ -287,17 +295,19 @@ const PlayerSprite = ({ rotate, climbOut }: { rotate?: boolean; climbOut?: boole
             "radial-gradient(ellipse at 50% 58%, rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.30) 42%, rgba(0,0,0,0) 68%)",
         }}
       />
-      <img
-        src={dinotoonUrl}
-        alt="Hero"
-        className="pointer-events-none absolute bottom-[3%] left-1/2 h-[140%] w-[140%] max-w-none object-contain object-bottom"
-        style={{
-          imageRendering: "auto",
-          mixBlendMode: "screen",
-          filter: "saturate(1.5) contrast(1.08)",
-          transform: t,
-        }}
-      />
+      <div className="pointer-events-none absolute inset-0 animate-dino-idle">
+        <img
+          src={dinotoonUrl}
+          alt="Hero"
+          className="absolute bottom-[1%] left-1/2 h-[154%] w-[154%] max-w-none object-contain object-bottom"
+          style={{
+            imageRendering: "auto",
+            mixBlendMode: "screen",
+            filter: "saturate(1.55) contrast(1.12) drop-shadow(0 2px 0 rgba(7,18,12,0.95)) drop-shadow(0 0 2px rgba(7,18,12,0.9))",
+            transform: t,
+          }}
+        />
+      </div>
     </div>
   );
 };
@@ -316,7 +326,13 @@ const IconTile = ({
 }) => {
   if (!iconUrl) return <div className="w-full h-full" style={{ background: bgColor }} />;
   return (
-    <div className="w-full h-full flex items-center justify-center" style={{ background: bgColor }}>
+    <div
+      className="w-full h-full flex items-center justify-center"
+      style={{
+        background: `radial-gradient(circle at 50% 45%, rgba(255,255,255,0.12), transparent 58%), ${bgColor}`,
+        boxShadow: "inset 0 2px 0 rgba(255,255,255,0.10), inset 0 -4px 10px rgba(0,0,0,0.30)",
+      }}
+    >
       <img
         src={iconUrl}
         alt=""
@@ -328,6 +344,7 @@ const IconTile = ({
           objectFit: "contain",
           imageRendering: "auto",
           transform: rotate ? "rotate(90deg)" : undefined,
+          filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.65)) drop-shadow(0 0 5px rgba(255,255,255,0.12))",
         }}
       />
     </div>
@@ -369,7 +386,7 @@ export function GameTop2D({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const localPlayer = players.find((p) => p.isLocal) ?? players[0];
-  const wallColor = themes[theme ?? "default"].wall;
+  const wallColor = blendHex(themes[theme ?? "default"].wall, "#756857", theme === "default" ? 0.25 : 0.55);
 
   const goalCaveKeys = useMemo(() => buildGoalCaveKeySet(grid, cavePos), [grid, cavePos]);
 
@@ -411,7 +428,9 @@ export function GameTop2D({
     if (rows <= 0 || cols <= 0 || availableSize.width <= 0 || availableSize.height <= 0)
       return { width: 0, height: 0 };
     const aspect = cols / rows;
-    const frameInset = fullBleed ? 0 : 16;
+    // A small permanent frame keeps every edge tile visible, including in the fullscreen
+    // presentation where the old overscale made boundary cells disappear beyond the viewport.
+    const frameInset = fullBleed ? 12 : 16;
     // Mobile portrait always reserves extra clearance here, even fullBleed/fullscreen, so the
     // board never touches the floating top/bottom HUD bars regardless of minor measurement
     // drift (safe-area insets, HUD bar reflow, sub-pixel rounding).
@@ -453,15 +472,19 @@ export function GameTop2D({
   return (
     <div
       ref={containerRef}
+      data-testid="game-top-board"
       className="w-full h-full flex overflow-hidden touch-none select-none items-center justify-center"
-      style={{ backgroundColor: "black" }}
+      style={{
+        background: "radial-gradient(circle at 50% 46%, #171811 0%, #0b0d0b 54%, #050605 100%)",
+      }}
       onClick={() => onCancelSelection?.()}
     >
       <div
+        data-testid="game-board-object"
         className={[
           fullBleed
             ? "border-0 shadow-none rounded-none"
-            : "rounded-xl border border-border/40 shadow-lg",
+            : "rounded-md border border-[#ad9164]/35 shadow-[0_20px_70px_rgba(0,0,0,0.72),0_4px_14px_rgba(0,0,0,0.58)]",
           "relative bg-transparent",
         ].join(" ")}
         style={{
@@ -472,14 +495,14 @@ export function GameTop2D({
         }}
       >
         <div
-          className={["grid gap-0", fullBleed ? "rounded-none" : "rounded-lg"].join(" ")}
+          className={["grid gap-0 overflow-hidden", fullBleed ? "rounded-none" : "rounded-[4px]"].join(" ")}
           style={{
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
             width: "100%",
             height: "100%",
             backgroundColor: "black",
-            boxShadow: "inset 0 0 0 3px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,255,255,0.08)",
+            boxShadow: "inset 0 0 0 3px rgba(0,0,0,0.88), inset 0 2px 0 rgba(255,255,255,0.09), 0 0 0 1px rgba(255,232,188,0.08)",
           }}
         >
           {grid.map((row, y) =>
@@ -538,8 +561,19 @@ export function GameTop2D({
                   case 4:  return <WaterTile uid={uid} />;
                   case 3:
                     return (
-                      <div className={`h-full w-full ${showLevelIntro && isCave ? "animate-goal-intro-glow" : ""}`}>
+                      <div className={`relative h-full w-full ${isCave ? "animate-goal-ambient" : ""} ${showLevelIntro && isCave ? "animate-goal-intro-glow" : ""}`}>
                         <CaveTile uid={uid} isStart={false} rotate={rotateUpright} />
+                        {isCave && (
+                          <div
+                            className="pointer-events-none absolute inset-0 animate-goal-sparkles"
+                            aria-hidden
+                            style={{
+                              backgroundImage: "radial-gradient(circle, rgba(255,239,170,0.95) 0 1px, transparent 1.5px), radial-gradient(circle, rgba(255,219,122,0.82) 0 1px, transparent 1.5px), radial-gradient(circle, rgba(255,255,224,0.7) 0 0.8px, transparent 1.3px)",
+                              backgroundRepeat: "no-repeat",
+                              backgroundSize: "12px 12px, 10px 10px, 8px 8px",
+                            }}
+                          />
+                        )}
                       </div>
                     );
                   case 18: return <CaveTile uid={uid} isStart rotate={rotateUpright} />;

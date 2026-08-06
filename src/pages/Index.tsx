@@ -54,13 +54,6 @@ const Index = () => {
                         </PlayerAuthGate>
                     )}
                 </div>
-
-                {/* Retro footer */}
-                <div className="fixed bottom-1 left-0 right-0 z-10 pointer-events-none select-none">
-                    <div className="mx-auto w-fit px-1 rounded bg-black/20 backdrop-blur-sm text-center pixel-text text-[8px] md:text-[10px] text-foreground/50">
-                        STONE AGE REBOOT © 2025
-                    </div>
-                </div>
             </div>
         );
     } catch (error) {

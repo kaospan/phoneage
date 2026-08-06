@@ -16,6 +16,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Settings2,
   SkipBack,
   SkipForward,
   Sparkles,
@@ -578,6 +579,7 @@ export const PuzzleGame = () => {
   >(null);
   const [leftShellPanelOpen, setLeftShellPanelOpen] = useState(false);
   const [rightShellPanelOpen, setRightShellPanelOpen] = useState(false);
+  const [showGameTools, setShowGameTools] = useState(false);
   const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
@@ -3075,7 +3077,7 @@ export const PuzzleGame = () => {
       if (bottomEl) ro.observe(bottomEl);
       else setBottomHudBarPx(0);
       return () => ro.disconnect();
-    }, [isMobilePortrait]);
+    }, [isMobilePortrait, viewMode]);
 
   const levelBackground = resolvedLevelImageUrl;
   const activeThemeKey = currentLevel?.theme ?? "default";
@@ -3250,7 +3252,9 @@ export const PuzzleGame = () => {
           className={[
             isMobilePortrait
               ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
-              : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
+              : isCompact3DView
+                ? "h-9 w-9 shrink-0 p-0 text-lg font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+                : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
             // Subtle recurring nudge toward the way out whenever no move is currently possible
             // — not gated to "first time ever" like the Stuck? tutorial, since it should still
             // catch the eye every time this happens, not just once per player.
@@ -3262,7 +3266,7 @@ export const PuzzleGame = () => {
               it reads as a distinct, important action among the neighboring same-size icon
               buttons — spelled out with text on desktop instead, where there's room for it. */}
           <span aria-hidden>↻</span>
-          {!isMobilePortrait && <span className="text-sm">Restart Level</span>}
+          {!isMobilePortrait && !isCompact3DView && <span className="text-sm">Restart Level</span>}
         </Button>
 
         {campaignDialog}
@@ -3734,19 +3738,23 @@ export const PuzzleGame = () => {
         {useSplitHud ? (
           <div
             ref={topHudBarRef}
+            data-testid="game-hud"
             className={[
-              "relative z-50 flex w-full items-start justify-between",
-              "px-1.5",
+              isCompact3DView
+                ? "pointer-events-none absolute inset-x-0 top-0 z-50 grid w-full grid-cols-[1fr_auto_1fr] items-start px-2"
+                : "relative z-50 flex w-full items-start justify-between px-1.5",
             ].join(" ")}
             style={{ paddingTop: isCompact3DView ? 'calc(env(safe-area-inset-top) + 0.125rem)' : 'calc(env(safe-area-inset-top) + 0.25rem)' }}
           >
             {/* Left HUD cluster (full-width in mobile portrait, since secondary controls move to the bottom HUD bar) */}
             <div
               className={[
-                "bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center overflow-x-auto",
-                isCompact3DView ? "gap-1 px-1.5 py-0.5" : "gap-1 px-2 py-1.5",
+                "flex items-center overflow-x-auto rounded-lg border backdrop-blur",
                 isCompact3DView
-                  ? "max-w-[calc(100vw-96px)]"
+                  ? "pointer-events-auto h-8 justify-self-start gap-1 border-[#b89a6a]/35 bg-[#15130f]/88 px-1 shadow-[0_8px_28px_rgba(0,0,0,0.42)]"
+                  : "gap-1 border-border/50 bg-card/95 px-2 py-1.5 shadow-lg",
+                isCompact3DView
+                  ? "max-w-[calc(50vw-8px)]"
                   : isMobilePortrait ? "max-w-[calc(100vw-16px)]" : "max-w-[calc(50vw-12px)]",
               ].join(" ")}
             >
@@ -3768,7 +3776,7 @@ export const PuzzleGame = () => {
                  <span className="text-primary font-black text-sm">
                    {isCompact3DView ? `Level ${currentLevel.id}` : `L${currentLevel.id}`}
                  </span>
-                 {(!isCompact3DView || hud3d.showMoves) && (
+                 {!isCompact3DView && (
                    <span className="text-foreground font-medium text-xs">{`M:${moves}`}</span>
                  )}
                  {!isCompact3DView && (
@@ -3790,7 +3798,7 @@ export const PuzzleGame = () => {
                  </span>
                  </>
                  )}
-                  {timeLeftText && (!isCompact3DView || hud3d.showTimer) && (
+                  {timeLeftText && !isCompact3DView && (
                      <span
                        className={[
                          isCompact3DView
@@ -3818,7 +3826,7 @@ export const PuzzleGame = () => {
                      START
                    </Button>
                  )}
-                 {(!isCompact3DView || hud3d.showRedKeys || hud3d.showGreenKeys) && (
+                 {!isCompact3DView && (
                    <div className="flex items-center gap-1">
                      {(!isCompact3DView || hud3d.showRedKeys) && (
                       <span
@@ -3860,10 +3868,42 @@ export const PuzzleGame = () => {
                   →
                 </Button>
               )}
-            </div>
+              </div>
 
-            {/* Right HUD cluster — hidden in mobile portrait, where these controls live in the bottom HUD bar instead */}
-            {!isMobilePortrait && (
+              {isCompact3DView && timeLeftText && hud3d.showTimer && (
+                <div
+                  className={[
+                    "pointer-events-auto col-start-2 inline-flex h-7 items-center justify-center gap-1.5 justify-self-center rounded-lg border px-3 text-[13px] font-black tabular-nums backdrop-blur",
+                    isTimerUrgent
+                      ? "border-red-200/70 bg-red-700/92 text-white shadow-[0_8px_28px_rgba(127,29,29,0.5)]"
+                      : "border-white/15 bg-[#11130f]/82 text-stone-50 shadow-[0_8px_28px_rgba(0,0,0,0.38)]",
+                  ].join(" ")}
+                  title="Time left"
+                >
+                  <TimerReset className="h-3.5 w-3.5 text-amber-200" />
+                  <span>{timeLeftText}</span>
+                </div>
+              )}
+
+              {isCompact3DView && (hud3d.showRedKeys || hud3d.showGreenKeys) && (
+                <div className="pointer-events-auto col-start-3 flex h-7 items-center gap-2 justify-self-end rounded-lg border border-white/15 bg-[#11130f]/82 px-2 shadow-[0_8px_28px_rgba(0,0,0,0.38)] backdrop-blur">
+                  {hud3d.showRedKeys && (
+                    <span className="inline-flex items-center gap-1 text-xs font-black text-red-100" title="Red keys collected">
+                      <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" aria-hidden />
+                      <span>{redKeyCount}</span>
+                    </span>
+                  )}
+                  {hud3d.showGreenKeys && (
+                    <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-100" title="Green keys collected">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" aria-hidden />
+                      <span>{greenKeyCount}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Right HUD cluster — hidden in mobile portrait, where these controls live in the bottom HUD bar instead */}
+            {!isMobilePortrait && !isCompact3DView && (
               <div className="flex shrink-0 items-center gap-1">
                 <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1 py-0.5 max-w-[calc(50vw-56px)] overflow-x-auto">
                   {secondaryHudButtons}
@@ -4076,7 +4116,7 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
-        {useSplitHud && isMobilePortrait && (
+        {useSplitHud && isMobilePortrait && !isCompact3DView && (
           <div
             ref={bottomHudBarRef}
             className="fixed inset-x-2 bottom-0 z-50 flex justify-center"
@@ -4085,6 +4125,43 @@ export const PuzzleGame = () => {
             <div className="bg-card/95 backdrop-blur rounded-lg shadow-lg border border-border/50 flex items-center gap-1 px-1 py-0.5 max-w-full overflow-x-auto">
               {secondaryHudButtons}
             </div>
+          </div>
+        )}
+        {useSplitHud && isCompact3DView && (
+          <div
+            className="pointer-events-none fixed bottom-2 right-2 z-50 flex max-w-[calc(100vw-1rem)] items-end justify-end gap-2"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            {showGameTools && (
+              <div className="pointer-events-auto flex max-w-[calc(100vw-4.75rem)] items-center gap-1 overflow-x-auto rounded-lg border border-white/15 bg-[#12130f]/92 px-1 py-1 shadow-[0_12px_42px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                {secondaryHudButtons}
+                {!isMobilePortrait && (
+                  <Button
+                    onClick={() => void toggleFullscreenMode()}
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 shrink-0 rounded-lg border border-white/10 bg-white/5 p-0 text-stone-100 hover:bg-white/10"
+                    title={isFullscreenMode ? "Exit fullscreen layout" : "Fullscreen layout (fit board)"}
+                    aria-pressed={isFullscreenMode}
+                    aria-label={isFullscreenMode ? "Exit fullscreen layout" : "Enter fullscreen layout"}
+                  >
+                    <Expand className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+            <Button
+              data-testid="game-tools-toggle"
+              onClick={() => setShowGameTools((open) => !open)}
+              variant="ghost"
+              size="sm"
+              className="pointer-events-auto h-10 w-10 shrink-0 rounded-lg border border-[#b89a6a]/40 bg-[#17140f]/92 p-0 text-amber-100 shadow-[0_10px_34px_rgba(0,0,0,0.52)] backdrop-blur-xl hover:bg-[#272017]"
+              title={showGameTools ? "Hide game tools" : "Show game tools"}
+              aria-label={showGameTools ? "Hide game tools" : "Show game tools"}
+              aria-expanded={showGameTools}
+            >
+              <Settings2 className="h-[18px] w-[18px]" />
+            </Button>
           </div>
         )}
         {useSplitHud && showRotateHint && (
@@ -4099,6 +4176,7 @@ export const PuzzleGame = () => {
         <div
           ref={gestureSurfaceRef}
           data-touch-controls-target
+          data-testid="game-board-stage"
           className={[
             isMobilePortrait ? "fixed inset-0 z-20" : "relative z-20 w-full min-h-0 flex-1",
             desktopShellActive ? `px-2 pb-2 pt-20 xl:pb-3 ${desktopBoardInsetClass}` : "",
@@ -4119,8 +4197,8 @@ export const PuzzleGame = () => {
         >
           <div
             className={[
-              "overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,20,0.9)_0%,rgba(7,12,14,0.96)_100%)] shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
-              isMobilePortrait ? "" : "relative h-full w-full rounded-[30px]",
+              "overflow-hidden bg-[#090b0a]",
+              isMobilePortrait ? "" : isCompact3DView ? "relative h-full w-full" : "relative h-full w-full rounded-[30px] border border-white/10 shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
               desktopShellActive ? "ring-1 ring-amber-300/10" : "",
             ].join(' ')}
             style={isMobilePortrait ? {
@@ -4209,7 +4287,10 @@ export const PuzzleGame = () => {
                     selectedArrow={selectedArrow}
                     selectorPos={isSelectorActive && !selectedArrow ? selectorPos : null}
                     players={renderPlayers}
-                    zoomFactor={cameraZoomFactor * 0.87}
+                    // Keep the compact board just under its fitted size by default. The old
+                    // 0.87 multiplier made this view 15% larger than its available frame,
+                    // which clipped perimeter tiles even before the player zoomed in.
+                    zoomFactor={cameraZoomFactor * 1.04}
                     fullBleed={isFullscreenMode}
                     rotateUpright={isMobilePortrait}
                     theme={currentLevel.theme}

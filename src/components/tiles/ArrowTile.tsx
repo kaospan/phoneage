@@ -6,24 +6,24 @@ export const ArrowBg = ({ uid }: { uid: string }) => (
   <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: "block" }}>
     <defs>
       <linearGradient id={`tabg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#C8A455" />
-        <stop offset="50%" stopColor="#A87E30" />
-        <stop offset="100%" stopColor="#7A5618" />
+        <stop offset="0%" stopColor="#59746A" />
+        <stop offset="50%" stopColor="#3E5D55" />
+        <stop offset="100%" stopColor="#293F3A" />
       </linearGradient>
     </defs>
     <rect width="100" height="100" fill={`url(#tabg${uid})`} />
-    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(255,255,255,0.13)" />
-    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(255,255,255,0.09)" />
-    <polygon points="100,100 0,100 14,87 86,87" fill="rgba(0,0,0,0.28)" />
-    <polygon points="100,100 100,0 87,14 87,86" fill="rgba(0,0,0,0.20)" />
-    <line x1="14" y1="50" x2="86" y2="50" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
-    <line x1="50" y1="14" x2="50" y2="86" stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
-    <rect width="100" height="100" fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="1.5" />
+    <polygon points="0,0 100,0 86,13 14,13" fill="rgba(225,255,246,0.11)" />
+    <polygon points="0,0 14,13 14,86 0,100" fill="rgba(225,255,246,0.07)" />
+    <polygon points="100,100 0,100 14,87 86,87" fill="rgba(0,0,0,0.36)" />
+    <polygon points="100,100 100,0 87,14 87,86" fill="rgba(0,0,0,0.29)" />
+    <line x1="14" y1="50" x2="86" y2="50" stroke="rgba(0,0,0,0.20)" strokeWidth="1.4" />
+    <line x1="50" y1="14" x2="50" y2="86" stroke="rgba(0,0,0,0.20)" strokeWidth="1.4" />
+    <rect width="100" height="100" fill="none" stroke="rgba(4,24,23,0.58)" strokeWidth="1.5" />
   </svg>
 );
 
-const ARROW_COMMON = { fill: "#f6c84f", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-const ARROW_SHADOW = "drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 5px rgba(0,0,0,0.75))";
+const ARROW_COMMON = { fill: "#d8e8d8", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+const ARROW_SHADOW = "drop-shadow(0 1px 1px rgba(0,0,0,0.86))";
 const ONE_ARROW_PATH = "M12 26 L12 14 L7 14 L16 5 L25 14 L20 14 L20 26 Z";
 const DOUBLE_VERTICAL_PATH = "M16 3 L26 13 L21 13 L21 19 L26 19 L16 29 L6 19 L11 19 L11 13 L6 13 Z";
 const DOUBLE_HORIZONTAL_PATH = "M3 16 L13 6 L13 11 L19 11 L19 6 L29 16 L19 26 L19 21 L13 21 L13 26 Z";
