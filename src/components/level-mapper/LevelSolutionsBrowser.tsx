@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, RotateCcw, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Pause, SkipBack, SkipForward, RotateCcw, Loader2 } from 'lucide-react';
 import { useLevelMapper } from '@/components/level-mapper/useLevelMapper';
 import { GameTop2D } from '@/components/GameTop2D';
 import { LevelThumbnail } from './LevelThumbnail';
@@ -344,6 +344,18 @@ export const LevelSolutionsBrowser: React.FC = () => {
     [allLevels, selectedId],
   );
   const selectedEntry = selectedId != null ? solveStatus[selectedId] : undefined;
+  const selectedFilteredIndex = useMemo(
+    () => filteredLevels.findIndex((lvl) => lvl.id === selectedId),
+    [filteredLevels, selectedId],
+  );
+  const previousLevel = selectedFilteredIndex > 0 ? filteredLevels[selectedFilteredIndex - 1] : null;
+  const nextLevel =
+    selectedFilteredIndex >= 0 && selectedFilteredIndex < filteredLevels.length - 1
+      ? filteredLevels[selectedFilteredIndex + 1]
+      : null;
+  const selectLevelId = useCallback((id: number) => {
+    setSelectedId(id);
+  }, []);
 
   const frames: SolutionFrame[] = useMemo(() => {
     if (!selectedLevel || !selectedEntry?.solution?.solved) return [];
@@ -528,7 +540,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
                 <button
                   key={lvl.id}
                   type="button"
-                  onClick={() => setSelectedId(lvl.id)}
+                  onClick={() => selectLevelId(lvl.id)}
                   className={cn(
                     'mb-1.5 flex w-full items-center gap-2.5 rounded-xl border px-2 py-2 text-left transition-colors',
                     isSelected
@@ -717,6 +729,32 @@ export const LevelSolutionsBrowser: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={!previousLevel}
+                    onClick={() => {
+                      if (previousLevel) selectLevelId(previousLevel.id);
+                    }}
+                    className="inline-flex h-8 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.05] px-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-stone-200 transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
+                    title={previousLevel ? `Previous: Level ${previousLevel.id}` : 'No previous level'}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!nextLevel}
+                    onClick={() => {
+                      if (nextLevel) selectLevelId(nextLevel.id);
+                    }}
+                    className="inline-flex h-8 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.05] px-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-stone-200 transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
+                    title={nextLevel ? `Next: Level ${nextLevel.id}` : 'No next level'}
+                  >
+                    Next
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <div
                   className={cn(
                     'inline-flex items-center rounded-lg border px-2.5 py-1 text-[11px] font-bold',
