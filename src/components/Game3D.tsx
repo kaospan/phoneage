@@ -28,6 +28,7 @@ interface Game3DProps {
   onPlayerClick?: () => void;
   playerFlashCount?: number;
   rotateUpright?: boolean;
+  crumbleAnimations?: Map<string, number>;
 }
 
 type PlayerFacing = 'up' | 'right' | 'down' | 'left';
