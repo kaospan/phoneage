@@ -2,7 +2,7 @@
 
 **Project**: Stone Age — arrow-and-terrain traversal puzzle game (a.k.a. "Phone Age")  
 **Live**: https://kaospan.github.io/phoneage/  
-**Current as of**: August 6, 2026  
+**Current as of**: August 7, 2026
 
 ---
 
@@ -110,6 +110,15 @@ A significant refactor of the BFS level solver (`src/lib/levelSolver.ts`):
 
 #### Phase 11: Development Guidelines (Aug 6)
 - Enhanced development guidelines for agent execution and debugging workflow across `AGENTS.md`.
+
+#### Phase 12: Gameplay Presentation & Board Fit (Aug 7)
+- Reworked the compact gameplay presentation while leaving game rules and solver logic unchanged.
+- Board is now kept just inside its fitted viewport with a small fullscreen safety frame, ensuring perimeter grid tiles are never cropped at the default zoom.
+- Reduced the compact HUD to level, timer, and key status; moved secondary controls into a collapsible corner dock.
+- Refined visual hierarchy: warmer stone and softer sand, beveled collectibles, quieter embossed teal arrow tiles, and a glowing exit-cave beacon with subtle particles.
+- Made the dinosaur more prominent with a stronger outline and gentle idle/breathing motion.
+- Removed the old footer overlay and added a restrained cave-like backdrop/vignette behind the board.
+- Commit: `6a344a0` (`Polish gameplay board presentation`). Automated test/build verification remains pending because the current WSL environment has no runnable Linux Node installation.
 
 ---
 
@@ -254,6 +263,6 @@ A full code review was conducted. Key findings (full report in `CODE_REVIEW.md`)
 ---
 
 **Document Version**: 2.0  
-**Last Updated**: August 6, 2026  
+**Last Updated**: August 7, 2026
 **Author**: GitHub Copilot (automated from git history)  
-**Status**: Reflects current repository HEAD (`a62b770`)
+**Status**: Reflects current repository HEAD (`6a344a0`)
