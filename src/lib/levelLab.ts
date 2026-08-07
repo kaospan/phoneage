@@ -71,10 +71,10 @@ const difficultyConfig: Record<LevelLabDifficulty, {
   maxDepth: number;
   targetMoves: number;
 }> = {
-  easy: { wander: 0.18, obstacleChance: 0.08, solveMs: 1200, solveNodes: 9000, maxDepth: 90, targetMoves: 10 },
-  medium: { wander: 0.32, obstacleChance: 0.16, solveMs: 1600, solveNodes: 18000, maxDepth: 130, targetMoves: 18 },
-  hard: { wander: 0.46, obstacleChance: 0.24, solveMs: 2200, solveNodes: 32000, maxDepth: 170, targetMoves: 28 },
-  expert: { wander: 0.58, obstacleChance: 0.31, solveMs: 3200, solveNodes: 60000, maxDepth: 220, targetMoves: 40 },
+  easy: { wander: 0.28, obstacleChance: 0.14, solveMs: 1500, solveNodes: 12000, maxDepth: 100, targetMoves: 14 },
+  medium: { wander: 0.45, obstacleChance: 0.22, solveMs: 2200, solveNodes: 25000, maxDepth: 150, targetMoves: 24 },
+  hard: { wander: 0.60, obstacleChance: 0.32, solveMs: 3200, solveNodes: 50000, maxDepth: 210, targetMoves: 38 },
+  expert: { wander: 0.75, obstacleChance: 0.42, solveMs: 5000, solveNodes: 90000, maxDepth: 300, targetMoves: 55 },
 };
 
 export const levelLabDifficultyForPromotedIndex = (
@@ -142,40 +142,60 @@ const keyFor = (p: Position) => `${p.x},${p.y}`;
 export const fingerprintLevelLabGrid = (grid: CellType[][]): string =>
   grid.map((row) => row.join(",")).join("|");
 
-const directionCell = (from: Position, to: Position): CellType => {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 8 : 10;
-  return dy > 0 ? 9 : 7;
-};
-
 const buildPath = (rng: () => number, difficulty: LevelLabDifficulty): Position[] => {
   const config = difficultyConfig[difficulty];
-  const startY = randomInt(rng, 1, ROWS - 2);
-  const goalY = randomInt(rng, 1, ROWS - 2);
+  const startY = randomInt(rng, 2, ROWS - 2);
+  const goalY = randomInt(rng, 2, ROWS - 2);
   const path: Position[] = [{ x: 1, y: startY }];
   const visited = new Set([keyFor(path[0])]);
   let current = path[0];
   let guard = 0;
 
-  while ((current.x !== COLS - 2 || current.y !== goalY) && guard < 360) {
+  while ((current.x !== COLS - 2 || current.y !== goalY) && guard < 400) {
     guard += 1;
-    const towardGoal: Position =
-      current.x < COLS - 2
-        ? { x: current.x + 1, y: current.y }
-        : { x: current.x, y: current.y + Math.sign(goalY - current.y) };
-    const wanderVertical =
-      rng() < config.wander && current.y > 1 && current.y < ROWS - 2
-        ? { x: current.x, y: current.y + (rng() < 0.5 ? -1 : 1) }
-        : null;
-    const next = wanderVertical && !visited.has(keyFor(wanderVertical)) ? wanderVertical : towardGoal;
-    if (next.x < 1 || next.x > COLS - 2 || next.y < 1 || next.y > ROWS - 2) continue;
+
+    const right = { x: current.x + 1, y: current.y };
+    const down = { x: current.x, y: current.y + 1 };
+    const up = { x: current.x, y: current.y - 1 };
+
+    const canRight = right.x < COLS - 1 && !visited.has(keyFor(right));
+    const canDown = down.y < ROWS - 1 && !visited.has(keyFor(down));
+    const canUp = up.y > 0 && !visited.has(keyFor(up));
+
+    if (!canRight && !canDown && !canUp) break;
+
+    const rightProbability = Math.max(0.35, 0.75 - config.wander * 0.5);
+    const roll = rng();
+    let next: Position;
+    if (canRight && roll < rightProbability) {
+      next = right;
+    } else if (canDown && canUp) {
+      next = rng() < 0.5 ? down : up;
+    } else if (canDown) {
+      next = down;
+    } else if (canUp) {
+      next = up;
+    } else {
+      next = right;
+    }
+
     current = next;
     path.push(current);
     visited.add(keyFor(current));
   }
 
   return path;
+};
+
+const randomArrowCell = (rng: () => number): CellType => {
+  const roll = rng();
+  if (roll < 0.22) return 7;
+  if (roll < 0.44) return 8;
+  if (roll < 0.66) return 9;
+  if (roll < 0.80) return 10;
+  if (roll < 0.88) return 11;
+  if (roll < 0.95) return 12;
+  return 13;
 };
 
 const carveCandidateGrid = (
@@ -189,6 +209,7 @@ const carveCandidateGrid = (
   const pathKeys = new Set(path.map(keyFor));
 
   for (const p of path) grid[p.y][p.x] = 0;
+
   for (const p of path) {
     const neighbors = [
       { x: p.x + 1, y: p.y },
@@ -198,14 +219,20 @@ const carveCandidateGrid = (
     ];
     for (const n of neighbors) {
       if (n.x <= 0 || n.x >= COLS - 1 || n.y <= 0 || n.y >= ROWS - 1 || pathKeys.has(keyFor(n))) continue;
-      if (rng() < 0.36) grid[n.y][n.x] = 0;
+      if (rng() < 0.40) grid[n.y][n.x] = 0;
     }
   }
 
   for (let y = 1; y < ROWS - 1; y += 1) {
     for (let x = 1; x < COLS - 1; x += 1) {
       if (pathKeys.has(`${x},${y}`) || grid[y][x] !== 0) continue;
-      if (rng() < config.obstacleChance) grid[y][x] = rng() < 0.72 ? 2 : 1;
+      if (rng() < config.obstacleChance) {
+        const roll = rng();
+        if (roll < 0.55) grid[y][x] = 2;
+        else if (roll < 0.80) grid[y][x] = 1;
+        else if (roll < 0.92) grid[y][x] = 4;
+        else grid[y][x] = 6;
+      }
     }
   }
 
@@ -231,13 +258,31 @@ const carveCandidateGrid = (
     }
   }
 
-  if (mechanics.arrows && usablePath.length >= 6) {
-    const count = difficulty === "easy" ? 1 : difficulty === "medium" ? 2 : difficulty === "hard" ? 3 : 4;
+  if (mechanics.arrows && usablePath.length >= 4) {
+    const count = difficulty === "easy" ? 2 : difficulty === "medium" ? 4 : difficulty === "hard" ? 6 : 8;
     for (let i = 0; i < count; i += 1) {
-      const index = randomInt(rng, 2, path.length - 3);
-      const p = path[index];
-      if (grid[p.y][p.x] !== 0) continue;
-      grid[p.y][p.x] = directionCell(p, path[index + 1]);
+      let px: number, py: number;
+      if (rng() < 0.55 && path.length > 4) {
+        const idx = randomInt(rng, 1, path.length - 2);
+        px = path[idx].x;
+        py = path[idx].y;
+      } else {
+        const candidates: Position[] = [];
+        for (let y = 1; y < ROWS - 1; y++) {
+          for (let x = 1; x < COLS - 1; x++) {
+            if (grid[y][x] === 0 && !pathKeys.has(`${x},${y}`)) {
+              candidates.push({ x, y });
+            }
+          }
+        }
+        if (candidates.length === 0) continue;
+        const pick = candidates[Math.floor(rng() * candidates.length)];
+        px = pick.x;
+        py = pick.y;
+      }
+
+      if (grid[py][px] !== 0) continue;
+      grid[py][px] = randomArrowCell(rng);
     }
   }
 

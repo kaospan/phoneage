@@ -584,7 +584,7 @@ export const PuzzleGame = () => {
   >(null);
   const [leftShellPanelOpen, setLeftShellPanelOpen] = useState(false);
   const [rightShellPanelOpen, setRightShellPanelOpen] = useState(false);
-  const [showGameTools, setShowGameTools] = useState(false);
+  const [showGameTools, setShowGameTools] = useState(true);
   const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
@@ -1023,11 +1023,11 @@ export const PuzzleGame = () => {
 
   useEffect(() => {
     if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
-    if (!isPlayerStuck) return;
+    if (!isGloballyStuck) return;
     if (getSeenTutorials().has("stuck-reminder")) return;
     const def = getTutorialDefinition("stuck-reminder");
     if (def) setTutorialQueue([def]);
-  }, [isPlayerStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
+  }, [isGloballyStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
 
   // Local move availability only catches "no move from THIS exact tile" — it can't see a dead
   // end the player backed themselves into a few moves ago, like relaying every bridging arrow
@@ -1040,10 +1040,6 @@ export const PuzzleGame = () => {
   const [isGloballyStuck, setIsGloballyStuck] = useState(false);
   const globalStuckRequestRef = useRef(0);
   useEffect(() => {
-    if (isPlayerStuck) {
-      setIsGloballyStuck(false);
-      return;
-    }
     if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
     if (!currentLevel || renderGrid.length === 0) return;
     if (isBuilding || isComplete || isTimeUp) return;
@@ -1070,14 +1066,6 @@ export const PuzzleGame = () => {
 
   const isStuck = isPlayerStuck || isGloballyStuck;
 
-  useEffect(() => {
-    if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
-    if (!isGloballyStuck) return;
-    if (getSeenTutorials().has("stuck-reminder")) return;
-    const def = getTutorialDefinition("stuck-reminder");
-    if (def) setTutorialQueue([def]);
-  }, [isGloballyStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
-
   const handleTutorialsDone = useCallback((shown: TutorialDefinition[]) => {
     for (const t of shown) markTutorialSeen(t.id);
     setTutorialQueue([]);
@@ -1090,12 +1078,12 @@ export const PuzzleGame = () => {
     remoteArrowHintMoveOriginRef.current = null;
   }, [currentLevel?.id]);
 
-  // Show the arrow-selection HUD hint once, only on the first arrow selection in levels 1-3.
+  // Show the arrow-selection HUD hint once, only on the first arrow selection in levels 2-3.
   useEffect(() => {
     if (!selectedArrow) return;
     if (arrowSelectHintSeenRef.current) return;
     const levelId = currentLevel?.id;
-    if (levelId == null || levelId > 3) return;
+    if (levelId == null || levelId < 2 || levelId > 3) return;
     arrowSelectHintSeenRef.current = true;
     try {
       localStorage.setItem("arrowSelectHintSeen", "1");
@@ -3242,9 +3230,9 @@ export const PuzzleGame = () => {
         disabled={isComplete || localPlayer?.isGliding}
         className={[
           isMobilePortrait
-            ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
+            ? "h-12 w-12 p-0 text-2xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
             : isCompact3DView
-              ? "h-9 w-9 shrink-0 p-0 text-lg font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+              ? "h-10 w-10 shrink-0 p-0 text-xl font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
               : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
           // Subtle recurring nudge toward the way out whenever no move is currently possible
           // — not gated to "first time ever" like the Stuck? tutorial, since it should still
@@ -4114,9 +4102,12 @@ export const PuzzleGame = () => {
             className="pointer-events-none fixed bottom-2 right-2 z-50 flex max-w-[calc(100vw-1rem)] items-end justify-end gap-2"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
+                {/* Restart Level — always visible, outside the tools toggle */}
+                <div className="pointer-events-auto">
+                  {restartLevelButton}
+                </div>
                 {showGameTools && (
                   <div className="pointer-events-auto flex max-w-[calc(100vw-4.75rem)] items-center gap-1 overflow-x-auto rounded-lg border border-white/15 bg-[#12130f]/92 px-1 py-1 shadow-[0_12px_42px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-                    {restartLevelButton}
                     {secondaryHudButtons}
                 {!isMobilePortrait && (
                   <Button
