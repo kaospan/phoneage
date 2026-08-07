@@ -120,6 +120,14 @@ A significant refactor of the BFS level solver (`src/lib/levelSolver.ts`):
 - Removed the old footer overlay and added a restrained cave-like backdrop/vignette behind the board.
 - Commit: `6a344a0` (`Polish gameplay board presentation`). Automated test/build verification remains pending because the current WSL environment has no runnable Linux Node installation.
 
+#### Phase 13: 3D-Only Redesign Rollout Guard (Aug 7)
+- Applied a rollout guard so the gameplay redesign path is active **only** in `3d` view mode.
+- `top` view is intentionally kept on the non-redesign presentation path for side-by-side comparison.
+- Added a single fallback switch in `src/components/PuzzleGame.tsx`:
+  - `ENABLE_3D_GAMEPLAY_REDESIGN = true`
+  - Set it to `false` for immediate fallback to the legacy `Game3D` path if production issues appear.
+- This keeps rollback low-risk and one-line, while preserving current game rules/solver behavior.
+
 ---
 
 ## CURRENT ARCHITECTURE

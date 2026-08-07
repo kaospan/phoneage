@@ -63,6 +63,7 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
   :root { --bg: #0f172a; --panel: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  h1 { margin: 0 0 12px; font-size: 20px; line-height: 1.2; }
   .layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
   .board { display: grid; gap: 2px; }
@@ -83,6 +84,7 @@ export function generateSolverTraceHTML(trace: SolverTrace): string {
 <body>
 <div class="layout">
   <div>
+    <h1>Solver Trace - Level ${trace.levelId}</h1>
     <div class="panel" style="margin-bottom:12px">
       <div class="controls">
         <button onclick="jumpFurthest()">Furthest State</button>

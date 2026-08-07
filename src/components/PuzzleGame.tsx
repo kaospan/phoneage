@@ -226,6 +226,8 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   top: "TOP",
 };
 const DEFAULT_VIEW_MODE: ViewMode = "3d";
+// Safety rollout switch: when false, 3D mode falls back to the legacy Game3D renderer path.
+const ENABLE_3D_GAMEPLAY_REDESIGN = true;
 
 const TutorialSettingsPopover = ({
   enabled,
@@ -323,7 +325,10 @@ const CRUMBLE_ANIMATION_TICKS = 42;
 const BOTTOM_HUD_CLEARANCE_PX = 60;
 const MAX_SESSION_RECORDED_INPUTS = 1000;
 
-const distanceBetweenTouches = (t1: Touch, t2: Touch) =>
+const distanceBetweenTouches = (
+  t1: Pick<Touch, "clientX" | "clientY">,
+  t2: Pick<Touch, "clientX" | "clientY">,
+) =>
   Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
 
 const facingFromDelta = (dx: number, dy: number, fallback: FacingDirection): FacingDirection => {
@@ -3195,7 +3200,7 @@ export const PuzzleGame = () => {
       }
     }, [cameraZoomIndex, isFullscreenMode]);
 
-    const isCompact3DView = viewMode === "3d";
+    const isCompact3DView = ENABLE_3D_GAMEPLAY_REDESIGN && viewMode === "3d";
     const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite" || viewMode === "top" || isCompact3DView;
     const desktopShellActive = !useSplitHud && !shouldRotateGate;
     const desktopTopInsetClass =
@@ -3417,16 +3422,20 @@ export const PuzzleGame = () => {
     }
 
     return (
-      <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden bg-[#081214]`}>
-        <div className={`absolute inset-0 bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'} opacity-20`} />
+      <div className={`relative flex h-[100svh] w-full flex-col overflow-hidden ${isCompact3DView ? 'bg-[#081214]' : 'bg-black'}`}>
+        <div className={`absolute inset-0 bg-gradient-to-br ${currentLevel.theme ? themes[currentLevel.theme].background : 'from-amber-50 to-orange-100'} ${isCompact3DView ? 'opacity-20' : 'opacity-28'}`} />
         {levelBackground && (
           <div
-            className="absolute inset-0 opacity-35 bg-cover bg-center blur-[2px] scale-105"
+            className={`absolute inset-0 bg-cover bg-center scale-105 ${isCompact3DView ? 'opacity-35 blur-[2px]' : 'opacity-28 blur-[1px]'}`}
             style={{ backgroundImage: `url(${levelBackground})` }}
           />
         )}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,205,138,0.20),transparent_24%),radial-gradient(circle_at_top_right,rgba(98,220,255,0.16),transparent_22%),linear-gradient(180deg,rgba(5,12,14,0.18)_0%,rgba(5,12,14,0.68)_58%,rgba(3,8,9,0.88)_100%)]" />
-        <div className="absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
+        {isCompact3DView ? (
+          <>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,205,138,0.20),transparent_24%),radial-gradient(circle_at_top_right,rgba(98,220,255,0.16),transparent_22%),linear-gradient(180deg,rgba(5,12,14,0.18)_0%,rgba(5,12,14,0.68)_58%,rgba(3,8,9,0.88)_100%)]" />
+            <div className="absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
+          </>
+        ) : null}
         {isBuilding && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 text-white">
             <div className="bg-black/70 border border-white/20 rounded-lg px-6 py-4 text-center">
@@ -4185,8 +4194,12 @@ export const PuzzleGame = () => {
               borderRadius: '0px',
             } : {}}
           >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,215,160,0.15),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_18%,rgba(0,0,0,0.18)_100%)]" />
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_100%)]" />
+            {isCompact3DView ? (
+              <>
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,215,160,0.15),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0)_18%,rgba(0,0,0,0.18)_100%)]" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_100%)]" />
+              </>
+            ) : null}
 
             {desktopShellActive && (
               <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 hidden xl:flex items-end justify-between gap-4">
@@ -4248,7 +4261,7 @@ export const PuzzleGame = () => {
                   }
                 }}
               />
-            ) : viewMode === "3d" ? (
+            ) : viewMode === "3d" && isCompact3DView ? (
               <GameTop2D
                     grid={renderGrid}
                     cavePos={renderCavePos}

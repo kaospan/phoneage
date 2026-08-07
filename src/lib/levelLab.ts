@@ -51,6 +51,18 @@ export interface LevelLabCampaignResult {
 const ROWS = 11;
 const COLS = 20;
 
+const PROMOTED_LEVEL_START = 101;
+const PROMOTED_LEVEL_END = 200;
+
+const levelLabDifficultyRanges: Record<LevelLabDifficulty, { start: number; end: number }> = {
+  easy: { start: 101, end: 125 },
+  medium: { start: 126, end: 150 },
+  hard: { start: 151, end: 175 },
+  expert: { start: 176, end: 200 },
+};
+
+const difficultyOrder: LevelLabDifficulty[] = ["easy", "medium", "hard", "expert"];
+
 const difficultyConfig: Record<LevelLabDifficulty, {
   wander: number;
   obstacleChance: number;
@@ -65,11 +77,46 @@ const difficultyConfig: Record<LevelLabDifficulty, {
   expert: { wander: 0.58, obstacleChance: 0.31, solveMs: 3200, solveNodes: 60000, maxDepth: 220, targetMoves: 40 },
 };
 
-export const levelLabDifficultyForPromotedIndex = (index: number): LevelLabDifficulty => {
-  if (index < 25) return "easy";
-  if (index < 50) return "medium";
-  if (index < 75) return "hard";
+export const levelLabDifficultyForPromotedIndex = (
+  index: number,
+  totalPromoted = PROMOTED_LEVEL_END - PROMOTED_LEVEL_START + 1,
+): LevelLabDifficulty => {
+  const total = Math.max(1, totalPromoted);
+  const clampedIndex = Math.max(0, Math.min(total - 1, index));
+  const ratio = clampedIndex / total;
+  if (ratio < 0.25) return "easy";
+  if (ratio < 0.5) return "medium";
+  if (ratio < 0.75) return "hard";
   return "expert";
+};
+
+export const levelLabDifficultyForPromotedLevelId = (levelId: number): LevelLabDifficulty | null => {
+  for (const difficulty of difficultyOrder) {
+    const { start, end } = levelLabDifficultyRanges[difficulty];
+    if (levelId >= start && levelId <= end) return difficulty;
+  }
+  return null;
+};
+
+export const buildLevelLabPromotionSlots = (levelsToPromote: number): Array<{ levelId: number; difficulty: LevelLabDifficulty }> => {
+  const total = Math.max(0, levelsToPromote);
+
+  // Explicitly pin the 100-level campaign to fixed mapper overwrite bands.
+  if (total === 100) {
+    const slots: Array<{ levelId: number; difficulty: LevelLabDifficulty }> = [];
+    for (const difficulty of difficultyOrder) {
+      const { start, end } = levelLabDifficultyRanges[difficulty];
+      for (let levelId = start; levelId <= end; levelId += 1) {
+        slots.push({ levelId, difficulty });
+      }
+    }
+    return slots;
+  }
+
+  return Array.from({ length: total }, (_, index) => ({
+    levelId: PROMOTED_LEVEL_START + index,
+    difficulty: levelLabDifficultyForPromotedIndex(index, total),
+  }));
 };
 
 export const levelLabMechanicsForDifficulty = (difficulty: LevelLabDifficulty): LevelLabMechanics => {
@@ -264,6 +311,7 @@ export const generateLevelLabCampaign = async ({
   shouldCancel,
 }: GenerateLevelLabCampaignOptions): Promise<LevelLabCampaignResult> => {
   const generated: LevelLabCandidate[] = [];
+  const promotionSlots = buildLevelLabPromotionSlots(levelsToPromote);
   const selectedByDifficulty: Record<LevelLabDifficulty, LevelLabCandidate[]> = {
     easy: [],
     medium: [],
@@ -271,12 +319,15 @@ export const generateLevelLabCampaign = async ({
     expert: [],
   };
   const seen = new Set<string>();
-  const perBandTarget = Math.ceil(levelsToPromote / 4);
+  const perBandTarget = Math.ceil(Math.max(0, levelsToPromote) / 4);
 
   for (let i = 0; i < candidateCount; i += 1) {
     if (shouldCancel?.()) break;
-    const targetIndex = Math.min(levelsToPromote - 1, Math.floor((i / Math.max(1, candidateCount)) * levelsToPromote));
-    const difficulty = levelLabDifficultyForPromotedIndex(targetIndex);
+    const targetIndex = Math.min(
+      promotionSlots.length - 1,
+      Math.floor((i / Math.max(1, candidateCount)) * Math.max(1, promotionSlots.length)),
+    );
+    const difficulty = promotionSlots[Math.max(0, targetIndex)]?.difficulty ?? "expert";
     const mechanics = levelLabMechanicsForDifficulty(difficulty);
     const candidate = await generateLevelLabCandidate({
       seed: seed + i * 104729,
@@ -298,24 +349,46 @@ export const generateLevelLabCampaign = async ({
     onProgress?.(i + 1, candidateCount, Object.values(selectedByDifficulty).reduce((sum, bucket) => sum + bucket.length, 0));
   }
 
-  const promoted: LevelLabCandidate[] = [];
-  for (let i = 0; i < levelsToPromote; i += 1) {
-    const difficulty = levelLabDifficultyForPromotedIndex(i);
-    const bucket = selectedByDifficulty[difficulty];
+  const promotedByLevelId = new Map<number, LevelLabCandidate>();
+  const usedCandidateIds = new Set<string>();
+
+  // First pass: assign best bucketed candidates into their exact slot difficulty.
+  for (const slot of promotionSlots) {
+    const bucket = selectedByDifficulty[slot.difficulty];
     const picked = bucket.shift();
-    if (!picked) continue;
-    promoted.push({ ...picked, promotedLevelId: 101 + i });
+    if (!picked || usedCandidateIds.has(picked.id)) continue;
+    promotedByLevelId.set(slot.levelId, { ...picked, promotedLevelId: slot.levelId });
+    usedCandidateIds.add(picked.id);
   }
 
-  if (promoted.length < levelsToPromote) {
-    const fallback = generated
-      .filter((candidate) => candidate.solved && !promoted.some((picked) => picked.id === candidate.id))
-      .sort((a, b) => b.score - a.score);
-    for (const candidate of fallback) {
-      if (promoted.length >= levelsToPromote) break;
-      promoted.push({ ...candidate, promotedLevelId: 101 + promoted.length });
-    }
+  // Fallback pass: fill missing slots using remaining solved candidates of the same difficulty only.
+  const fallbackByDifficulty: Record<LevelLabDifficulty, LevelLabCandidate[]> = {
+    easy: generated
+      .filter((candidate) => candidate.solved && candidate.difficulty === "easy")
+      .sort((a, b) => b.score - a.score),
+    medium: generated
+      .filter((candidate) => candidate.solved && candidate.difficulty === "medium")
+      .sort((a, b) => b.score - a.score),
+    hard: generated
+      .filter((candidate) => candidate.solved && candidate.difficulty === "hard")
+      .sort((a, b) => b.score - a.score),
+    expert: generated
+      .filter((candidate) => candidate.solved && candidate.difficulty === "expert")
+      .sort((a, b) => b.score - a.score),
+  };
+
+  for (const slot of promotionSlots) {
+    if (promotedByLevelId.has(slot.levelId)) continue;
+    const fallbackBucket = fallbackByDifficulty[slot.difficulty];
+    const picked = fallbackBucket.find((candidate) => !usedCandidateIds.has(candidate.id));
+    if (!picked) continue;
+    promotedByLevelId.set(slot.levelId, { ...picked, promotedLevelId: slot.levelId });
+    usedCandidateIds.add(picked.id);
   }
+
+  const promoted = promotionSlots
+    .map((slot) => promotedByLevelId.get(slot.levelId))
+    .filter((candidate): candidate is LevelLabCandidate => Boolean(candidate));
 
   return {
     generated,

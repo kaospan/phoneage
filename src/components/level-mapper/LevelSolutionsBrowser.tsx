@@ -115,6 +115,12 @@ const saveSolverLogs = (logs: SolverLogEntry[]) => {
   }
 };
 
+const createTraceFilename = (levelId: number | null | undefined, suffix = 'trace') => {
+  const safeLevel = Number.isFinite(levelId) ? levelId : 'unknown';
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `phoneage-level-${safeLevel}-${suffix}-${stamp}.html`;
+};
+
 const tracePathToNode = (trace: SolverTrace, nodeId: number | null): string[] => {
   if (nodeId == null) return [];
   const path: string[] = [];
@@ -231,12 +237,18 @@ export const LevelSolutionsBrowser: React.FC = () => {
     setSolverLogs((prev) => [entry, ...prev].slice(0, MAX_SOLVER_LOG_ENTRIES));
   }, []);
 
-  const openTrace = useCallback((trace: SolverTrace) => {
+  const downloadTrace = useCallback((trace: SolverTrace, suffix = 'trace') => {
     const html = generateSolverTraceHTML(trace);
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = createTraceFilename(trace.levelId ?? null, suffix);
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }, []);
 
   const solveOne = useCallback(async (id: number) => {
@@ -252,7 +264,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
       }));
       appendSolverLog(buildSolverLogEntry(id, startedAt, finishedAt, result, null, result.trace ?? trace, SINGLE_SOLVE_OPTS), result.trace ?? trace);
       if (!result.solved && result.trace) {
-        openTrace(result.trace);
+        downloadTrace(result.trace, 'unsolved');
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -260,7 +272,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
       setSolveStatus((prev) => ({ ...prev, [id]: { status: 'error', error: error.message } }));
       appendSolverLog(buildSolverLogEntry(id, startedAt, finishedAt, null, error, trace, SINGLE_SOLVE_OPTS), trace);
     }
-  }, [appendSolverLog, openTrace]);
+  }, [appendSolverLog, downloadTrace]);
 
   const filteredLevels = useMemo(() => {
     const q = search.trim();
@@ -325,7 +337,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
             }));
             appendSolverLog(buildSolverLogEntry(id, startedAt, finishedAt, result, null, result.trace ?? trace, BATCH_SOLVE_OPTS), result.trace ?? trace);
             if (!result.solved && result.trace) {
-              openTrace(result.trace);
+              downloadTrace(result.trace, 'unsolved');
             }
           } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
@@ -340,7 +352,7 @@ export const LevelSolutionsBrowser: React.FC = () => {
       }
       setBatchRunning(false);
     },
-    [appendSolverLog, openTrace],
+    [appendSolverLog, downloadTrace],
   );
 
   const selectedLevel = useMemo(
@@ -666,10 +678,10 @@ export const LevelSolutionsBrowser: React.FC = () => {
                                 {trace ? (
                                   <button
                                     type="button"
-                                    onClick={() => openTrace(trace)}
+                                    onClick={() => downloadTrace(trace, 'trace')}
                                     className="h-8 rounded-xl border border-amber-300/30 bg-amber-500/15 px-2.5 text-[10px] font-bold uppercase tracking-wide text-amber-100 hover:bg-amber-500/25"
                                   >
-                                    View Trace
+                                    Download Trace
                                   </button>
                                 ) : log.traceAvailable ? (
                                   <span className="text-[10px] text-stone-500">Full trace expired after reload</span>
@@ -914,10 +926,10 @@ export const LevelSolutionsBrowser: React.FC = () => {
                           return (
                             <button
                               type="button"
-                              onClick={() => openTrace(selectedEntry.solution!.trace!)}
+                              onClick={() => downloadTrace(selectedEntry.solution!.trace!, 'trace')}
                               className="ml-2 rounded-lg border border-amber-300/30 bg-amber-500/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-100 hover:bg-amber-500/25"
                             >
-                              {traceLabel}
+                              Download Trace
                             </button>
                           );
                         })() : null}

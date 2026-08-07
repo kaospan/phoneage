@@ -165,7 +165,7 @@ export const LevelLab: React.FC = () => {
   const generateCampaignAndWrite = async () => {
     if (isGenerating) return;
     const confirmed = window.confirm(
-      "Generate 1000 candidates and overwrite local level overrides 101-200 with the best 100 solved levels?",
+      "Generate 1000 candidates and overwrite local level overrides 101-200 with the best solved levels by difficulty bands?\n\nEasy: 101-125\nMedium: 126-150\nHard: 151-175\nExpert: 176-200",
     );
     if (!confirmed) return;
 
@@ -200,7 +200,7 @@ export const LevelLab: React.FC = () => {
       setCandidates(merged);
       setSelectedId(result.promoted[0]?.id ?? merged[0]?.id ?? null);
       setAllLevels(getAllLevels());
-      const message = `Generated ${result.attempted} candidates and wrote ${result.promoted.length} solved levels to 101-200.`;
+      const message = `Generated ${result.attempted} candidates and wrote ${result.promoted.length} solved levels to 101-200 (Easy 101-125, Medium 126-150, Hard 151-175, Expert 176-200).`;
       setCampaignSummary(message);
       if (result.promoted.length === 100) {
         toast.success(message);
