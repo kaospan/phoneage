@@ -3382,19 +3382,11 @@ export const PuzzleGame = () => {
 
     if (!hasStartedGame) {
       return (
-        <div className="relative flex h-[100svh] w-full items-center justify-center overflow-hidden bg-[#080b08] px-5 py-6">
-          <img
-            src={menuArt}
-            alt="Stone Age"
-            className="absolute inset-0 h-full w-full object-cover opacity-80"
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.28)_0%,rgba(0,0,0,0.45)_48%,rgba(0,0,0,0.72)_100%)]" />
+        <div className="relative flex h-[100svh] w-full items-center justify-center overflow-hidden bg-gradient-to-br from-stone-900 via-stone-800 to-stone-950 px-5 py-6">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.15),transparent_55%),radial-gradient(circle_at_bottom_left,rgba(52,211,153,0.12),transparent_55%)]" />
           <div className="relative z-10 flex w-full max-w-3xl flex-col items-center text-center">
-            <div
-              className="text-[clamp(4rem,13vw,9rem)] font-black uppercase leading-none text-stone-50"
-              style={{ textShadow: "0 8px 0 rgba(54,32,15,0.75), 0 20px 42px rgba(0,0,0,0.75)" }}
-            >
-              Stone Age
+            <div className="text-[clamp(4rem,13vw,9rem)] font-black uppercase leading-none text-stone-50 drop-shadow-[0_8px_0_rgba(54,32,15,0.75)]">
+              PhoneAge
             </div>
             <Button
               onClick={startGameFromTitle}
