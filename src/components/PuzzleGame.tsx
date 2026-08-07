@@ -3234,33 +3234,37 @@ export const PuzzleGame = () => {
       />
     );
 
+    const restartLevelButton = (
+      <Button
+        onClick={resetLevel}
+        variant="outline"
+        size="sm"
+        disabled={isComplete || localPlayer?.isGliding}
+        className={[
+          isMobilePortrait
+            ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
+            : isCompact3DView
+              ? "h-9 w-9 shrink-0 p-0 text-lg font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+              : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
+          // Subtle recurring nudge toward the way out whenever no move is currently possible
+          // — not gated to "first time ever" like the Stuck? tutorial, since it should still
+          // catch the eye every time this happens, not just once per player.
+          isStuck ? "animate-stuck-hint-pulse" : "",
+        ].join(" ")}
+        title="Restart level (R)"
+      >
+        {/* Icon-only on mobile (no room for a label there), but enlarged and amber-accented so
+            it reads as a distinct, important action among the neighboring same-size icon
+            buttons — spelled out with text on desktop instead, where there's room for it. */}
+        <RotateCcw className="h-5 w-5" />
+        {!isMobilePortrait && !isCompact3DView && (
+          <span className="text-sm">Restart Level</span>
+        )}
+      </Button>
+    );
+
     const secondaryHudButtons = (
       <>
-        <Button
-          onClick={resetLevel}
-          variant="outline"
-          size="sm"
-          disabled={isComplete || localPlayer?.isGliding}
-          className={[
-            isMobilePortrait
-              ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
-              : isCompact3DView
-                ? "h-9 w-9 shrink-0 p-0 text-lg font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
-                : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
-            // Subtle recurring nudge toward the way out whenever no move is currently possible
-            // — not gated to "first time ever" like the Stuck? tutorial, since it should still
-            // catch the eye every time this happens, not just once per player.
-            isStuck ? "animate-stuck-hint-pulse" : "",
-          ].join(" ")}
-          title="Restart level (R)"
-        >
-          {/* Icon-only on mobile (no room for a label there), but enlarged and amber-accented so
-              it reads as a distinct, important action among the neighboring same-size icon
-              buttons — spelled out with text on desktop instead, where there's room for it. */}
-          <span aria-hidden>↻</span>
-          <span className="text-sm">Restart Level</span>
-        </Button>
-
         {campaignDialog}
 
         <Button
@@ -4110,9 +4114,10 @@ export const PuzzleGame = () => {
             className="pointer-events-none fixed bottom-2 right-2 z-50 flex max-w-[calc(100vw-1rem)] items-end justify-end gap-2"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-            {showGameTools && (
-              <div className="pointer-events-auto flex max-w-[calc(100vw-4.75rem)] items-center gap-1 overflow-x-auto rounded-lg border border-white/15 bg-[#12130f]/92 px-1 py-1 shadow-[0_12px_42px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-                {secondaryHudButtons}
+                {showGameTools && (
+                  <div className="pointer-events-auto flex max-w-[calc(100vw-4.75rem)] items-center gap-1 overflow-x-auto rounded-lg border border-white/15 bg-[#12130f]/92 px-1 py-1 shadow-[0_12px_42px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                    {restartLevelButton}
+                    {secondaryHudButtons}
                 {!isMobilePortrait && (
                   <Button
                     onClick={() => void toggleFullscreenMode()}
@@ -4202,18 +4207,38 @@ export const PuzzleGame = () => {
             ) : null}
 
             {desktopShellActive && (
-              <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 hidden xl:flex items-end justify-between gap-4">
-                <div className="max-w-md rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md">
-                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Adventure Notes</div>
-                  <div className="mt-1 text-sm leading-relaxed text-stone-200">
-                    Reach the cave, route arrows across the void, and keep the clock from eating your lunch.
+              <>
+                <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 hidden xl:flex items-end justify-between gap-4">
+                  <div className="max-w-md rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md">
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Adventure Notes</div>
+                    <div className="mt-1 text-sm leading-relaxed text-stone-200">
+                      Reach the cave, route arrows across the void, and keep the clock from eating your lunch.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md text-sm text-stone-200">
+                    <BookOpen className="h-4 w-4 text-amber-200" />
+                    <span>View {VIEW_MODE_LABELS[viewMode]} • Theme {activeThemeKey}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md text-sm text-stone-200">
-                  <BookOpen className="h-4 w-4 text-amber-200" />
-                  <span>View {VIEW_MODE_LABELS[viewMode]} • Theme {activeThemeKey}</span>
+                {/* Restart Level — fixed at the bottom-left corner on desktop, with full text label */}
+                <div className="fixed bottom-4 left-4 z-40 hidden xl:block">
+                  <Button
+                    onClick={resetLevel}
+                    variant="outline"
+                    size="sm"
+                    disabled={isComplete || localPlayer?.isGliding}
+                    className={[
+                      "h-10 gap-1.5 px-3 text-base font-semibold rounded-xl border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25",
+                      // Subtle recurring nudge toward the way out whenever no move is currently possible
+                      isStuck ? "animate-stuck-hint-pulse" : "",
+                    ].join(" ")}
+                    title="Restart level (R)"
+                  >
+                    <RotateCcw className="h-5 w-5" />
+                    <span className="text-sm">Restart Level</span>
+                  </Button>
                 </div>
-              </div>
+              </>
             )}
 
             {viewMode === "top" ? (
