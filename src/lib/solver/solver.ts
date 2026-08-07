@@ -26,6 +26,11 @@ interface QueueItem {
 
 class PriorityFrontier {
   private heap: QueueItem[] = [];
+  private bfs = false;
+
+  setBfs(value: boolean) {
+    this.bfs = value;
+  }
 
   get length() {
     return this.heap.length;
@@ -49,6 +54,7 @@ class PriorityFrontier {
 
   private isBefore(a: QueueItem, b: QueueItem) {
     if (a.priority !== b.priority) return a.priority < b.priority;
+    if (this.bfs) return a.seq < b.seq;
     if (a.distanceToGoal !== b.distanceToGoal) return a.distanceToGoal < b.distanceToGoal;
     return a.seq < b.seq;
   }
@@ -82,7 +88,7 @@ export async function solveLevel(
   levelId: number,
   start: SolveState,
   goalCaves: Position[],
-  opts: Required<Pick<SolveOptions, "maxMsPerLevel" | "maxNodesPerLevel" | "maxDepth">> & Pick<SolveOptions, "onProgress" | "trace">
+  opts: Required<Pick<SolveOptions, "maxMsPerLevel" | "maxNodesPerLevel" | "maxDepth">> & Pick<SolveOptions, "onProgress" | "trace" | "searchMode">
 ): Promise<LevelSolution> {
   const t0 = performance.now();
   const startKey = stateKey(start);
@@ -133,12 +139,14 @@ export async function solveLevel(
   const prev = new Map<string, { p: string; a: Action }>();
   const depth = new Map<string, number>();
   const frontier = new PriorityFrontier();
+  if (opts.searchMode === "bfs") frontier.setBfs(true);
   let queueSeq = 0;
   const startDistance = manhattanToGoal(start.playerPos, goalCaves);
+  const startPriority = opts.searchMode === "bfs" ? 0 : startDistance;
   frontier.push({
     k: startKey,
     s: start,
-    priority: startDistance,
+    priority: startPriority,
     distanceToGoal: startDistance,
     seq: queueSeq++,
   });
@@ -317,10 +325,11 @@ export async function solveLevel(
         };
       }
       const distanceToGoal = manhattanToGoal(succ.state.playerPos, goalCaves);
+      const priority = opts.searchMode === "bfs" ? nd : nd + distanceToGoal;
       frontier.push({
         k: nk,
         s: succ.state,
-        priority: nd + distanceToGoal,
+        priority,
         distanceToGoal,
         seq: queueSeq++,
       });
