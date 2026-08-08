@@ -3760,10 +3760,27 @@ export const PuzzleGame = () => {
                 ←
               </Button>
 
-               <div className="flex items-center gap-2 px-1 whitespace-nowrap">
-                 <span className="text-primary font-black text-sm">
-                   {isCompact3DView ? `Level ${currentLevel.id}` : `L${currentLevel.id}`}
-                 </span>
+                <div className="flex items-center gap-1 px-1 whitespace-nowrap">
+                  <span className="text-primary font-black text-sm">
+                    {isCompact3DView ? `Level ${currentLevel.id}` : `L${currentLevel.id}`}
+                  </span>
+                  <Button
+                    onClick={() => {
+                      if (currentLevelIndex < allLevels.length - 1) {
+                        if (goToLevelIndex(currentLevelIndex + 1)) pushHudMessage("Next level");
+                      } else {
+                        pushHudMessage("No more levels");
+                      }
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    disabled={nextLevelLocked}
+                    className="h-6 w-6 shrink-0 rounded-lg border border-white/10 bg-white/5 p-0 text-xs font-bold text-stone-50 hover:bg-white/10"
+                    aria-label="Next level (N)"
+                    title={nextLevelTitle}
+                  >
+                    →
+                  </Button>
                  {!isCompact3DView && (
                    <span className="text-foreground font-medium text-xs">{`M:${moves}`}</span>
                  )}
@@ -3937,11 +3954,28 @@ export const PuzzleGame = () => {
                   </Button>
 
                    <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-white/10 bg-black/20 px-2 py-1.5">
-                     <div className="rounded-2xl border border-amber-300/25 bg-amber-500/10 px-2 py-1.5">
-                       <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Stage</div>
-                       <div className="mt-1 text-base font-black text-amber-100">L{currentLevel.id}</div>
-                     </div>
-                     <div className="rounded-2xl border border-white/10 bg-white/5 px-2 py-1.5">
+                    <div className="rounded-2xl border border-amber-300/25 bg-amber-500/10 px-2 py-1.5">
+                        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Stage</div>
+                        <div className="mt-1 text-base font-black text-amber-100">L{currentLevel.id}</div>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          if (currentLevelIndex < allLevels.length - 1) {
+                            if (goToLevelIndex(currentLevelIndex + 1)) pushHudMessage("Next level");
+                          } else {
+                            pushHudMessage("No more levels");
+                          }
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        disabled={nextLevelLocked}
+                        className="h-7 w-7 shrink-0 rounded-xl border border-white/10 bg-white/5 p-0 text-sm font-bold text-stone-50 hover:bg-white/10"
+                        aria-label="Next level (N)"
+                        title={nextLevelTitle}
+                      >
+                        →
+                      </Button>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 px-2 py-1.5">
                        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Moves</div>
                        <div className="mt-1 text-base font-black text-stone-50">{moves}</div>
                      </div>
@@ -3995,21 +4029,6 @@ export const PuzzleGame = () => {
                       START WHEN READY
                     </Button>
                   )}
-
-                  <Button
-                    onClick={resetLevel}
-                    variant="ghost"
-                    size="sm"
-                    disabled={isComplete || localPlayer?.isGliding}
-                    className={[
-                      "h-9 rounded-2xl border border-white/10 bg-white/5 px-2 text-stone-50 hover:bg-white/10",
-                      isStuck ? "animate-stuck-hint-pulse" : "",
-                    ].join(" ")}
-                    title="Restart level (R)"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Restart Level
-                  </Button>
 
                   <HowToPlayDialog disabled={shouldRotateGate} />
 
@@ -4151,6 +4170,24 @@ export const PuzzleGame = () => {
             </div>
           </div>
         )}
+        <Button
+          onClick={resetLevel}
+          variant="ghost"
+          size="sm"
+          disabled={isComplete || localPlayer?.isGliding}
+          className={[
+            "pointer-events-auto fixed bottom-4 left-4 z-50 shrink-0 rounded-2xl border bg-amber-400/15 p-0 text-amber-200 shadow-[0_10px_34px_rgba(0,0,0,0.52)] backdrop-blur-xl hover:bg-amber-400/25",
+            isMobile
+              ? "h-12 w-12 text-2xl font-black border-amber-300/60"
+              : "h-12 gap-2 px-4 text-base font-semibold border-amber-300/50",
+            isStuck ? "animate-stuck-hint-pulse" : "",
+          ].join(" ")}
+          aria-label="Restart level (R)"
+          title="Restart level (R)"
+        >
+          <RotateCcw />
+          {!isMobile && <span>Restart Level</span>}
+        </Button>
         <div
           ref={gestureSurfaceRef}
           data-touch-controls-target
