@@ -6,7 +6,6 @@ export interface SolveOptions {
   maxDepth?: number;
   onProgress?: (msg: string) => void;
   trace?: SolverTrace;
-  searchMode?: "astar" | "bfs";
 }
 
 export interface LevelSolution {

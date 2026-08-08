@@ -57,10 +57,7 @@ export function CampaignJourneyOverlay({
 
   const [dinoPos, setDinoPos] = useState<DinoPos | null>(() => (atPoint ? { xFrac: atPoint.xFrac, y: atPoint.y } : null));
   const [isWalking, setIsWalking] = useState(false);
-  const [facingLeft, setFacingLeft] = useState(false);
-  const walkPathRef = useRef<Array<{ xFrac: number; y: number }> | null>(null);
-  const walkStepRef = useRef(0);
-  const [segmentDuration, setSegmentDuration] = useState(WALK_DURATION_MS);
+  const facingLeft = toPoint && atPoint ? toPoint.xFrac < atPoint.xFrac : false;
 
   const fireDone = () => {
     if (doneFiredRef.current) return;
@@ -77,33 +74,12 @@ export function CampaignJourneyOverlay({
     node.scrollTop = Math.max(0, targetY - node.clientHeight / 2);
 
     if (!toPoint) return;
-
-    // Follow the actual snake path through all intermediate nodes (not a straight line)
-    const startIdx = points.findIndex((p) => p.item.id === dinoAtLevelId);
-    const endIdx = points.findIndex((p) => p.item.id === walkToLevelId);
-    if (startIdx < 0 || endIdx < 0) return;
-
-    const pathSlice =
-      startIdx <= endIdx
-        ? points.slice(startIdx, endIdx + 1)
-        : points.slice(endIdx, startIdx + 1).reverse();
-
-    const path = pathSlice.map((p) => ({ xFrac: p.xFrac, y: p.y }));
-    walkPathRef.current = path;
-    walkStepRef.current = 1;
-    doneFiredRef.current = false;
-    setSegmentDuration(Math.max(250, WALK_DURATION_MS / Math.max(1, path.length - 1)));
-
     const timer = setTimeout(() => {
       setIsWalking(true);
-      if (path.length > 1) {
-        setFacingLeft(path[1].xFrac < path[0].xFrac);
-        setDinoPos({ xFrac: path[1].xFrac, y: path[1].y });
-      } else {
-        fireDone();
-      }
+      setDinoPos({ xFrac: toPoint.xFrac, y: toPoint.y });
     }, WALK_DELAY_MS);
     return () => clearTimeout(timer);
+    // Only re-run when the walk endpoints actually change (levelIds), not on every points re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dinoAtLevelId, walkToLevelId]);
 
@@ -198,35 +174,19 @@ export function CampaignJourneyOverlay({
               style={{
                 left: `${dinoPos.xFrac * 100}%`,
                 top: dinoPos.y,
-                width: DOT_SIZE * 1.4,
-                height: DOT_SIZE * 1.4,
+                width: DOT_SIZE * 1.1,
+                height: DOT_SIZE * 1.1,
                 transform: "translate(-50%, -66%)",
-                transition: `left ${segmentDuration}ms ease-in-out, top ${segmentDuration}ms ease-in-out`,
+                transition: `left ${WALK_DURATION_MS}ms ease-in-out, top ${WALK_DURATION_MS}ms ease-in-out`,
               }}
               onTransitionEnd={(e) => {
-                if (e.propertyName === "left") {
-                  const path = walkPathRef.current;
-                  if (!path) {
-                    fireDone();
-                    return;
-                  }
-                  walkStepRef.current += 1;
-                  if (walkStepRef.current < path.length) {
-                    const next = path[walkStepRef.current];
-                    if (dinoPos) {
-                      setFacingLeft(next.xFrac < dinoPos.xFrac);
-                    }
-                    setDinoPos({ xFrac: next.xFrac, y: next.y });
-                  } else {
-                    fireDone();
-                  }
-                }
+                if (e.propertyName === "left") fireDone();
               }}
             >
               <img
                 src={dinotoonUrl}
                 alt=""
-                className="h-full w-full object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.7)]"
+                className="h-full w-full object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]"
                 style={{ transform: facingLeft ? "scaleX(-1)" : undefined }}
               />
             </div>

@@ -584,7 +584,7 @@ export const PuzzleGame = () => {
   >(null);
   const [leftShellPanelOpen, setLeftShellPanelOpen] = useState(false);
   const [rightShellPanelOpen, setRightShellPanelOpen] = useState(false);
-  const [showGameTools, setShowGameTools] = useState(true);
+  const [showGameTools, setShowGameTools] = useState(false);
   const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
@@ -1023,11 +1023,11 @@ export const PuzzleGame = () => {
 
   useEffect(() => {
     if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
-    if (!isGloballyStuck) return;
+    if (!isPlayerStuck) return;
     if (getSeenTutorials().has("stuck-reminder")) return;
     const def = getTutorialDefinition("stuck-reminder");
     if (def) setTutorialQueue([def]);
-  }, [isGloballyStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
+  }, [isPlayerStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
 
   // Local move availability only catches "no move from THIS exact tile" — it can't see a dead
   // end the player backed themselves into a few moves ago, like relaying every bridging arrow
@@ -1040,6 +1040,10 @@ export const PuzzleGame = () => {
   const [isGloballyStuck, setIsGloballyStuck] = useState(false);
   const globalStuckRequestRef = useRef(0);
   useEffect(() => {
+    if (isPlayerStuck) {
+      setIsGloballyStuck(false);
+      return;
+    }
     if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
     if (!currentLevel || renderGrid.length === 0) return;
     if (isBuilding || isComplete || isTimeUp) return;
@@ -1066,6 +1070,14 @@ export const PuzzleGame = () => {
 
   const isStuck = isPlayerStuck || isGloballyStuck;
 
+  useEffect(() => {
+    if (!tutorialsEnabled || isReplaying || isTutorialActive) return;
+    if (!isGloballyStuck) return;
+    if (getSeenTutorials().has("stuck-reminder")) return;
+    const def = getTutorialDefinition("stuck-reminder");
+    if (def) setTutorialQueue([def]);
+  }, [isGloballyStuck, tutorialsEnabled, isReplaying, isTutorialActive]);
+
   const handleTutorialsDone = useCallback((shown: TutorialDefinition[]) => {
     for (const t of shown) markTutorialSeen(t.id);
     setTutorialQueue([]);
@@ -1078,12 +1090,12 @@ export const PuzzleGame = () => {
     remoteArrowHintMoveOriginRef.current = null;
   }, [currentLevel?.id]);
 
-  // Show the arrow-selection HUD hint once, only on the first arrow selection in levels 2-3.
+  // Show the arrow-selection HUD hint once, only on the first arrow selection in levels 1-3.
   useEffect(() => {
     if (!selectedArrow) return;
     if (arrowSelectHintSeenRef.current) return;
     const levelId = currentLevel?.id;
-    if (levelId == null || levelId < 2 || levelId > 3) return;
+    if (levelId == null || levelId > 3) return;
     arrowSelectHintSeenRef.current = true;
     try {
       localStorage.setItem("arrowSelectHintSeen", "1");
@@ -3222,37 +3234,33 @@ export const PuzzleGame = () => {
       />
     );
 
-    const restartLevelButton = (
-      <Button
-        onClick={resetLevel}
-        variant="outline"
-        size="sm"
-        disabled={isComplete || localPlayer?.isGliding}
-        className={[
-          isMobilePortrait
-            ? "h-12 w-12 p-0 text-2xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
-            : isCompact3DView
-              ? "h-10 w-10 shrink-0 p-0 text-xl font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
-              : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
-          // Subtle recurring nudge toward the way out whenever no move is currently possible
-          // — not gated to "first time ever" like the Stuck? tutorial, since it should still
-          // catch the eye every time this happens, not just once per player.
-          isStuck ? "animate-stuck-hint-pulse" : "",
-        ].join(" ")}
-        title="Restart level (R)"
-      >
-        {/* Icon-only on mobile (no room for a label there), but enlarged and amber-accented so
-            it reads as a distinct, important action among the neighboring same-size icon
-            buttons — spelled out with text on desktop instead, where there's room for it. */}
-        <RotateCcw className="h-5 w-5" />
-        {!isMobilePortrait && !isCompact3DView && (
-          <span className="text-sm">Restart Level</span>
-        )}
-      </Button>
-    );
-
     const secondaryHudButtons = (
       <>
+        <Button
+          onClick={resetLevel}
+          variant="outline"
+          size="sm"
+          disabled={isComplete || localPlayer?.isGliding}
+          className={[
+            isMobilePortrait
+              ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
+              : isCompact3DView
+                ? "h-9 w-9 shrink-0 p-0 text-lg font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+                : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
+            // Subtle recurring nudge toward the way out whenever no move is currently possible
+            // — not gated to "first time ever" like the Stuck? tutorial, since it should still
+            // catch the eye every time this happens, not just once per player.
+            isStuck ? "animate-stuck-hint-pulse" : "",
+          ].join(" ")}
+          title="Restart level (R)"
+        >
+          {/* Icon-only on mobile (no room for a label there), but enlarged and amber-accented so
+              it reads as a distinct, important action among the neighboring same-size icon
+              buttons — spelled out with text on desktop instead, where there's room for it. */}
+          <span aria-hidden>↻</span>
+          <span className="text-sm">Restart Level</span>
+        </Button>
+
         {campaignDialog}
 
         <Button
@@ -4102,13 +4110,9 @@ export const PuzzleGame = () => {
             className="pointer-events-none fixed bottom-2 right-2 z-50 flex max-w-[calc(100vw-1rem)] items-end justify-end gap-2"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
-                {/* Restart Level — always visible, outside the tools toggle */}
-                <div className="pointer-events-auto">
-                  {restartLevelButton}
-                </div>
-                {showGameTools && (
-                  <div className="pointer-events-auto flex max-w-[calc(100vw-4.75rem)] items-center gap-1 overflow-x-auto rounded-lg border border-white/15 bg-[#12130f]/92 px-1 py-1 shadow-[0_12px_42px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-                    {secondaryHudButtons}
+            {showGameTools && (
+              <div className="pointer-events-auto flex max-w-[calc(100vw-4.75rem)] items-center gap-1 overflow-x-auto rounded-lg border border-white/15 bg-[#12130f]/92 px-1 py-1 shadow-[0_12px_42px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                {secondaryHudButtons}
                 {!isMobilePortrait && (
                   <Button
                     onClick={() => void toggleFullscreenMode()}
@@ -4198,38 +4202,18 @@ export const PuzzleGame = () => {
             ) : null}
 
             {desktopShellActive && (
-              <>
-                <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 hidden xl:flex items-end justify-between gap-4">
-                  <div className="max-w-md rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md">
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Adventure Notes</div>
-                    <div className="mt-1 text-sm leading-relaxed text-stone-200">
-                      Reach the cave, route arrows across the void, and keep the clock from eating your lunch.
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md text-sm text-stone-200">
-                    <BookOpen className="h-4 w-4 text-amber-200" />
-                    <span>View {VIEW_MODE_LABELS[viewMode]} • Theme {activeThemeKey}</span>
+              <div className="pointer-events-none absolute inset-x-4 bottom-4 z-30 hidden xl:flex items-end justify-between gap-4">
+                <div className="max-w-md rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md">
+                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Adventure Notes</div>
+                  <div className="mt-1 text-sm leading-relaxed text-stone-200">
+                    Reach the cave, route arrows across the void, and keep the clock from eating your lunch.
                   </div>
                 </div>
-                {/* Restart Level — fixed at the bottom-left corner on desktop, with full text label */}
-                <div className="fixed bottom-4 left-4 z-40 hidden xl:block">
-                  <Button
-                    onClick={resetLevel}
-                    variant="outline"
-                    size="sm"
-                    disabled={isComplete || localPlayer?.isGliding}
-                    className={[
-                      "h-10 gap-1.5 px-3 text-base font-semibold rounded-xl border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25",
-                      // Subtle recurring nudge toward the way out whenever no move is currently possible
-                      isStuck ? "animate-stuck-hint-pulse" : "",
-                    ].join(" ")}
-                    title="Restart level (R)"
-                  >
-                    <RotateCcw className="h-5 w-5" />
-                    <span className="text-sm">Restart Level</span>
-                  </Button>
+                <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-black/28 px-4 py-3 backdrop-blur-md text-sm text-stone-200">
+                  <BookOpen className="h-4 w-4 text-amber-200" />
+                  <span>View {VIEW_MODE_LABELS[viewMode]} • Theme {activeThemeKey}</span>
                 </div>
-              </>
+              </div>
             )}
 
             {viewMode === "top" ? (
