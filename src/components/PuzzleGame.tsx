@@ -3236,31 +3236,6 @@ export const PuzzleGame = () => {
 
     const secondaryHudButtons = (
       <>
-        <Button
-          onClick={resetLevel}
-          variant="outline"
-          size="sm"
-          disabled={isComplete || localPlayer?.isGliding}
-          className={[
-            isMobilePortrait
-              ? "h-11 w-11 p-0 text-xl font-black border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25"
-              : isCompact3DView
-                ? "h-9 w-9 shrink-0 p-0 text-lg font-black border-amber-300/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
-                : "h-9 gap-1.5 px-3 text-base font-semibold hover:bg-primary/20",
-            // Subtle recurring nudge toward the way out whenever no move is currently possible
-            // — not gated to "first time ever" like the Stuck? tutorial, since it should still
-            // catch the eye every time this happens, not just once per player.
-            isStuck ? "animate-stuck-hint-pulse" : "",
-          ].join(" ")}
-          title="Restart level (R)"
-        >
-          {/* Icon-only on mobile (no room for a label there), but enlarged and amber-accented so
-              it reads as a distinct, important action among the neighboring same-size icon
-              buttons — spelled out with text on desktop instead, where there's room for it. */}
-          <span aria-hidden>↻</span>
-          <span className="text-sm">Restart Level</span>
-        </Button>
-
         {campaignDialog}
 
         <Button
@@ -4193,7 +4168,7 @@ export const PuzzleGame = () => {
           data-touch-controls-target
           data-testid="game-board-stage"
           className={[
-            isMobilePortrait ? "fixed inset-0 z-20" : "relative z-20 w-full min-h-0 flex-1",
+            isMobilePortrait ? "fixed inset-0 z-[55]" : "relative z-[55] w-full min-h-0 flex-1",
             desktopShellActive ? `px-2 pb-2 pt-20 xl:pb-3 ${desktopBoardInsetClass}` : "",
           ].join(" ")}
           onMouseDown={handleMouseDown}
