@@ -1,8 +1,8 @@
 import { referenceSpriteUrls } from '@/data/assetCatalog';
 import type { CellReference } from '@/lib/spriteMatching';
 
-const STORAGE_KEY = 'stone-age-cell-references';
-const SEEDED_KEY = 'stone-age-default-references';
+const STORAGE_KEY = 'phoneage-cell-references';
+const SEEDED_KEY = 'phoneage-default-references';
 
 const loadImage = (url: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {

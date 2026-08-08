@@ -77,7 +77,7 @@ describe("recorded-run solver regressions", () => {
     const level = getAllLevels().find((candidate) => candidate.id === 8);
     expect(level).toBeTruthy();
 
-    window.localStorage.setItem("stone-age-recorded-run-8", JSON.stringify(level8RecordedRun));
+    window.localStorage.setItem("phoneage-recorded-run-8", JSON.stringify(level8RecordedRun));
     try {
       const result = await solveGrid(
         level!.grid as CellType[][],
@@ -104,7 +104,7 @@ describe("recorded-run solver regressions", () => {
         "P:R",
       ]);
     } finally {
-      window.localStorage.removeItem("stone-age-recorded-run-8");
+      window.localStorage.removeItem("phoneage-recorded-run-8");
     }
   }, 35000);
 
@@ -125,7 +125,7 @@ describe("recorded-run solver regressions", () => {
       actions: recordedRunFromSolverActions(solution),
     };
 
-    window.localStorage.setItem("stone-age-recorded-run-12", JSON.stringify(recordedRun));
+    window.localStorage.setItem("phoneage-recorded-run-12", JSON.stringify(recordedRun));
     try {
       const result = await solveGrid(
         level!.grid as CellType[][],
@@ -138,7 +138,7 @@ describe("recorded-run solver regressions", () => {
       expect(result.solved, result.reason).toBe(true);
       expect(result.reason).toBe("Learned from recorded run after bounded search failed");
     } finally {
-      window.localStorage.removeItem("stone-age-recorded-run-12");
+      window.localStorage.removeItem("phoneage-recorded-run-12");
     }
   }, 35000);
 });

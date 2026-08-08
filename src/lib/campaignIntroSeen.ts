@@ -1,4 +1,4 @@
-const SEEN_KEY = "stone-age-campaign-intro-seen";
+const SEEN_KEY = "phoneage-campaign-intro-seen";
 
 export const hasSeenCampaignIntro = (): boolean => {
   if (typeof window === "undefined") return true;

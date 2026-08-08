@@ -7,7 +7,7 @@ export interface AlignmentProfile {
   updatedAt: number;
 }
 
-const STORAGE_KEY = 'stone-age-mapper-alignment-profile-v1';
+const STORAGE_KEY = 'phoneage-mapper-alignment-profile-v1';
 
 export const loadAlignmentProfile = (): AlignmentProfile | null => {
   try {

@@ -1,4 +1,4 @@
-const REMOTE_ARROW_HINT_KEY = "stone-age-remote-arrow-hint-done";
+const REMOTE_ARROW_HINT_KEY = "phoneage-remote-arrow-hint-done";
 
 /** True once the player has completed the in-game remote-arrow-control walkthrough (select an
  * arrow from a distance, move it, then switch control back to the character) — a one-time

@@ -1,4 +1,4 @@
-# Stone Age
+# Phoneage
 
 An arrow-and-terrain traversal puzzle inspired by retro DOS logic games. You guide a green dino across hazardous terrain to reach the cave, riding directional arrow blocks across gaps of void and water, collecting keys, breaking rocks, and warping through teleport pads. 200 hand-tuned/generated campaign levels, cloud-synced progress, an in-app level editor, and a full interactive tutorial system.
 

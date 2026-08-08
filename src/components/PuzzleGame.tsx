@@ -3477,7 +3477,7 @@ export const PuzzleGame = () => {
                   <div className="absolute inset-0 bg-[#0b0907]" />
                   <img
                     src={menuArt}
-                    alt="Stone Age art"
+                    alt="Phoneage art"
                     className="pointer-events-none absolute left-2 top-2 h-[78%] w-[78%] object-contain object-left-top opacity-95"
                     style={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.45))" }}
                   />
@@ -3488,7 +3488,7 @@ export const PuzzleGame = () => {
                       Story Mode
                     </div>
                     <div className="mt-3 text-4xl font-black uppercase tracking-[0.08em] text-stone-50">
-                      Stone Age
+                      Phoneage
                     </div>
                     <div className="mt-2 max-w-[17rem] text-sm leading-relaxed text-stone-300">
                       A warmer, more cinematic puzzle shell inspired by your reference boards and menus.

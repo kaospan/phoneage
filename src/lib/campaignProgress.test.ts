@@ -129,7 +129,7 @@ describe("localStorage persistence", () => {
   });
 
   it("falls back to defaults on corrupted storage instead of throwing", () => {
-    localStorage.setItem("stone-age-campaign-progress-v1", "{not json");
+    localStorage.setItem("phoneage-campaign-progress-v1", "{not json");
     expect(() => loadCampaignProgress()).not.toThrow();
     expect(loadCampaignProgress().highestUnlockedLevelId).toBe(1);
   });

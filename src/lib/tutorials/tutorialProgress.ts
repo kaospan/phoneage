@@ -1,8 +1,8 @@
 import type { TutorialId } from "./tutorialTypes";
 
 export const TUTORIALS_ENABLED_UPDATED_EVENT = "tutorials-enabled-updated";
-const ENABLED_KEY = "stone-age-tutorials-enabled";
-const SEEN_KEY = "stone-age-tutorials-seen";
+const ENABLED_KEY = "phoneage-tutorials-enabled";
+const SEEN_KEY = "phoneage-tutorials-seen";
 
 export const getTutorialsEnabled = (): boolean => {
   if (typeof window === "undefined") return true;

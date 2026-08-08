@@ -1,6 +1,6 @@
 export const RECORD_MOVES_UPDATED_EVENT = 'record-moves-updated';
-const RECORD_MOVES_KEY = 'stone-age-record-moves-enabled';
-const RECORDED_RUN_KEY_PREFIX = 'stone-age-recorded-run-';
+const RECORD_MOVES_KEY = 'phoneage-record-moves-enabled';
+const RECORDED_RUN_KEY_PREFIX = 'phoneage-recorded-run-';
 
 export type RecordedInputCommand =
   | { type: 'move'; dx: number; dy: number }

@@ -1,5 +1,5 @@
-const MUSIC_KEY = "stone-age-music-enabled";
-export const MUSIC_ENABLED_UPDATED_EVENT = "stone-age-music-enabled-updated";
+const MUSIC_KEY = "phoneage-music-enabled";
+export const MUSIC_ENABLED_UPDATED_EVENT = "phoneage-music-enabled-updated";
 
 /** Music plays by default for everyone — only an explicit mute persists as "off". */
 export const getMusicEnabled = (): boolean => {

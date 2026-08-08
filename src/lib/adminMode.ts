@@ -1,5 +1,5 @@
 export const ADMIN_MODE_UPDATED_EVENT = 'admin-mode-updated';
-const ADMIN_MODE_KEY = 'stone-age-admin-mode';
+const ADMIN_MODE_KEY = 'phoneage-admin-mode';
 
 export const getAdminMode = (): boolean => {
   if (typeof window === 'undefined') return false;

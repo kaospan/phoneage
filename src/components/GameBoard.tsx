@@ -65,7 +65,7 @@ export const GameBoard = () => {
       {/* Header */}
       <div className="retro-border bg-card p-4 scanline">
         <h1 className="pixel-text text-3xl text-center text-primary mb-2">
-          === STONE AGE ===
+          === PHONEAGE ===
         </h1>
         <div className="flex justify-between text-foreground pixel-text text-sm">
           <span>SCORE: {Math.floor(score)}</span>

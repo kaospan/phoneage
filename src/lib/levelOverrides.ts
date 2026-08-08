@@ -1,6 +1,6 @@
 import { getAllLevels, shouldAllowLevelOverride, type ColorTheme } from '@/data/levels';
 
-export const LEVEL_OVERRIDES_UPDATED_EVENT = 'stone-age-level-overrides-updated';
+export const LEVEL_OVERRIDES_UPDATED_EVENT = 'phoneage-level-overrides-updated';
 
 export const notifyLevelOverridesUpdated = () => {
   if (typeof window === 'undefined') return;

@@ -11,8 +11,8 @@ export interface CellReference {
     locked?: boolean;
 }
 
-export const STORAGE_KEY = 'stone-age-cell-references';
-export const CELL_REFERENCES_UPDATED_EVENT = 'stone-age-cell-references-updated';
+export const STORAGE_KEY = 'phoneage-cell-references';
+export const CELL_REFERENCES_UPDATED_EVENT = 'phoneage-cell-references-updated';
 
 const notifyCellReferencesUpdated = () => {
     if (typeof window === 'undefined') return;

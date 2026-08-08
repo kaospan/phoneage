@@ -1,4 +1,4 @@
-const STORAGE_KEY = "stone-age-campaign-progress-v1";
+const STORAGE_KEY = "phoneage-campaign-progress-v1";
 const STORAGE_VERSION = 1;
 
 export interface CampaignLevelRecord {

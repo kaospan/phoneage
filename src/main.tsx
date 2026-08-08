@@ -13,6 +13,29 @@ const devLog = (...args: unknown[]) => {
 
 devLog('🚀 main.tsx starting...');
 
+// One-time migration from the app's old "stone-age-" localStorage prefix to "phoneage-", so
+// players who already unlocked levels / set preferences under the old name don't lose that
+// state when this ships. Copies rather than moves, so a rollback can't strand anyone either.
+const LEGACY_STORAGE_PREFIX = 'stone-age-';
+const CURRENT_STORAGE_PREFIX = 'phoneage-';
+
+const migrateLegacyStorageKeys = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const legacyKeys = Object.keys(localStorage).filter((k) => k.startsWith(LEGACY_STORAGE_PREFIX));
+    for (const legacyKey of legacyKeys) {
+      const newKey = CURRENT_STORAGE_PREFIX + legacyKey.slice(LEGACY_STORAGE_PREFIX.length);
+      if (localStorage.getItem(newKey) != null) continue;
+      const value = localStorage.getItem(legacyKey);
+      if (value != null) localStorage.setItem(newKey, value);
+    }
+  } catch {
+    // ignore storage failures — worst case, prefs/progress just reset to defaults
+  }
+};
+
+migrateLegacyStorageKeys();
+
 type LocalStorageSeed = {
   version: 1;
   generatedAt: string;
@@ -81,8 +104,8 @@ const maybeReloadOnceForNewBuild = () => {
   const buildId = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? '';
   if (!buildId) return;
 
-  const lastKey = 'stone-age-last-build-id';
-  const onceKey = `stone-age-reloaded-${buildId}`;
+  const lastKey = 'phoneage-last-build-id';
+  const onceKey = `phoneage-reloaded-${buildId}`;
   const last = localStorage.getItem(lastKey) ?? '';
   if (last !== buildId) {
     localStorage.setItem(lastKey, buildId);
@@ -101,7 +124,7 @@ const maybeReloadOnceForNewBuild = () => {
 // live, bypassing any HTTP cache via `cache: 'no-store'`, and offers a refresh instead of forcing
 // one — a forced reload mid-puzzle would be more disruptive than a stale tab.
 const VERSION_CHECK_INTERVAL_MS = 3 * 60 * 1000;
-const UPDATE_BANNER_ID = 'stone-age-update-banner';
+const UPDATE_BANNER_ID = 'phoneage-update-banner';
 
 const showUpdateBanner = () => {
   if (document.getElementById(UPDATE_BANNER_ID)) return;
