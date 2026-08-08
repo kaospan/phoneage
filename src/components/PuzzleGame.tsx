@@ -584,7 +584,7 @@ export const PuzzleGame = () => {
   >(null);
   const [leftShellPanelOpen, setLeftShellPanelOpen] = useState(false);
   const [rightShellPanelOpen, setRightShellPanelOpen] = useState(false);
-  const [showGameTools, setShowGameTools] = useState(false);
+  const [showGameTools, setShowGameTools] = useState(true);
   const isWaitingToStart = Boolean(levelTimeLimitSeconds) && !isTimerArmed && !isComplete && !isBuilding && !isTimeUp;
   const timerRemainingMsRef = useRef(0);
   const timerEndAtMsRef = useRef<number | null>(null);
@@ -4168,7 +4168,7 @@ export const PuzzleGame = () => {
           data-touch-controls-target
           data-testid="game-board-stage"
           className={[
-            isMobilePortrait ? "fixed inset-0 z-[55]" : "relative z-[55] w-full min-h-0 flex-1",
+            isMobilePortrait ? "fixed inset-0 z-20" : "relative z-20 w-full min-h-0 flex-1",
             desktopShellActive ? `px-2 pb-2 pt-20 xl:pb-3 ${desktopBoardInsetClass}` : "",
           ].join(" ")}
           onMouseDown={handleMouseDown}
@@ -4187,8 +4187,8 @@ export const PuzzleGame = () => {
         >
           <div
             className={[
-              "overflow-hidden",              isMobilePortrait ? "" : isCompact3DView ? "relative h-full w-full" : "relative h-full w-full rounded-[30px] border border-white/10 shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
-              desktopShellActive ? "ring-1 ring-amber-300/10" : "",
+              "overflow-hidden bg-[#090b0a]",
+              isMobilePortrait ? "" : isCompact3DView ? "relative h-full w-full" : "relative h-full w-full rounded-[30px] border border-white/10 shadow-[0_26px_120px_rgba(0,0,0,0.55)]",
             ].join(' ')}
             style={isMobilePortrait ? {
               position: 'fixed',
