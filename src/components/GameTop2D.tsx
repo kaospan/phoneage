@@ -443,6 +443,17 @@ export function GameTop2D({
     return { width, height: Math.max(rows, Math.floor(width / aspect)) };
   }, [availableSize.height, availableSize.width, cols, fullBleed, rotateUpright, rows, scale]);
 
+  // The player sprite is drawn oversized (up to h-[154%]/w-[154%] of its tile) so the dino reads
+  // well at small zoom. Interior tiles have room for that overflow to spill onto neighboring
+  // cells, but a player standing on the board's outer row/column gets clipped by the grid's
+  // overflow-hidden with nothing to spill into. Padding the grid box itself (rather than each
+  // tile) gives every edge that same spillover room without touching normal tile layout.
+  const edgePadding = useMemo(() => {
+    if (rows <= 0 || cols <= 0 || boardSize.width <= 0 || boardSize.height <= 0) return 0;
+    const cellSize = Math.min(boardSize.width / cols, boardSize.height / rows);
+    return Math.round(cellSize * 0.35);
+  }, [boardSize.width, boardSize.height, rows, cols]);
+
   // Icons at 128 px — crisp when downscaled
   const redKeyUrl = useMemo(
     () => (typeof window !== "undefined" ? createKeyIconDataUrl(128, { accent: "rgba(239,68,68,0.98)", glow: "rgba(239,68,68,0.18)" }) : null),
@@ -501,6 +512,7 @@ export function GameTop2D({
             gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
             width: "100%",
             height: "100%",
+            padding: edgePadding > 0 ? `${edgePadding}px` : undefined,
             backgroundColor: "black",
             boxShadow: "inset 0 0 0 3px rgba(0,0,0,0.88), inset 0 2px 0 rgba(255,255,255,0.09), 0 0 0 1px rgba(255,232,188,0.08)",
           }}
